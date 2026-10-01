@@ -222,3 +222,27 @@ body:has(.ai-lab-react-flow) {
   overflow-y: auto !important;
   overflow-x: hidden;
 }
+
+/*
+ * Chat WhatsApp admin (HP / layar lipat): atribut dipasang oleh
+ * useKeyboardOpen() hanya selama halaman chat aktif di bawah lg.
+ * - Tinggi layar = area yang terlihat (--wa-vh), jadi kolom balasan menempel di
+ *   atas keyboard.
+ * - Saat keyboard terbuka bottom nav disembunyikan dan ruang cadangannya dilepas.
+ */
+@media (max-width: 1023px) {
+  html[data-wa-chat="true"] .admin-theme {
+    height: var(--wa-vh, 100dvh);
+    min-height: 0;
+    max-height: var(--wa-vh, 100dvh);
+    overflow: hidden;
+  }
+}
+@media (max-width: 767px) {
+  html[data-kb-open="true"] nav[aria-label="Admin"] {
+    display: none;
+  }
+  html[data-kb-open="true"] .admin-theme main main {
+    padding-bottom: env(safe-area-inset-bottom) !important;
+  }
+}

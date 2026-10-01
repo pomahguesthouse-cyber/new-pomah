@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -42,8 +42,6 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import {
-  listThreads,
-  getThread,
   sendMessage,
   draftAiReply,
   markRead,
@@ -62,7 +60,18 @@ import {
   triggerManualAlert,
 } from "@/admin/functions/whatsapp.functions";
 import { getAiLabConfig, formatAgentBadge, type AiLabConfig } from "@/admin/modules/ai-lab/ai-lab.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
+import { useIsDesktop } from "@/hooks/use-desktop";
+import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
+import {
+  WA_PAGE,
+  defaultThreadsParams,
+  fetchOlderMessages,
+  threadQueryOptions,
+  threadsQueryOptions,
+} from "@/admin/modules/whatsapp/wa-queries";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -259,9 +268,110 @@ function contactInitials(thread: { phone?: string | null; display_name?: string 
   return d ? d.slice(-2) : "WA";
 }
 
+const ThreadRow = memo(function ThreadRow({
+  t,
+  active,
+  onOpen,
+  onPrefetch,
+}: {
+  t: any;
+  active: boolean;
+  onOpen: (id: string) => void;
+  onPrefetch: (id: string) => void;
+}) {
+  const intent = INTENT_STYLES[t.intent ?? "other"] ?? INTENT_STYLES.other;
+  return (
+    <li key={t.id}>
+      <button
+        onClick={() => onOpen(t.id)}
+        onPointerDown={() => onPrefetch(t.id)}
+        onMouseEnter={() => onPrefetch(t.id)}
+        onFocus={() => onPrefetch(t.id)}
+        className={cn(
+          "group block w-full border-b border-border px-3 py-3 text-left transition-colors hover:bg-accent/10",
+          active && "bg-accent/15",
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <Avatar className="h-9 w-9 shrink-0">
+            <AvatarFallback className="text-[11px] font-semibold">
+              {contactInitials(t)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1.5">
+                {t.pinned && <Pin className="h-3 w-3 shrink-0 text-amber-500" />}
+                <p className="truncate text-sm font-semibold">
+                  {contactDisplay(t)}
+                </p>
+                {((t as any)._mergedCount ?? 0) > 1 && (
+                  <span
+                    title={`${(t as any)._mergedCount} percakapan digabung`}
+                    className="flex items-center gap-0.5 shrink-0 rounded-full border border-border px-1 text-[9px] text-muted-foreground"
+                  >
+                    <GitMerge className="h-2.5 w-2.5" />
+                    {(t as any)._mergedCount}
+                  </span>
+                )}
+              </div>
+              <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                {timeAgo(t.last_message_at)}
+              </span>
+            </div>
+            <p
+              className={cn(
+                "mt-0.5 truncate text-xs",
+                (t.unread_count ?? 0) > 0
+                  ? "font-medium text-foreground"
+                  : "text-muted-foreground",
+              )}
+            >
+              {t.last_message_preview}
+            </p>
+            <div className="mt-1.5 flex items-center gap-1.5">
+              {t.intent && t.intent !== "other" && (
+                <Badge
+                  variant="outline"
+                  className={cn("h-4 px-1.5 text-[9px] font-medium", intent.className)}
+                >
+                  {intent.label}
+                </Badge>
+              )}
+              {(t as any).ai_auto === false ? (
+                <Badge
+                  variant="outline"
+                  className="h-4 px-1.5 text-[9px] border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/35"
+                >
+                  Human
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className="h-4 px-1.5 text-[9px] border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/35"
+                >
+                  AI Auto
+                </Badge>
+              )}
+              {t.status === "closed" && (
+                <Badge variant="outline" className="h-4 px-1.5 text-[9px]">
+                  closed
+                </Badge>
+              )}
+              {(t.unread_count ?? 0) > 0 && (
+                <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                  {t.unread_count}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </button>
+    </li>
+  );
+});
+
 export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: string | null }) {
-  const listFn = useServerFn(listThreads);
-  const getFn = useServerFn(getThread);
   const sendFn = useServerFn(sendMessage);
   const draftFn = useServerFn(draftAiReply);
   const markReadFn = useServerFn(markRead);
@@ -282,19 +392,84 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   
   const qc = useQueryClient();
 
-  const { data: threadsData } = useQuery({ queryKey: ["wa-threads"], queryFn: () => listFn() });
-  const { data: aiLabConfig } = useQuery({ queryKey: ["ai-lab-config"], queryFn: () => getAiLabConfig() });
-  const { data: alertsData } = useQuery({ queryKey: ["conv-alerts"], queryFn: () => alertsFn() });
-  
+  const isDesktop = useIsDesktop();
+  useKeyboardOpen(!isDesktop);
+
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"all" | "unread" | "open" | "closed">("all");
+  const [threadLimit, setThreadLimit] = useState<number | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  const threadsParams = useMemo(() => {
+    const base = defaultThreadsParams(isDesktop);
+    return {
+      limit: threadLimit ?? base.limit,
+      q: debouncedSearch,
+      filter,
+    };
+  }, [isDesktop, threadLimit, debouncedSearch, filter]);
+
+  const { data: threadsData, isPending: threadsPending } = useQuery(threadsQueryOptions(threadsParams));
+  const { data: aiLabConfig } = useQuery({
+    queryKey: ["ai-lab-config"],
+    queryFn: () => getAiLabConfig(),
+    staleTime: 5 * 60_000,
+  });
+  // Alert monitor hanya perlu untuk badge/tab Monitor: tunda sampai daftar thread
+  // dan percakapan aktif selesai dimuat supaya tidak berebut jaringan di HP.
+  const [alertsReady, setAlertsReady] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setAlertsReady(true), 1500);
+    return () => window.clearTimeout(t);
+  }, []);
+  const { data: alertsData } = useQuery({
+    queryKey: ["conv-alerts"],
+    queryFn: () => alertsFn(),
+    enabled: alertsReady,
+  });
+
   const threads = threadsData?.threads ?? [];
   const allAlerts = alertsData?.alerts ?? [];
   const openAlerts = allAlerts.filter((a: any) => a.status === "open");
 
-  useRealtimeInvalidate(
-    "admin-wa-stream",
-    ["whatsapp_threads", "whatsapp_messages"],
-    [["wa-threads"], ["wa-thread"]],
-  );
+  // Realtime: satu channel, invalidasi dipersempit & di-debounce. Pesan baru hanya
+  // me-refetch percakapan terkait (bukan semua thread di cache) + daftar thread.
+  useEffect(() => {
+    const pendingIds = new Set<string>();
+    let listDirty = false;
+    let timer: number | null = null;
+    const flush = () => {
+      timer = null;
+      if (listDirty) void qc.invalidateQueries({ queryKey: ["wa-threads"] });
+      for (const id of pendingIds) void qc.invalidateQueries({ queryKey: ["wa-thread", id] });
+      pendingIds.clear();
+      listDirty = false;
+    };
+    const schedule = () => {
+      if (timer == null) timer = window.setTimeout(flush, 400);
+    };
+    const onChange = (table: "whatsapp_threads" | "whatsapp_messages") => (payload: any) => {
+      listDirty = true;
+      const row = payload?.new ?? payload?.old ?? {};
+      const id: string | undefined = table === "whatsapp_messages" ? row.thread_id : row.id;
+      if (id) pendingIds.add(id);
+      else void qc.invalidateQueries({ queryKey: ["wa-thread"], refetchType: "active" });
+      schedule();
+    };
+    const ch = supabase
+      .channel("admin-wa-stream")
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "whatsapp_threads" }, onChange("whatsapp_threads"))
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "whatsapp_messages" }, onChange("whatsapp_messages"))
+      .subscribe();
+    return () => {
+      if (timer != null) window.clearTimeout(timer);
+      void supabase.removeChannel(ch);
+    };
+  }, [qc]);
   useRealtimeInvalidate(
     "admin-conv-alerts",
     ["conversation_alerts"],
@@ -309,16 +484,25 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     setActiveId(initialThreadId);
   }, [initialThreadId]);
 
-  const openThread = (id: string) => {
-    setActiveId(id);
-    void navigate({ to: "/admin/whatsapp", search: { thread: id } });
-  };
+  const openThread = useCallback(
+    (id: string) => {
+      setActiveId(id);
+      void navigate({ to: "/admin/whatsapp", search: { thread: id } });
+    },
+    [navigate],
+  );
+  // Prefetch isi percakapan saat jari menyentuh / kursor di atas baris, sebelum
+  // klik selesai. Cache dipakai langsung oleh useQuery saat thread dibuka.
+  const prefetchThread = useCallback(
+    (id: string) => {
+      void qc.prefetchQuery(threadQueryOptions(id, isDesktop));
+    },
+    [qc, isDesktop],
+  );
   const closeThread = () => {
     setActiveId(null);
     void navigate({ to: "/admin/whatsapp", search: {}, replace: true });
   };
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "unread" | "open" | "closed">("all");
   const [draft, setDraft] = useState("");
   const [attachment, setAttachment] = useState<ComposerAttachment | null>(null);
   const attachmentRef = useRef<ComposerAttachment | null>(null);
@@ -378,30 +562,154 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     });
   }, [dedupedThreads, search, filter]);
 
-  const current = activeId ?? filteredThreads[0]?.id ?? null;
+  // Desktop: thread pertama otomatis terbuka (perilaku lama). HP: hanya thread yang
+  // benar-benar dibuka; dulu thread pertama ikut diunduh & ditandai terbaca walau
+  // yang tampil daftar.
+  const current = activeId ?? (isDesktop ? (filteredThreads[0]?.id ?? null) : null);
 
-  const { data: thread } = useQuery({
-    queryKey: ["wa-thread", current],
-    queryFn: () => getFn({ data: { id: current! } }),
+  const { data: thread, isPending: threadPending, dataUpdatedAt: threadUpdatedAt } = useQuery({
+    ...threadQueryOptions(current ?? "", isDesktop),
     enabled: !!current,
   });
 
-  // Mark as read on open
-  useEffect(() => {
-    if (!current) return;
-    const t = threads.find((x) => x.id === current);
-    if (t && (t.unread_count ?? 0) > 0) {
-      markReadFn({ data: { threadId: current } }).then(() => {
-        qc.invalidateQueries({ queryKey: ["wa-threads"] });
-      });
-    }
-  }, [current, threads, markReadFn, qc]);
+  // Pesan lama yang dimuat lewat "Muat pesan lebih lama" (di-reset saat ganti thread).
+  const [older, setOlder] = useState<{
+    threadId: string;
+    messages: any[];
+    hasMore: boolean | null;
+  } | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const olderForCurrent = older && older.threadId === current ? older : null;
 
-  // Auto scroll on new messages
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const allMessages = useMemo(() => {
+    const latest = thread?.messages ?? [];
+    if (!olderForCurrent || olderForCurrent.messages.length === 0) return latest;
+    const seen = new Set(latest.map((m: any) => m.id));
+    return [...olderForCurrent.messages.filter((m) => !seen.has(m.id)), ...latest];
+  }, [thread?.messages, olderForCurrent]);
+  const hasOlder = olderForCurrent?.hasMore ?? thread?.hasMore ?? false;
+
+  // Mark as read on open. Memakai unread_count dari detail thread (daftar hanya
+  // memuat sebagian thread), dan satu permintaan per thread dalam satu waktu.
+  const markingRef = useRef<string | null>(null);
+  const currentUnread =
+    thread?.thread?.unread_count ?? threads.find((x) => x.id === current)?.unread_count ?? 0;
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [thread?.messages?.length]);
+    if (!current || (currentUnread ?? 0) <= 0 || markingRef.current === current) return;
+    markingRef.current = current;
+    markReadFn({ data: { threadId: current } })
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["wa-threads"] });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (markingRef.current === current) markingRef.current = null;
+      });
+  }, [current, currentUnread, threadUpdatedAt, markReadFn, qc]);
+
+  // ── Posisi scroll percakapan ───────────────────────────────────────────────
+  // Buka thread -> langsung di pesan terbaru (tanpa animasi). Pesan baru ->
+  // tetap di dasar bila pengguna memang sedang di dasar. Muat pesan lama ->
+  // posisi baca tidak loncat.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+  const initialScrolledRef = useRef<string | null>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const prependRef = useRef<{ height: number; top: number } | null>(null);
+
+  const scrollToBottom = useCallback((smooth = false) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    else el.scrollTop = el.scrollHeight;
+  }, []);
+
+  const onScrollMessages = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
+
+  // Wadah scroll dibuat ulang saat thread ditutup/dibuka lagi atau saat data
+  // thread hilang sebentar (mis. layar lipat berganti ukuran): anggap "render pertama".
+  const threadReady = !!thread?.thread;
+  useLayoutEffect(() => {
+    if (!current || !threadReady) initialScrolledRef.current = null;
+  }, [current, threadReady]);
+
+  useLayoutEffect(() => {
+    if (!current || allMessages.length === 0) return;
+    const lastId = allMessages[allMessages.length - 1]?.id ?? null;
+    if (initialScrolledRef.current !== current) {
+      initialScrolledRef.current = current;
+      lastMessageIdRef.current = lastId;
+      stickRef.current = true;
+      scrollToBottom(false);
+      return;
+    }
+    const pending = prependRef.current;
+    if (pending) {
+      prependRef.current = null;
+      const el = scrollRef.current;
+      if (el) {
+        const expected = pending.top + (el.scrollHeight - pending.height);
+        // Chrome menggeser sendiri (scroll anchoring) kecuali scrollTop = 0.
+        if (Math.abs(el.scrollTop - expected) > 2) el.scrollTop = expected;
+      }
+      return;
+    }
+    if (lastId !== lastMessageIdRef.current) {
+      lastMessageIdRef.current = lastId;
+      if (stickRef.current) scrollToBottom(false);
+    }
+  }, [current, allMessages, scrollToBottom]);
+
+  // Gambar/lampiran yang selesai dimuat mengubah tinggi isi: tetap di dasar.
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (stickRef.current) scrollToBottom(false);
+    });
+    ro.observe(content);
+    // Wadah menyusut saat keyboard muncul: tetap di dasar bila memang di dasar.
+    if (scrollRef.current) ro.observe(scrollRef.current);
+    return () => ro.disconnect();
+  }, [current, thread?.thread?.id, scrollToBottom]);
+
+  // Ganti thread: render pertama thread baru dikenali lewat perbandingan id di
+  // useLayoutEffect di atas; di sini cukup reset status "menempel di dasar".
+  useEffect(() => {
+    stickRef.current = true;
+    setLoadingOlder(false);
+  }, [current]);
+
+  const loadOlder = useCallback(async () => {
+    if (!current || loadingOlder || allMessages.length === 0) return;
+    const before = allMessages[0]?.sent_at;
+    if (!before) return;
+    const el = scrollRef.current;
+    stickRef.current = false; // posisi baca dijaga, jangan tarik ke dasar
+    setLoadingOlder(true);
+    try {
+      const res = await fetchOlderMessages(current, before);
+      if (el) prependRef.current = { height: el.scrollHeight, top: el.scrollTop };
+      setOlder((prev) => {
+        const base = prev && prev.threadId === current ? prev.messages : [];
+        const seen = new Set(base.map((m) => m.id));
+        return {
+          threadId: current,
+          messages: [...res.messages.filter((m: any) => !seen.has(m.id)), ...base],
+          hasMore: res.hasMore,
+        };
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [current, loadingOlder, allMessages]);
 
   const setComposerAttachment = (next: ComposerAttachment | null) => {
     attachmentRef.current = next;
@@ -429,14 +737,27 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   const metaWindowClosed = useMemo(() => {
     const provider = (thread?.thread as { provider?: string } | undefined)?.provider;
     if (provider !== "meta") return false;
-    return metaCustomerWindowClosed(lastInboundAt(thread?.messages ?? []));
-  }, [thread]);
+    // Pesan masuk terakhir dari server (bisa di luar jendela pesan terbaru yang dimuat).
+    const latestIn = thread?.lastInboundAt ?? null;
+    const local = lastInboundAt(allMessages);
+    const newest = latestIn && local ? (Date.parse(latestIn) >= Date.parse(local) ? latestIn : local) : (latestIn ?? local);
+    return metaCustomerWindowClosed(newest);
+  }, [thread, allMessages]);
 
   const attachmentReady = attachment?.phase === "ready" && !!attachment.path;
   const attachmentBusy = attachment?.phase === "processing" || attachment?.phase === "uploading";
 
   const draftRef = useRef(draft);
   draftRef.current = draft;
+
+  // Kolom ketik HP: tumbuh mengikuti isi sampai batas 120px, lalu scroll internal.
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [draft, isDesktop, current, thread?.thread?.id]);
 
   const sendMut = useMutation({
     mutationFn: () => {
@@ -469,6 +790,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
       const sent = attachmentRef.current;
       setComposerAttachment(null);
       if (sent?.previewUrl) URL.revokeObjectURL(sent.previewUrl);
+      stickRef.current = true;
       qc.invalidateQueries({ queryKey: ["wa-thread", current] });
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
     },
@@ -665,7 +987,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     onError: (e) => toast.error((e as Error).message),
   });
 
-  const totalUnread = threads.reduce((s, t) => s + (t.unread_count ?? 0), 0);
+  const totalUnread = threadsData?.unreadTotal ?? threads.reduce((s, t) => s + (t.unread_count ?? 0), 0);
 
   // ─── Monitor mutations ─────────────────────────────────────────────────────
   const dismissMut = useMutation({
@@ -772,98 +1094,30 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
         {sidebarTab === "inbox" ? (
           <ScrollArea className="flex-1">
           <ul>
-            {filteredThreads.map((t) => {
-              const intent = INTENT_STYLES[t.intent ?? "other"] ?? INTENT_STYLES.other;
-              const active = current === t.id;
-              return (
-                <li key={t.id}>
-                  <button
-                    onClick={() => openThread(t.id)}
-                    className={cn(
-                      "group block w-full border-b border-border px-3 py-3 text-left transition-colors hover:bg-accent/10",
-                      active && "bg-accent/15",
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <Avatar className="h-9 w-9 shrink-0">
-                        <AvatarFallback className="text-[11px] font-semibold">
-                          {contactInitials(t)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-1.5">
-                            {t.pinned && <Pin className="h-3 w-3 shrink-0 text-amber-500" />}
-                            <p className="truncate text-sm font-semibold">
-                              {contactDisplay(t)}
-                            </p>
-                            {((t as any)._mergedCount ?? 0) > 1 && (
-                              <span
-                                title={`${(t as any)._mergedCount} percakapan digabung`}
-                                className="flex items-center gap-0.5 shrink-0 rounded-full border border-border px-1 text-[9px] text-muted-foreground"
-                              >
-                                <GitMerge className="h-2.5 w-2.5" />
-                                {(t as any)._mergedCount}
-                              </span>
-                            )}
-                          </div>
-                          <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                            {timeAgo(t.last_message_at)}
-                          </span>
-                        </div>
-                        <p
-                          className={cn(
-                            "mt-0.5 truncate text-xs",
-                            (t.unread_count ?? 0) > 0
-                              ? "font-medium text-foreground"
-                              : "text-muted-foreground",
-                          )}
-                        >
-                          {t.last_message_preview}
-                        </p>
-                        <div className="mt-1.5 flex items-center gap-1.5">
-                          {t.intent && t.intent !== "other" && (
-                            <Badge
-                              variant="outline"
-                              className={cn("h-4 px-1.5 text-[9px] font-medium", intent.className)}
-                            >
-                              {intent.label}
-                            </Badge>
-                          )}
-                          {(t as any).ai_auto === false ? (
-                            <Badge
-                              variant="outline"
-                              className="h-4 px-1.5 text-[9px] border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/35"
-                            >
-                              Human
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="h-4 px-1.5 text-[9px] border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/35"
-                            >
-                              AI Auto
-                            </Badge>
-                          )}
-                          {t.status === "closed" && (
-                            <Badge variant="outline" className="h-4 px-1.5 text-[9px]">
-                              closed
-                            </Badge>
-                          )}
-                          {(t.unread_count ?? 0) > 0 && (
-                            <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
-                              {t.unread_count}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
-            {filteredThreads.length === 0 && (
+            {filteredThreads.map((t) => (
+              <ThreadRow
+                key={t.id}
+                t={t}
+                active={current === t.id}
+                onOpen={openThread}
+                onPrefetch={prefetchThread}
+              />
+            ))}
+            {threadsPending && filteredThreads.length === 0 && <ThreadListSkeleton />}
+            {!threadsPending && filteredThreads.length === 0 && (
               <li className="p-6 text-center text-xs text-muted-foreground">No conversations</li>
+            )}
+            {threadsData?.hasMore && (
+              <li className="p-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-10 w-full text-xs lg:h-8"
+                  onClick={() => setThreadLimit((n) => (n ?? threadsParams.limit) + WA_PAGE.threadsStep)}
+                >
+                  Muat percakapan lebih lama
+                </Button>
+              </li>
             )}
           </ul>
         </ScrollArea>
@@ -924,8 +1178,32 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
       </aside>
 
       {/* CONVERSATION */}
-      <section className={cn("min-h-0 flex-col flex-1 w-full lg:flex", activeId ? "flex" : "hidden lg:flex")}>
-        {current && thread?.thread ? (
+      <section className={cn("min-h-0 min-w-0 flex-col flex-1 w-full max-lg:overflow-x-hidden lg:flex", activeId ? "flex" : "hidden lg:flex")}>
+        {current && !thread?.thread && threadPending ? (
+          <>
+            <header className="flex items-center gap-2 border-b border-border bg-card px-3 py-2 md:px-5 md:py-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (initialThreadId && window.history.length > 1) window.history.back();
+                  else closeThread();
+                }}
+                className="lg:hidden -ml-1 inline-flex h-10 w-10 items-center justify-center rounded-md hover:bg-accent/10"
+                aria-label="Kembali ke daftar"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <Skeleton className="h-9 w-9 shrink-0 rounded-full md:h-10 md:w-10" />
+              <div className="space-y-1.5">
+                <Skeleton className="h-3.5 w-32" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            </header>
+            <div className="min-h-0 flex-1 overflow-hidden bg-[#efeae2] px-3 py-3 dark:bg-[#0b141a] md:px-6 md:py-4">
+              <MessageListSkeleton />
+            </div>
+          </>
+        ) : current && thread?.thread ? (
           <>
             <header className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 md:px-5 md:py-3">
               <div className="flex items-center gap-2 md:gap-3 min-w-0">
@@ -935,7 +1213,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                     if (initialThreadId && window.history.length > 1) window.history.back();
                     else closeThread();
                   }}
-                  className="lg:hidden -ml-1 inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent/10"
+                  className="lg:hidden -ml-1 inline-flex h-10 w-10 items-center justify-center rounded-md hover:bg-accent/10"
                   aria-label="Kembali ke daftar"
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -1036,14 +1314,34 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
               </div>
             </header>
 
-            <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto bg-[#efeae2] px-3 py-3 dark:bg-[#0b141a] md:px-6 md:py-4">
-              <div className="absolute inset-0 opacity-[0.06] dark:opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'url("https://w7.pngwing.com/pngs/396/505/png-transparent-whatsapp-pattern-black-and-white-floral.png")', backgroundSize: '400px', backgroundRepeat: 'repeat' }} />
-              <div className="relative z-10">
-                <MessageStream messages={thread.messages} aiLabConfig={aiLabConfig} />
+            <div
+              ref={scrollRef}
+              onScroll={onScrollMessages}
+              className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#efeae2] px-3 py-3 dark:bg-[#0b141a] md:px-6 md:py-4"
+            >
+              {/* Pola latar dari host luar: hanya desktop (di HP = 1 request + TLS tambahan tiap buka). */}
+              {isDesktop && (
+                <div className="absolute inset-0 opacity-[0.06] dark:opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'url("https://w7.pngwing.com/pngs/396/505/png-transparent-whatsapp-pattern-black-and-white-floral.png")', backgroundSize: '400px', backgroundRepeat: 'repeat' }} />
+              )}
+              <div ref={contentRef} className="relative z-10">
+                {hasOlder && (
+                  <div className="mb-3 flex justify-center">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-10 rounded-full px-4 text-xs lg:h-8"
+                      disabled={loadingOlder}
+                      onClick={() => void loadOlder()}
+                    >
+                      {loadingOlder ? "Memuat…" : "Muat pesan lebih lama"}
+                    </Button>
+                  </div>
+                )}
+                <MessageStream messages={allMessages} aiLabConfig={aiLabConfig} />
               </div>
             </div>
 
-            <footer className="relative z-20 shrink-0 border-t border-border bg-card p-3">
+            <footer className="relative z-20 min-w-0 max-w-full shrink-0 border-t border-border bg-card p-2 md:max-lg:pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:p-3">
               {metaWindowClosed && (
                 <p
                   role="status"
@@ -1052,10 +1350,10 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                   {META_WINDOW_CLOSED_MESSAGE}
                 </p>
               )}
-              <div className="flex flex-wrap items-center gap-1.5 pb-2">
+              <div className="flex flex-wrap items-center gap-1 pb-1.5 lg:gap-1.5 lg:pb-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                    <Button variant="ghost" size="sm" className="h-9 px-2 text-xs lg:h-7" aria-label="Templates">
                       <MessagesSquare className="mr-1.5 h-3.5 w-3.5" /> Templates
                     </Button>
                   </DropdownMenuTrigger>
@@ -1077,7 +1375,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-2 text-xs"
+                  className="h-9 px-2 text-xs lg:h-7"
                   disabled={draftMut.isPending}
                   onClick={() => draftMut.mutate()}
                 >
@@ -1087,7 +1385,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-2 text-xs"
+                  className="h-9 px-2 text-xs lg:h-7"
                   disabled={classifyMut.isPending}
                   onClick={() => classifyMut.mutate()}
                 >
@@ -1136,51 +1434,94 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                   </button>
                 </div>
               )}
-              <Textarea
-                placeholder="Type a reply…  ⌘/Ctrl + Enter to send"
-                rows={2}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSend) {
-                    e.preventDefault();
-                    sendMut.mutate();
-                  }
-                }}
-                className="min-h-16 resize-none text-base md:text-sm"
+              <input
+                ref={fileRef}
+                type="file"
+                accept={WA_FILE_INPUT_ACCEPT}
+                className="hidden"
+                onChange={(e) => void onPickFile(e.target.files)}
               />
-              <div className="mt-2 flex min-w-0 items-center gap-2">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept={WA_FILE_INPUT_ACCEPT}
-                  className="hidden"
-                  onChange={(e) => void onPickFile(e.target.files)}
-                />
-                <button
-                  type="button"
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent disabled:opacity-40"
-                  aria-label="Lampirkan berkas"
-                  title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : "Lampirkan berkas"}
-                  disabled={metaWindowClosed || attachmentBusy || sendMut.isPending}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <Paperclip className="h-5 w-5" />
-                </button>
-                <p className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted-foreground">
-                  {draft.length} chars
-                </p>
-                <Button
-                  size="sm"
-                  className="h-11 shrink-0 px-4"
-                  disabled={!canSend}
-                  title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : undefined}
-                  onClick={() => sendMut.mutate()}
-                >
-                  <Send className="mr-2 h-3.5 w-3.5" />
-                  {sendMut.isPending ? "Sending…" : "Send"}
-                </Button>
-              </div>
+              {isDesktop ? (
+                <>
+                  <Textarea
+                    placeholder="Type a reply…  ⌘/Ctrl + Enter to send"
+                    rows={2}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSend) {
+                        e.preventDefault();
+                        sendMut.mutate();
+                      }
+                    }}
+                    className="min-h-16 resize-none text-base md:text-sm"
+                  />
+                  <div className="mt-2 flex min-w-0 items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent disabled:opacity-40"
+                      aria-label="Lampirkan berkas"
+                      title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : "Lampirkan berkas"}
+                      disabled={metaWindowClosed || attachmentBusy || sendMut.isPending}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      <Paperclip className="h-5 w-5" />
+                    </button>
+                    <p className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted-foreground">
+                      {draft.length} chars
+                    </p>
+                    <Button
+                      size="sm"
+                      className="h-11 shrink-0 px-4"
+                      disabled={!canSend}
+                      title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : undefined}
+                      onClick={() => sendMut.mutate()}
+                    >
+                      <Send className="mr-2 h-3.5 w-3.5" />
+                      {sendMut.isPending ? "Sending…" : "Send"}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                /* HP / layar lipat: satu baris ringkas [lampir][kolom ketik auto-grow][kirim]. */
+                <div className="flex min-w-0 items-end gap-1.5">
+                  <button
+                    type="button"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent disabled:opacity-40"
+                    aria-label="Lampirkan berkas"
+                    title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : "Lampirkan berkas"}
+                    disabled={metaWindowClosed || attachmentBusy || sendMut.isPending}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </button>
+                  <Textarea
+                    ref={composerRef}
+                    placeholder="Ketik balasan…"
+                    rows={1}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSend) {
+                        e.preventDefault();
+                        sendMut.mutate();
+                      }
+                    }}
+                    enterKeyHint="enter"
+                    className="min-h-10 max-h-[120px] min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl px-3 py-2 text-base leading-5"
+                  />
+                  <Button
+                    size="icon"
+                    className="h-10 w-10 shrink-0 rounded-full"
+                    disabled={!canSend}
+                    aria-label={sendMut.isPending ? "Mengirim" : "Kirim"}
+                    title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : "Kirim"}
+                    onClick={() => sendMut.mutate()}
+                  >
+                    <Send className={cn("h-4 w-4", sendMut.isPending && "animate-pulse")} />
+                  </Button>
+                </div>
+              )}
             </footer>
           </>
         ) : (
@@ -1777,15 +2118,15 @@ function MessageAttachment({ m }: { m: any }) {
   if (a.kind === "image") {
     return (
       <a href={a.url} target="_blank" rel="noopener noreferrer" className="mb-1 block max-w-full">
-        <img src={a.url} alt={a.name} className="max-h-64 w-full max-w-full rounded-md object-cover sm:max-w-[280px]" />
+        <img src={a.url} alt={a.name} loading="lazy" decoding="async" className="min-h-24 max-h-64 w-full max-w-full rounded-md bg-black/5 object-cover sm:max-w-[280px]" />
       </a>
     );
   }
   if (a.kind === "video") {
-    return <video src={a.url} controls className="mb-1 max-h-64 w-full max-w-full rounded-md sm:max-w-[280px]" />;
+    return <video src={a.url} controls preload="none" className="mb-1 max-h-64 w-full max-w-full rounded-md sm:max-w-[280px]" />;
   }
   if (a.kind === "audio") {
-    return <audio src={a.url} controls className="mb-1 w-full max-w-[240px]" />;
+    return <audio src={a.url} controls preload="none" className="mb-1 w-full max-w-[240px]" />;
   }
   // Generic file (PDF, doc, etc.) — card with icon + name + download.
   const label = a.mime.includes("pdf") || a.name.toLowerCase().endsWith(".pdf") ? "PDF" : (a.mime || "Berkas");
@@ -1804,7 +2145,42 @@ function MessageAttachment({ m }: { m: any }) {
   );
 }
 
-function MessageStream({ messages, aiLabConfig }: { messages: any[]; aiLabConfig?: { id: string | null; config: AiLabConfig } }) {
+function ThreadListSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 7 }, (_, i) => (
+        <li key={i} className="flex items-start gap-3 border-b border-border px-3 py-3" aria-hidden>
+          <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-3.5 w-2/5" />
+            <Skeleton className="h-3 w-4/5" />
+          </div>
+        </li>
+      ))}
+    </>
+  );
+}
+
+function MessageListSkeleton() {
+  const rows = [
+    ["items-start", "w-44"],
+    ["items-end", "w-52"],
+    ["items-start", "w-56"],
+    ["items-end", "w-40"],
+    ["items-start", "w-48"],
+  ];
+  return (
+    <div className="space-y-3 px-1 py-2" aria-hidden>
+      {rows.map(([align, w], i) => (
+        <div key={i} className={cn("flex flex-col", align)}>
+          <Skeleton className={cn("h-9 max-w-[76%] rounded-md bg-black/10", w)} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const MessageStream = memo(function MessageStream({ messages, aiLabConfig }: { messages: any[]; aiLabConfig?: { id: string | null; config: AiLabConfig } }) {
   const groups: { label: string; items: any[] }[] = [];
   let last = "";
   for (const m of messages) {
@@ -1876,7 +2252,7 @@ function MessageStream({ messages, aiLabConfig }: { messages: any[]; aiLabConfig
       ))}
     </div>
   );
-}
+});
 
 // ─── Conversation Monitor Alert Card ─────────────────────────────────────────
 // Stub minimal — full UI alert dapat diperluas kemudian.
