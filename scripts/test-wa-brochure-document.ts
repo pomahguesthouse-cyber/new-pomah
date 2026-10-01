@@ -15,7 +15,7 @@ import {
 } from "../src/services/wa-autoreply/brochure-source";
 import { planMediaFastPath, type GalleryRoom } from "../src/services/wa-autoreply/media-fast-path";
 import { sendGuestWhatsApp, type GuestWhatsAppDeps } from "../src/services/guest-whatsapp.service";
-import { BROCHURE_CAPTION } from "../src/services/wa-media-dedup";
+import { BROCHURE_CAPTION, BROCHURE_DEDUP_WINDOW_MS } from "../src/services/wa-media-dedup";
 
 const SUPA = "https://proj.supabase.co";
 const rooms: GalleryRoom[] = [
@@ -160,7 +160,13 @@ async function main() {
   assert.ok(svc.includes("sendGuestWhatsApp(phone || target, BROCHURE_CAPTION"));
   assert.ok(svc.includes("brochureLinkFallbackReply(outcome.file.url)"));
   assert.ok(svc.includes("MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY"));
-  assert.ok(svc.includes("loadRecentOutboundCaptions(phone)"));
+  assert.equal(BROCHURE_DEDUP_WINDOW_MS, 2 * 60 * 60_000, "jeda kirim ulang brosur 2 jam");
+  assert.ok(svc.includes("loadRecentOutboundCaptions(phone, BROCHURE_DEDUP_WINDOW_MS)"));
+  const dedupSource = fs.readFileSync("src/services/wa-media-dedup.ts", "utf8");
+  assert.ok(
+    dedupSource.includes("Date.now() - windowMs"),
+    "pencarian caption outbound harus memakai jendela yang diteruskan, bukan 30 menit tetap",
+  );
   // Dokumen brosur harus tercatat di whatsapp_messages (terlihat di inbox admin).
   assert.ok(svc.includes('source: "bot_brochure"'));
   assert.ok(svc.includes("sendBrochureFastPath(c.wpp_token, sendTarget, phone, c.thread_id)"));

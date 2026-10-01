@@ -56,7 +56,11 @@ import {
   planMediaFastPath,
   roomsForPhotoPlan,
 } from "@/services/wa-autoreply/media-fast-path";
-import { BROCHURE_CAPTION, loadRecentOutboundCaptions } from "@/services/wa-media-dedup";
+import {
+  BROCHURE_CAPTION,
+  BROCHURE_DEDUP_WINDOW_MS,
+  loadRecentOutboundCaptions,
+} from "@/services/wa-media-dedup";
 import {
   BROCHURE_BUCKET,
   BROCHURE_FILENAME,
@@ -565,9 +569,11 @@ type BrochureSendOutcome =
   | { status: "unavailable" };
 
 /**
- * Kirim brosur PDF sekali sebagai dokumen WhatsApp (Meta Cloud API bila
- * terhubung; Evolution hanya bila Meta tidak dikonfigurasi). Dedup 30 menit
- * lewat caption di `whatsapp_meta_outbound`.
+ * Kirim brosur PDF sebagai dokumen WhatsApp (Meta Cloud API bila terhubung;
+ * Evolution hanya bila Meta tidak dikonfigurasi). Dalam
+ * `BROCHURE_DEDUP_WINDOW_MS` (2 jam) caption yang sama di
+ * `whatsapp_meta_outbound` membalas "sudah dikirim"; setelah jendela itu
+ * brosur dikirim ulang. Pencarian caption memakai konstanta yang sama.
  */
 async function sendBrochureFastPath(
   token: string,
@@ -580,7 +586,7 @@ async function sendBrochureFastPath(
     console.warn("[Autoreply] brosur PDF tidak ditemukan (env/sop_documents/bucket brosur)");
     return { status: "unavailable" };
   }
-  const recent = await loadRecentOutboundCaptions(phone);
+  const recent = await loadRecentOutboundCaptions(phone, BROCHURE_DEDUP_WINDOW_MS);
   if (recent.has(BROCHURE_CAPTION)) return { status: "already_sent", file };
   const { sendGuestWhatsApp } = await import("@/services/guest-whatsapp.service");
   const result = await sendGuestWhatsApp(phone || target, BROCHURE_CAPTION, {
