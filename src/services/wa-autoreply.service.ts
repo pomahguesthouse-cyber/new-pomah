@@ -573,6 +573,7 @@ async function sendBrochureFastPath(
   token: string,
   target: string,
   phone: string,
+  threadId?: string | null,
 ): Promise<BrochureSendOutcome> {
   const file = await loadPublicBrochure();
   if (!file) {
@@ -590,6 +591,30 @@ async function sendBrochureFastPath(
   if (!result.ok) {
     console.warn(`[Autoreply] brosur document send failed (${result.channel}): ${result.error}`);
     return { status: "failed", file, error: result.error };
+  }
+  // Catat dokumen di `whatsapp_messages` supaya muncul di inbox admin. Tanpa
+  // baris ini brosur hanya ada di `whatsapp_meta_outbound` dan admin melihat
+  // "Ini brosurnya ya Kak" tanpa file (laporan 1 Okt 2026). Jangan beri
+  // `queue_entry_id`: dedup final-reply akan menganggap turn sudah terjawab.
+  if (threadId) {
+    try {
+      await saveOutboundMessage(supabaseAdmin, {
+        threadId,
+        body: BROCHURE_CAPTION,
+        metadata: {
+          agent: "system",
+          agent_key: "brochure-fast-path",
+          source: "bot_brochure",
+          media_type: "document",
+          mime_type: "application/pdf",
+          file_name: file.name,
+          media_url: file.url,
+          send_status: "sent",
+        } as any,
+      });
+    } catch (e) {
+      console.warn("[Autoreply] brochure outbound row failed (non-fatal):", e);
+    }
   }
   return { status: "sent", file };
 }
@@ -1156,7 +1181,7 @@ export async function executeAutoreplyForPhone(
         // Brosur PDF dikirim sebagai dokumen; teks singkat menyusul lewat jalur
         // kirim normal (satu dokumen + satu teks, tanpa balasan ganda).
         await quickAck.beforeReplySend();
-        const outcome = await sendBrochureFastPath(c.wpp_token, sendTarget, phone);
+        const outcome = await sendBrochureFastPath(c.wpp_token, sendTarget, phone, c.thread_id);
         if (outcome.status === "sent") {
           adoptReply(mediaPlan.reply);
           orchResult = mediaOrchResult(["brochure-fast-path"]);
