@@ -2,6 +2,9 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { classifyIntent } from "@/ai/router/intent-classifier";
 import { guestCountWasStated, resolveAdultsForBooking } from "@/lib/guest-count";
 import { createBooking } from "@/tools/booking.tool";
+import { computeExtraBedTotal, computeGrandTotal, totalsMatch, toRupiah } from "@/lib/booking-total";
+import { markBookingDraft, saveBookingDraft } from "@/services/booking-draft.service";
+import { runDeferred } from "@/lib/cf-context";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
@@ -87,6 +90,16 @@ export interface BookingContext {
   dpAmount?: number;
   /** Pending override yang menunggu konfirmasi "Ya/Tidak" dari tamu. */
   pendingOverride?: import("./flexible-slot-extractor").ExtractedSlots;
+  /** Total (integer rupiah) yang ditampilkan di ringkasan konfirmasi terakhir. Dicocokkan dengan hitungan server sebelum write. */
+  quotedTotal?: number;
+  /** Nomor lain yang disebut tamu dan MENUNGGU konfirmasi aktif-WhatsApp (belum dipakai sebagai guestPhone). */
+  pendingPhone?: string;
+  /** ISO waktu write booking terakhir GAGAL (belum tercatat). Dihapus saat sukses. */
+  writeFailedAt?: string;
+  /** Tiket handoff staf sudah dibuat untuk kegagalan write ini (cegah tiket ganda). */
+  writeFailureTicketed?: boolean;
+  /** Kunci notifikasi staf yang sudah dijadwalkan (satu per draft/konfirmasi). */
+  staffAlertKeys?: string[];
 }
 
 export interface StateRecord {
@@ -464,12 +477,20 @@ function buildBookingSummary(
   const eb = computeExtraBeds(policy, totalRooms, totalGuests);
   const extraBeds = context.extraBeds ?? eb.extraBeds;
   const hasRate = resolvedExtraBedRate > 0;
-  const extraBedTotal = nights && extraBeds > 0 && hasRate ? nights * extraBeds * resolvedExtraBedRate : 0;
+  const extraBedTotal = nights && extraBeds > 0 && hasRate ? computeExtraBedTotal(extraBeds, resolvedExtraBedRate, nights) : 0;
 
   // Subtotal kamar: pakai dynamic (jika tersedia), kalau tidak fallback rata.
   const fallbackSubtotal = nights && pricePerNight ? nights * pricePerNight * totalRooms : 0;
   const roomSubtotal = overrides?.roomSubtotal ?? context.totalPrice ?? fallbackSubtotal;
-  const grandTotal = roomSubtotal + extraBedTotal;
+  // Satu sumber angka (integer rupiah) — sama dengan yang dipakai create_booking.
+  const grandTotal = computeGrandTotal({
+    roomSubtotal,
+    extraBeds,
+    extraBedRate: hasRate ? resolvedExtraBedRate : 0,
+    nights: nights ?? 0,
+  });
+  // Catat angka yang DITAMPILKAN ke tamu; dicocokkan dengan hitungan server sebelum write.
+  context.quotedTotal = grandTotal > 0 ? grandTotal : undefined;
 
   const ratePrefix = overrides?.hasDynamicBreakdown ? "rata-rata " : "";
   const paymentLine =
@@ -592,7 +613,27 @@ type ResolvedBookingRates = Awaited<ReturnType<typeof resolveBookingSummaryRates
  * bisa dipakai ulang untuk apply-ke-context DAN build ringkasan, alih-alih
  * dua kali round-trip DB untuk data yang sama.
  */
-function buildBookingSummaryFromResolved(
+async function buildBookingSummaryFromResolved(
+  ctx: ToolContext,
+  context: BookingContext,
+  resolved: ResolvedBookingRates,
+): Promise<StateMachineResult> {
+  const previousQuote = context.quotedTotal;
+  const result = buildBookingSummaryFromResolvedSync(ctx, context, resolved);
+  // Simpan total yang ditampilkan agar langkah konfirmasi bisa membandingkannya
+  // dengan hitungan server (context dipersist SEBELUM ringkasan dibangun di
+  // banyak jalur, jadi quotedTotal harus dipersist ulang di sini bila berubah).
+  if (ctx.phone && context.quotedTotal !== previousQuote) {
+    try {
+      await updateBookingState(ctx.supabaseAdmin, ctx.phone, "CONFIRMING_BOOKING", context);
+    } catch (e) {
+      console.warn("[BookingState] gagal menyimpan quotedTotal (non-fatal):", e);
+    }
+  }
+  return result;
+}
+
+function buildBookingSummaryFromResolvedSync(
   ctx: ToolContext,
   context: BookingContext,
   resolved: ResolvedBookingRates,
@@ -625,7 +666,7 @@ export async function buildBookingSummaryAsync(ctx: ToolContext, context: Bookin
   } catch (e) {
     console.warn("[BookingState] resolveBookingSummaryRates failed, fallback sync:", e);
   }
-  return buildBookingSummaryFromResolved(ctx, context, resolved);
+  return await buildBookingSummaryFromResolved(ctx, context, resolved);
 }
 
 /**
@@ -1077,6 +1118,194 @@ function computeExtraBeds(
 /**
  * Evaluates the message against the current state and returns whether the state machine handled it.
  */
+// ─── Aturan konfirmasi & write tunggal booking ──────────────────────────────
+
+/**
+ * Kunci idempotensi write booking untuk SATU ringkasan yang dikonfirmasi.
+ *
+ * Deterministik terhadap (nomor, isi pesanan, `updated_at` state): dua pesan
+ * "ya" yang diproses bersamaan membaca state yang sama → kunci sama → unique
+ * index `bookings_idempotency_key_uidx` menjamin hanya satu booking. Setelah
+ * write gagal state diperbarui (`updated_at` berubah) sehingga percobaan ulang
+ * memakai kunci baru — tidak menabrak booking lama yang sudah di-rollback.
+ */
+export function buildConfirmIdempotencyKey(
+  phone: string,
+  context: BookingContext,
+  stateUpdatedAt: string,
+): string {
+  const rooms = (context.rooms ?? [])
+    .map((r) => `${r.roomTypeId}x${r.quantity}`)
+    .sort()
+    .join(",");
+  const raw = [
+    normalizePhone(phone),
+    context.checkIn ?? "",
+    context.checkOut ?? "",
+    context.roomId ?? "",
+    rooms,
+    (context.guestName ?? "").trim().toLowerCase(),
+    context.adults ?? "",
+    context.children ?? 0,
+    context.extraBeds ?? 0,
+    context.paymentType ?? "",
+    context.dpAmount ?? 0,
+    stateUpdatedAt,
+  ].join("|");
+  // djb2 — cukup untuk membedakan; bukan untuk keamanan.
+  let h = 5381;
+  for (let i = 0; i < raw.length; i++) h = ((h << 5) + h + raw.charCodeAt(i)) >>> 0;
+  return `wa_confirm:${normalizePhone(phone)}:${h.toString(16)}`;
+}
+
+/**
+ * Balasan saat write booking GAGAL. Wajib: jelas bahwa pemesanan BELUM
+ * tercatat (tanpa kode booking), data tidak perlu diisi ulang, dan ada langkah
+ * lanjut (coba lagi / dibantu staf). Tidak boleh terdengar seperti sukses.
+ *
+ * `detail` hanya dipakai untuk penyebab yang bisa ditindaklanjuti tamu
+ * (kamar penuh, tanggal tidak dijual, dll) — pesan teknis tidak diteruskan.
+ */
+export function buildBookingWriteFailureReply(opts: { detail?: string | null; staffNotified: boolean }): string {
+  const detail = opts.detail?.trim();
+  const reason = detail ? ` Penyebab: ${detail}.` : "";
+  const staffLine = opts.staffNotified
+    ? "Staf kami juga sudah kami beri tahu dan bisa membantu mencatatnya langsung."
+    : 'Atau balas "Admin" supaya dibantu staf kami langsung.';
+  return (
+    `Mohon maaf Kak, pemesanan Kakak *belum tercatat* di sistem kami (belum ada kode booking).${reason}\n\n` +
+    `Data pesanan tetap saya simpan, jadi Kakak tidak perlu mengisi ulang. ` +
+    `Balas "Ya" untuk saya coba catat lagi. ${staffLine}\n\n` +
+    `Kalau mau mengubah kamar atau tanggal, sebutkan saja ya Kak.`
+  );
+}
+
+/** Pesan error write yang aman diteruskan ke tamu (bukan detail teknis DB). */
+function guestSafeWriteFailureDetail(result: { error?: unknown; room_conflict?: unknown } | null): string | null {
+  const err = typeof result?.error === "string" ? result.error.trim() : "";
+  if (!err) return null;
+  // Error teknis diawali "Gagal ..." (pesan DB/PostgREST) — jangan diteruskan.
+  if (/^gagal\b/i.test(err)) return null;
+  // Error validasi internal untuk agent (mengandung instruksi tool) — jangan diteruskan.
+  if (/panggil ulang|create_booking|tool/i.test(err)) return null;
+  return err.replace(/[.\s]+$/, "");
+}
+
+/**
+ * Notifikasi staf saat booking bot tidak tercatat. Fire-and-forget: tidak
+ * menunggu kirim, tidak melempar, tidak mengirim ke tamu. Satu kunci draft
+ * hanya dijadwalkan sekali.
+ */
+function alertStaffBookingWriteFailed(
+  ctx: ToolContext,
+  phone: string,
+  context: BookingContext,
+  draftKey: string,
+  kind: "write_failed" | "total_mismatch",
+): void {
+  const alertKey = `${kind}:${draftKey}`;
+  const sent = context.staffAlertKeys ?? [];
+  if (sent.includes(alertKey)) return;
+  context.staffAlertKeys = [...sent, alertKey];
+  const reason = kind === "total_mismatch" ? "total tidak cocok dengan hitungan sistem" : "gagal dicatat";
+  runDeferred("BookingWrite.notifyStaff", async () => {
+    const { notifyBookingWriteFailed } = await import("@/services/manager-notifier.service");
+    await notifyBookingWriteFailed(ctx.supabaseAdmin as any, {
+      phone: normalizePhone(phone),
+      guestName: context.guestName,
+      roomType: context.roomName,
+      checkIn: context.checkIn,
+      checkOut: context.checkOut,
+      total: context.quotedTotal ?? context.totalPrice ?? null,
+      dedupeKey: alertKey,
+      reason,
+    });
+  });
+}
+
+/** Catat kegagalan write: log terstruktur + tiket handoff staf (best-effort, tidak pernah throw). */
+async function recordBookingWriteFailure(
+  ctx: ToolContext,
+  phone: string,
+  context: BookingContext,
+  failure: { error: string; thrown: boolean },
+): Promise<boolean> {
+  console.error(
+    "[BookingWrite] GAGAL — pemesanan belum tercatat: " +
+      JSON.stringify({
+        phone_tail: normalizePhone(phone).slice(-6),
+        check_in: context.checkIn,
+        check_out: context.checkOut,
+        room: context.roomName,
+        thrown: failure.thrown,
+        error: failure.error.slice(0, 300),
+      }),
+  );
+  try {
+    const { createHandoffTicket } = await import("@/services/frustration-detector");
+    const ticket = await createHandoffTicket(ctx.supabaseAdmin, {
+      phone,
+      kind: "booking_write_failed",
+      triggerMessage: `Booking gagal dicatat: ${failure.error}`,
+      context,
+    });
+    return !!ticket;
+  } catch (e) {
+    console.warn("[BookingWrite] gagal membuat tiket handoff (non-fatal):", e);
+    return false;
+  }
+}
+
+// ─── Nomor telepon: harus aktif WhatsApp, format 62xxxx ──────────────────────
+
+/** Normalisasi ke 62xxxx (digit saja); null bila bukan nomor telepon yang masuk akal. */
+export function normalizeWaNumber(raw: string | null | undefined): string | null {
+  const p = normalizePhone(raw);
+  return /^[1-9][0-9]{8,14}$/.test(p) ? p : null;
+}
+
+const PHONE_ACTIVE_YES_PATTERN =
+  /^(ya|iya|iyaa+|yes|betul|benar|bener|aktif|ok+|oke|sip|siap)(\s+(ya|iya|kak?|aktif|wa|whatsapp|kok|betul|benar))*[\s.!,]*$/i;
+const PHONE_USE_CHAT_NUMBER_PATTERN =
+  /\b(tidak|bukan|nggak|ngga|gak|ga|pakai nomor ini|pake nomor ini|nomor ini (saja|aja)|yang ini (saja|aja)|nomor wa ini)\b/i;
+
+/**
+ * Nomor yang disebut tamu: sama dengan nomor WA thread → langsung dipakai;
+ * beda → disimpan sebagai `pendingPhone` dan TIDAK dipakai sampai tamu
+ * mengonfirmasi bahwa nomor itu aktif WhatsApp (konfirmasi dibalas ke channel
+ * yang sama).
+ */
+export function proposeGuestPhone(
+  context: BookingContext,
+  waPhone: string,
+  raw: string,
+): "same" | "pending" | "invalid" {
+  const n = normalizeWaNumber(raw);
+  if (!n) return "invalid";
+  if (n === normalizePhone(waPhone)) {
+    context.guestPhone = n;
+    context.pendingPhone = undefined;
+    return "same";
+  }
+  context.pendingPhone = n;
+  return "pending";
+}
+
+export function buildPhoneActiveQuestion(pending: string, waPhone: string): string {
+  return (
+    `Nomor +${pending} yang Kakak sebutkan, apakah aktif WhatsApp? ` +
+    `Konfirmasi pemesanan akan kami kirim ke nomor itu. ` +
+    `Balas "Ya" kalau aktif WhatsApp, atau "Pakai nomor ini saja" untuk memakai nomor WhatsApp yang sedang chat (+${normalizePhone(waPhone)}).`
+  );
+}
+
+/** Kunci draft: stabil per isi pesanan (tanpa waktu), sama untuk percobaan ulang. */
+export function buildDraftKey(phone: string, context: BookingContext): string {
+  return buildConfirmIdempotencyKey(phone, context, "").replace(/^wa_confirm:/, "wa_draft:");
+}
+
+const STAFF_REQUEST_PATTERN = /\b(admin|staf|staff|petugas|manusia|cs|customer service)\b/i;
+
 export async function processBookingState(
   ctx: ToolContext,
   phone: string,
@@ -1098,6 +1327,8 @@ export async function processBookingState(
      * saat alur booking dimulai dan tamu terdaftar 1 dewasa).
      */
     knownGuestCount?: number | null;
+    /** Hanya untuk test: ganti penulis booking (default: tool `createBooking`). */
+    createBookingImpl?: typeof createBooking;
   },
 ): Promise<StateMachineResult> {
   const supabase = ctx.supabaseAdmin;
@@ -1126,6 +1357,49 @@ export async function processBookingState(
     const resolvedRates = await applyResolvedRatesToContext(ctx, context);
     await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
     return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
+  }
+
+  // Nomor lain yang disebut tamu menunggu konfirmasi "aktif WhatsApp".
+  if (
+    context.pendingPhone &&
+    state !== "IDLE" &&
+    state !== "AWAITING_CANCEL_CONFIRMATION" &&
+    state !== "PAYMENT_PENDING" &&
+    state !== "COMPLETED" &&
+    !CANCELLATION_PATTERNS.test(message)
+  ) {
+    const pending = context.pendingPhone;
+    const waNumber = normalizeWaNumber(phone) ?? normalizePhone(phone);
+    const typed = extractPhone(message);
+    let accepted: string | null = null;
+    if (typed) {
+      const r = proposeGuestPhone(context, phone, typed);
+      if (r === "same") accepted = context.guestPhone ?? waNumber;
+      else if (r === "invalid") {
+        return { handled: true, reply: buildPhoneActiveQuestion(pending, phone) };
+      } else {
+        await updateBookingState(supabase, phone, state, context);
+        return { handled: true, reply: buildPhoneActiveQuestion(context.pendingPhone ?? pending, phone) };
+      }
+    } else if (PHONE_ACTIVE_YES_PATTERN.test(message.trim())) {
+      accepted = pending;
+    } else if (PHONE_USE_CHAT_NUMBER_PATTERN.test(message)) {
+      accepted = waNumber;
+    } else {
+      return { handled: true, reply: buildPhoneActiveQuestion(pending, phone) };
+    }
+    context.guestPhone = accepted ?? waNumber;
+    context.pendingPhone = undefined;
+    await updateBookingState(supabase, phone, state, context);
+    const prefix = `Baik Kak, nomor +${context.guestPhone} saya catat untuk konfirmasi pemesanan. `;
+    if (state === "CONFIRMING_BOOKING") {
+      const sum = await buildBookingSummaryAsync(ctx, context);
+      return { handled: true, reply: prefix + "\n\n" + (sum.reply ?? "") };
+    }
+    const next = await processBookingState(ctx, phone, "", { ...currentStateRecord, context }, opts);
+    return next.handled && next.reply
+      ? { ...next, reply: prefix + "\n\n" + next.reply }
+      : { handled: true, reply: prefix.trim() };
   }
 
   if (state === "AWAITING_CANCEL_CONFIRMATION") {
@@ -1410,8 +1684,11 @@ export async function processBookingState(
     // 3) Nomor HP → simpan, tetap minta tipe kamar.
     const typedPhone = extractPhone(trimmed);
     if (typedPhone) {
-      context.guestPhone = typedPhone;
+      const proposal = proposeGuestPhone(context, phone, typedPhone);
       await updateBookingState(supabase, phone, state, context);
+      if (proposal === "pending" && context.pendingPhone) {
+        return { handled: true, reply: buildPhoneActiveQuestion(context.pendingPhone, phone) };
+      }
       return reAskWithPrefix(`Nomor ${typedPhone} sudah saya catat, Kak. `);
     }
 
@@ -1582,10 +1859,16 @@ export async function processBookingState(
     }
 
     if (extracted.email) context.guestEmail = extracted.email;
-    if (extracted.phone) context.guestPhone = extracted.phone;
+    if (extracted.phone) proposeGuestPhone(context, phone, extracted.phone);
     if (extracted.adults) context.adults = extracted.adults;
     if (extracted.children !== undefined) context.children = extracted.children;
     if (extracted.extra_beds !== undefined) context.extraBeds = extracted.extra_beds;
+
+    // Nomor lain yang disebut tamu: tanyakan dulu apakah aktif WhatsApp sebelum dipakai.
+    if (context.pendingPhone) {
+      await updateBookingState(supabase, phone, state, context);
+      return { handled: true, reply: buildPhoneActiveQuestion(context.pendingPhone, phone) };
+    }
 
     // Additional slots
     if (extracted.is_invoice_request) {
@@ -1720,7 +2003,7 @@ export async function processBookingState(
       try {
         const resolvedRates = await applyResolvedRatesToContext(ctx, context).catch(() => null);
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-        const summaryResult = buildBookingSummaryFromResolved(ctx, context, resolvedRates as any);
+        const summaryResult = await buildBookingSummaryFromResolved(ctx, context, resolvedRates as any);
         if (inlineAnswerPrefix && summaryResult.reply) {
           summaryResult.reply = inlineAnswerPrefix + summaryResult.reply;
         }
@@ -1769,6 +2052,28 @@ export async function processBookingState(
       console.info(`[BookingState] CONFIRMING_BOOKING → PAYMENT_PENDING: bookingCode sudah ada (${context.bookingCode}), skip createBooking.`);
       await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
       return { handled: false };
+    }
+
+    // Setelah write gagal tamu boleh minta dibantu staf. Data pesanan sudah
+    // tersimpan di state; pastikan tiket handoff ada, jangan minta data ulang.
+    if (context.writeFailedAt && STAFF_REQUEST_PATTERN.test(message) && !CONFIRM_PATTERN.test(message)) {
+      let ticketed = context.writeFailureTicketed === true;
+      if (!ticketed) {
+        ticketed = await recordBookingWriteFailure(ctx, phone, context, {
+          error: "tamu minta dibantu staf setelah pemesanan gagal dicatat",
+          thrown: false,
+        });
+        context.writeFailureTicketed = ticketed;
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+      }
+      return {
+        handled: true,
+        reply: ticketed
+          ? "Baik Kak, permintaan Kakak sudah saya teruskan ke staf kami. Mohon ditunggu ya, pemesanannya akan dibantu dicatat langsung. " +
+            "Data pesanan Kakak tetap tersimpan, tidak perlu diisi ulang."
+          : "Baik Kak. Mohon maaf, saya belum berhasil meneruskan ke staf lewat sistem. " +
+            'Silakan hubungi admin kami lewat chat ini, atau balas "Ya" supaya saya coba catat pemesanannya lagi.',
+      };
     }
 
     // Koreksi tipe kamar harus diproses sebelum kata konfirmasi. Pesan seperti
@@ -1903,15 +2208,24 @@ export async function processBookingState(
     if (CONFIRM_PATTERN.test(message)) {
       // GATING INVOICE: validasi semua slot wajib sebelum buat booking.
       // guestPhone diisi otomatis dari nomor WA sesi — tidak perlu divalidasi di sini.
-      if (!context.guestPhone || context.guestPhone.length < 8) {
-        context.guestPhone = phone;
-      }
+      // Nomor wajib aktif WhatsApp: default nomor WA thread; nomor lain hanya
+      // dipakai setelah tamu mengonfirmasinya (pendingPhone ditangani di gate atas).
+      // Selalu disimpan dalam format 62xxxx.
+      context.guestPhone = normalizeWaNumber(context.guestPhone) ?? normalizeWaNumber(phone) ?? undefined;
       const missing: string[] = [];
+      if (!context.guestPhone) missing.push("nomor telepon");
       if (!context.checkIn || !context.checkOut) missing.push("tanggal");
       if (!context.roomName) missing.push("tipe kamar");
       if (!context.guestName) missing.push("nama");
       // Email opsional: hanya validasi format jika tamu mengisinya.
       if (context.guestEmail && !EMAIL_PATTERN.test(context.guestEmail)) missing.push("email");
+      // Total harga wajib datang dari perhitungan resmi (tarif harian/base_rate
+      // lewat applyResolvedRatesToContext), bukan dikarang. Bila belum ada,
+      // hitung ulang sekali; bila tetap kosong, jangan tulis booking.
+      if (!((context.totalPrice ?? 0) > 0)) {
+        await applyResolvedRatesToContext(ctx, context);
+      }
+      if (!((context.totalPrice ?? 0) > 0)) missing.push("total harga");
       const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
       const confirmPolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
       const eb = computeExtraBeds(confirmPolicy, totalRoomsCount, getTotalGuests(context));
@@ -1934,47 +2248,139 @@ export async function processBookingState(
         };
       }
 
-      // Create the booking deterministically with the data collected in context.
-      const raw = await createBooking(
-        {
-          room_type: context.roomName,
-          rooms: context.rooms,
-          full_name: context.guestName,
-          email: context.guestEmail,
-          phone: context.guestPhone,
-          check_in: context.checkIn,
-          check_out: context.checkOut,
-          // Sengaja diteruskan apa adanya: bila jumlah tamu tidak pernah
-          // disebut, `create_booking` yang menentukan default dari kapasitas
-          // kamar (Deluxe 2, Family Room 4) — bukan dipaksa 1 di sini.
-          adults: context.adults,
-          children: context.children ?? 0,
-          payment_type: context.paymentType ?? "full",
-          dp_amount: context.dpAmount ?? 0,
-          special_requests: context.specialRequests,
-          extra_beds: context.extraBeds ?? 0,
-        },
-        ctx,
-      );
+      // WRITE TUNGGAL: satu panggilan create_booking dengan data yang sudah
+      // dikonfirmasi tamu. Kunci idempotensi per-ringkasan mencegah duplikat
+      // bila pesan "ya" diproses dua kali (retry webhook / tamu ketuk dua kali).
+      const writeBooking = opts?.createBookingImpl ?? createBooking;
+      // Catatan sementara di Supabase SEBELUM write final: data tidak hilang bila
+      // write gagal / koneksi putus, dan staf bisa melanjutkan dari draft.
+      const draftKey = buildDraftKey(phone, context);
+      await saveBookingDraft(supabase, {
+        draftKey,
+        phone: normalizePhone(phone),
+        guestName: context.guestName,
+        checkIn: context.checkIn,
+        checkOut: context.checkOut,
+        roomType: context.roomName,
+        quotedTotal: context.quotedTotal,
+        payload: context as unknown as Record<string, unknown>,
+      });
+      const confirmKey = buildConfirmIdempotencyKey(phone, context, currentStateRecord.updated_at);
+      const writeCtx: ToolContext = { ...ctx, idempotencyKey: confirmKey };
 
-      let result: any = {};
+      let result: any = null;
+      let writeError: string | null = null;
+      let thrown = false;
       try {
-        result = JSON.parse(raw);
-      } catch {
-        /* ignore */
+        const raw = await writeBooking(
+          {
+            room_type: context.roomName,
+            rooms: context.rooms,
+            full_name: context.guestName,
+            email: context.guestEmail,
+            phone: context.guestPhone,
+            check_in: context.checkIn,
+            check_out: context.checkOut,
+            // Sengaja diteruskan apa adanya: bila jumlah tamu tidak pernah
+            // disebut, `create_booking` yang menentukan default dari kapasitas
+            // kamar (Deluxe 2, Family Room 4) — bukan dipaksa 1 di sini.
+            adults: context.adults,
+            children: context.children ?? 0,
+            payment_type: context.paymentType ?? "full",
+            dp_amount: context.dpAmount ?? 0,
+            special_requests: context.specialRequests,
+            extra_beds: context.extraBeds ?? 0,
+            // Total yang tadi ditampilkan & disetujui tamu. create_booking menolak
+            // menulis bila hitungan server berbeda. Tanpa nilai (state lama sebelum
+            // fitur ini) guard dilewati.
+            expected_total: context.quotedTotal,
+          },
+          writeCtx,
+        );
+        try {
+          result = JSON.parse(raw);
+        } catch {
+          writeError = "respons create_booking tidak terbaca";
+        }
+      } catch (e) {
+        thrown = true;
+        writeError = e instanceof Error ? e.message : String(e);
       }
 
-      if (!result.ok) {
+      // Total terkonfirmasi != hitungan server: BELUM ada yang ditulis. Hentikan,
+      // pakai angka sistem, dan minta tamu mengonfirmasi ulang (bukan kegagalan write).
+      if (!writeError && result?.total_mismatch === true) {
+        const serverTotal = toRupiah(result.server_total);
+        const confirmedTotal = toRupiah(result.confirmed_total);
+        console.warn(
+          `[BookingWrite] total tidak cocok — dikonfirmasi ${confirmedTotal}, server ${serverTotal}; write dihentikan.`,
+        );
+        context.quotedTotal = serverTotal > 0 ? serverTotal : undefined;
+        await markBookingDraft(supabase, draftKey, {
+          status: "failed",
+          error: `total_mismatch confirmed=${confirmedTotal} server=${serverTotal}`,
+        });
+        alertStaffBookingWriteFailed(ctx, phone, context, draftKey, "total_mismatch");
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+        const fmt = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
         return {
           handled: true,
           reply:
-            `Mohon maaf Kak, pemesanan belum bisa diproses: ${result.error ?? "terjadi kendala"}. ` +
-            `Data booking sebelumnya tetap saya simpan. Kakak bisa koreksi datanya, pilih kamar/tanggal lain, atau balas "batal".`,
+            `Mohon maaf Kak, total pemesanan terbaru dari sistem kami ${fmt(serverTotal)}, ` +
+            `berbeda dari ${fmt(confirmedTotal)} yang tadi saya sampaikan. ` +
+            `Pemesanan belum saya catat. Balas "Ya" kalau setuju dengan total ${fmt(serverTotal)}, ` +
+            `atau sebutkan koreksinya ya Kak.`,
         };
       }
 
+      // Sukses HANYA bila tool mengembalikan ok:true DAN kode booking.
+      if (!writeError && (!result?.ok || !result?.reference_code)) {
+        writeError = typeof result?.error === "string" && result.error ? result.error : "booking tidak tersimpan";
+      }
+
+      if (writeError) {
+        const staffNotified =
+          context.writeFailureTicketed === true ||
+          (await recordBookingWriteFailure(ctx, phone, context, { error: writeError, thrown }));
+        // Draft dibiarkan (status 'failed') agar staf bisa melanjutkan.
+        await markBookingDraft(supabase, draftKey, { status: "failed", error: writeError });
+        context.writeFailedAt = new Date().toISOString();
+        context.writeFailureTicketed = staffNotified;
+        alertStaffBookingWriteFailed(ctx, phone, context, draftKey, "write_failed");
+        // State tetap CONFIRMING_BOOKING dengan data utuh: "ya" berikutnya = coba lagi,
+        // tamu tidak diminta mengisi ulang apa pun.
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+        return {
+          handled: true,
+          reply: buildBookingWriteFailureReply({
+            detail: thrown ? null : guestSafeWriteFailureDetail(result),
+            staffNotified,
+          }),
+        };
+      }
+
+      if (context.writeFailureTicketed) {
+        // Percobaan ulang berhasil: tutup tiket handoff dari kegagalan sebelumnya (best-effort).
+        try {
+          await (supabase as any)
+            .from("handoff_tickets")
+            .update({
+              status: "resolved",
+              booking_code: result.reference_code,
+              resolution_note: "Booking berhasil dicatat bot pada percobaan ulang.",
+              resolved_at: new Date().toISOString(),
+            })
+            .eq("phone", phone)
+            .eq("status", "open")
+            .eq("frustration_kind", "booking_write_failed");
+        } catch (e) {
+          console.warn("[BookingWrite] gagal menutup tiket handoff (non-fatal):", e);
+        }
+      }
+      await markBookingDraft(supabase, draftKey, { status: "completed", bookingCode: result.reference_code });
       context.bookingCode = result.reference_code;
+      context.writeFailedAt = undefined;
+      context.writeFailureTicketed = undefined;
       await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
 
       return {

@@ -16,6 +16,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fmtDateID } from "@/lib/date";
+import { findNotificationThreadId } from "./notification-thread-resolver";
 import { sendWhatsAppMessage } from "./whatsapp.service";
 import { sendMessage as tgSendMessage, sendPhoto as tgSendPhoto, type ReplyMarkup } from "./telegram.service";
 import { normalizeAssistantName } from "@/ai/agents/persona";
@@ -219,7 +220,8 @@ interface SendOptions {
     | "zombie_timeout"
     | "booking_stuck"
     | "rpc_failure"
-    | "ai_credit_low";
+    | "ai_credit_low"
+    | "booking_write_failed";
   recipient: ManagerContact;
   message: string;
   fileUrl?: string;
@@ -1480,5 +1482,156 @@ export async function notifyAiCreditLow(
     console.warn(`[ManagerNotifier] AI credit alert terkirim: ${opts.kind} (status ${opts.status})`);
   } catch (e) {
     console.warn("[ManagerNotifier] notifyAiCreditLow error (non-fatal):", e);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Booking bot gagal tercatat                                         */
+/* ------------------------------------------------------------------ */
+
+const THREAD_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface BookingWriteFailedNotice {
+  phone: string;
+  guestName?: string | null;
+  roomType?: string | null;
+  checkIn?: string | null;
+  checkOut?: string | null;
+  /** Integer rupiah yang ditampilkan ke staf. */
+  total?: number | null;
+  threadId?: string | null;
+  /** Satu kegagalan = satu kunci (draft atau konfirmasi). */
+  dedupeKey: string;
+  /** Catatan singkat untuk log internal, bukan pesan ke tamu. */
+  reason?: string | null;
+}
+
+function phoneDigits(phone: string): string {
+  return String(phone ?? "").replace(/\D/g, "");
+}
+
+/** Empat digit akhir untuk push. Nomor lengkap hanya di log internal. */
+export function maskPhoneTail(phone: string): string {
+  const digits = phoneDigits(phone);
+  if (digits.length <= 4) return digits || "----";
+  return `···${digits.slice(-4)}`;
+}
+
+export function buildBookingWriteFailedNotice(
+  input: BookingWriteFailedNotice & { threadId: string | null },
+): { logMessage: string; pushTitle: string; pushBody: string; url: string } {
+  const name = (input.guestName || "").trim() || "Tamu";
+  const room = (input.roomType || "").trim() || "Kamar";
+  const dates =
+    input.checkIn && input.checkOut ? `${fmtDateID(input.checkIn)} – ${fmtDateID(input.checkOut)}` : "-";
+  const total = formatRupiah(input.total);
+  const fullPhone = phoneDigits(input.phone) || String(input.phone ?? "").trim() || "-";
+  const url = input.threadId ? `/admin/whatsapp?thread=${input.threadId}` : "/admin/whatsapp";
+  const pushTitle = "Booking via bot GAGAL tercatat";
+  const reason = (input.reason || "").trim();
+  const logMessage =
+    `${pushTitle}\n\n` +
+    `Tamu: ${name}\n` +
+    `Nomor: ${fullPhone}\n` +
+    `Kamar: ${room}\n` +
+    `Tanggal: ${dates}\n` +
+    `Total: ${total}\n` +
+    (reason ? `Penyebab: ${reason}\n` : "") +
+    `Thread: ${url}`;
+  // Push sengaja tanpa nomor lengkap — hanya 4 digit akhir.
+  const pushBody = `${name} · ${maskPhoneTail(input.phone)}\n${room} · ${dates}\nTotal ${total}`;
+  return { logMessage, pushTitle, pushBody, url };
+}
+
+/**
+ * Beri tahu staf bahwa booking WhatsApp bot tidak tercatat.
+ * Mengikuti pola NEW BOOKING / BOOKING EXPIRED (notification_logs + fan-out
+ * ke pengelola) dan push aplikasi lewat `enqueue_staff_push`.
+ * Tidak pernah mengirim ke nomor tamu. Tidak pernah throw.
+ * Dedupe satu baris per `dedupeKey` (draft/konfirmasi).
+ */
+export async function notifyBookingWriteFailed(db: Db, input: BookingWriteFailedNotice): Promise<void> {
+  try {
+    const dedupeKey = `booking_write_failed:${input.dedupeKey}`;
+    const { data: existing } = await db
+      .from("notification_logs")
+      .select("id")
+      .eq("dedupe_key", dedupeKey)
+      .eq("channel", "push")
+      .maybeSingle();
+    if ((existing as { id?: string } | null)?.id) {
+      console.info(`[ManagerNotifier] Skip booking gagal — sudah dinotifikasi: ${dedupeKey}`);
+      return;
+    }
+
+    let threadId = input.threadId?.trim() || null;
+    if (!threadId) {
+      threadId = await findNotificationThreadId(db as any, input.phone);
+    }
+    const notice = buildBookingWriteFailedNotice({ ...input, threadId });
+
+    const claim = await db
+      .from("notification_logs")
+      .insert({
+        event_type: "booking_write_failed",
+        // Penerima baris ini adalah saluran push staf, bukan nomor tamu.
+        // Nomor lengkap tamu ada di `message` (log internal).
+        recipient_phone: "staff-push",
+        recipient_role: "staff",
+        message: notice.logMessage,
+        status: "sent",
+        attempts: 1,
+        dedupe_key: dedupeKey,
+        related_id: threadId && THREAD_UUID_RE.test(threadId) ? threadId : null,
+        channel: "push",
+        sent_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (claim.error) {
+      const message = String((claim.error as { message?: string }).message ?? claim.error);
+      if (/duplicate|unique|23505/i.test(message)) {
+        console.info(`[ManagerNotifier] Skip booking gagal — dedupe: ${dedupeKey}`);
+        return;
+      }
+      console.warn("[ManagerNotifier] log booking gagal tidak tersimpan (push tetap dicoba):", message);
+    }
+
+    const { error: pushError } = await db.rpc("enqueue_staff_push", {
+      p_payload: {
+        kind: "booking_write_failed",
+        title: notice.pushTitle,
+        body: notice.pushBody,
+        url: notice.url,
+        thread_id: threadId,
+      },
+    });
+    if (pushError) {
+      console.warn("[ManagerNotifier] enqueue_staff_push booking gagal:", pushError.message ?? pushError);
+    }
+
+    // Saluran staf yang sama dengan booking baru / kedaluwarsa. Bukan ke tamu.
+    const { waToken } = await getPropertyTokens(db);
+    const managers = (await getActiveManagers(db)).filter((m) => !!m.phone || !!m.telegram_chat_id);
+    await Promise.all([
+      managers.length > 0
+        ? fanOut(db, waToken, managers, {
+            eventType: "booking_write_failed",
+            message: notice.logMessage,
+            relatedId: threadId && THREAD_UUID_RE.test(threadId) ? threadId : null,
+            dedupeKeyFor: (m) => `${dedupeKey}:mgr:${m.id}`,
+          })
+        : Promise.resolve(),
+      fanOutToAgentChannels(db, ["front-office", "manager"], {
+        eventType: "booking_write_failed",
+        message: notice.logMessage,
+        relatedId: threadId && THREAD_UUID_RE.test(threadId) ? threadId : null,
+        dedupeKeyFor: (agent, chat) => `${dedupeKey}:agent:${agent}:${chat}`,
+      }),
+    ]);
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyBookingWriteFailed error (non-fatal):", e);
   }
 }

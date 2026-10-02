@@ -804,7 +804,10 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
     bookingInProgress
       ? "TAMU SEDANG MENGISI DATA BOOKING: jawab pertanyaannya SINGKAT, ingatkan akan lanjut " +
         "pengisian data. JANGAN panggil `start_booking_details` lagi, " +
-        "JANGAN tanya nama/email/HP — proses sudah jalan."
+        "JANGAN tanya nama/email/HP — proses sudah jalan. JANGAN menanyakan ulang data yang sudah " +
+        "ada di ringkasan (nama, HP, tipe kamar, tanggal, total). JANGAN pernah menyatakan booking " +
+        "sudah berhasil/tercatat kecuali sistem sudah memberi kode booking; bila tamu menanyakan " +
+        "status dan belum ada kode booking, jawab jujur bahwa pemesanan belum tercatat."
       : "",
 
     trainingBlock,
