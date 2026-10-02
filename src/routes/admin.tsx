@@ -9,15 +9,38 @@ import {
 } from "@/lib/auth-return";
 import { authErrorText, isInvalidSessionError, isTransientAuthError } from "@/lib/auth-storage";
 import { checkSession, clearStaleStaffAuth } from "@/lib/staff-auth-cleanup";
+import {
+  LAYOUT_REUSE_MS,
+  SESSION_TRUST_MS,
+  markSessionValidated,
+  resetSessionValidated,
+  sessionValidatedWithin,
+} from "@/lib/admin-session-trust";
 
 /**
  * beforeLoad runs on every /admin/* navigation. A full checkSession() calls the
  * auth server (getUser), which made each page switch wait on the network.
- * After one successful check we trust the local session for a few minutes.
+ * After one successful check we trust the local session for a few minutes
+ * (SESSION_TRUST_MS, state in @/lib/admin-session-trust).
  * The first check, expired tokens, and sign-out still take the full path.
+ *
+ * supabase-js runs getSession() and getUser() under one lock, and every server
+ * function call awaits getSession() first (auth-attacher). A second getUser()
+ * fired by the layout right after beforeLoad's getUser() therefore queued the
+ * dashboard's first requests behind one more auth round trip. When beforeLoad
+ * validated the session moments ago (LAYOUT_REUSE_MS), the layout reuses that result.
  */
-const SESSION_TRUST_MS = 3 * 60_000;
-let lastValidAt = 0;
+
+/** Warm the TCP+TLS connection to Supabase while the admin scripts download. */
+function supabaseOriginLinks(): Array<{ rel: string; href: string; crossOrigin: "anonymous" }> {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  if (typeof url !== "string" || !url.startsWith("https://")) return [];
+  try {
+    return [{ rel: "preconnect", href: new URL(url).origin, crossOrigin: "anonymous" }];
+  } catch {
+    return [];
+  }
+}
 
 export const Route = createFileRoute("/admin")({
   // The session lives in localStorage, so a server render cannot call getUser().
@@ -27,10 +50,11 @@ export const Route = createFileRoute("/admin")({
   ssr: false,
   head: () => ({
     meta: [{ name: "robots", content: "noindex, nofollow" }],
+    links: supabaseOriginLinks(),
   }),
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
-    if (Date.now() - lastValidAt < SESSION_TRUST_MS) {
+    if (sessionValidatedWithin(SESSION_TRUST_MS)) {
       try {
         const { data } = await supabase.auth.getSession();
         if (data.session) return;
@@ -38,10 +62,10 @@ export const Route = createFileRoute("/admin")({
         /* fall through to the full check */
       }
     }
-    lastValidAt = 0;
+    resetSessionValidated();
     const status = await checkSession("admin beforeLoad");
     if (status === "valid") {
-      lastValidAt = Date.now();
+      markSessionValidated();
       markStaffSessionHint();
       return;
     }
@@ -108,6 +132,13 @@ function AdminLayout() {
         return;
       }
       cancelLeave();
+      if (
+        (reason === "INITIAL_SESSION" || reason.startsWith("session check")) &&
+        sessionValidatedWithin(LAYOUT_REUSE_MS)
+      ) {
+        keep(`${reason} (validated by beforeLoad)`);
+        return;
+      }
       void supabase.auth.getUser().then(({ data, error }) => {
         if (cancelled || decided) return;
         if (data.user && !isInvalidSessionError(error)) {

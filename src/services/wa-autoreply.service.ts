@@ -1365,6 +1365,8 @@ export async function executeAutoreplyForPhone(
         // melewati orchestrator, jadi tanpa ini slot tanggal tak pernah
         // tersimpan dan turn berikutnya (mis. "per malam berapa?") akan
         // menanyakan tanggal lagi. Fire-and-forget — tak boleh menggagalkan reply.
+        // Catatan: update_conversation_topic MENGGABUNG slots (jsonb ||), jadi cukup
+        // kirim {checkIn, checkOut}; slot lama (jumlah tamu, tipe kamar) tetap ada.
         if (availabilityReply.dates) {
           const { checkIn, checkOut } = availabilityReply.dates;
           void runDeferred("Autoreply.persist-availability-dates", async () => {
@@ -1412,6 +1414,8 @@ export async function executeAutoreplyForPhone(
         };
         console.info(`[Autoreply] Contextual booking_inquiry fast-path for ${phone.slice(-6)}`);
 
+        // Catatan: update_conversation_topic MENGGABUNG slots (jsonb ||), jadi cukup
+        // kirim {checkIn, checkOut}; slot lama (jumlah tamu, tipe kamar) tetap ada.
         if (contextualReply.dates) {
           const { checkIn, checkOut } = contextualReply.dates;
           void runDeferred("Autoreply.persist-contextual-availability-dates", async () => {

@@ -25,6 +25,20 @@ export const Route = createFileRoute("/admin/bookings")({
       typeof search.booking === "string" && BOOKING_ID.test(search.booking) ? search.booking : undefined;
     return booking ? { booking } : {};
   },
+  // Prefetch the default first page (what the page opens with) when the route is
+  // matched/preloaded, in parallel with the chunk download. Not awaited. The key
+  // and function are the same as the useQuery in BookingsPage.
+  loader: ({ context }) => {
+    if (typeof window === "undefined") return;
+    void context.queryClient.prefetchQuery({
+      queryKey: [
+        "bookings",
+        { page: 1, statusFilter: "all", sourceFilter: "all", sortBy: "created_at", sortDir: "desc", search: "" },
+      ],
+      queryFn: () =>
+        fetchBookings({ page: 1, pageSize: PAGE_SIZE, status: "all", source: "all", search: "", sortBy: "created_at", sortDir: "desc" }),
+    });
+  },
   component: BookingsPage,
 });
 

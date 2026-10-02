@@ -147,7 +147,7 @@ export function AdminTopbar({
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/75 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 md:px-4">
+      <header className="admin-topbar sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/75 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 md:px-4">
         <SidebarTrigger className="-ml-1 max-md:hidden" />
         <Separator orientation="vertical" className="mr-1 h-5 max-md:hidden" />
 
