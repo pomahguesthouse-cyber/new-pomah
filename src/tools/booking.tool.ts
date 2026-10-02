@@ -11,6 +11,7 @@ import { isDateString, fmtDateID } from "@/lib/date";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
+import { computeGrandTotal, toRupiah, totalsMatch } from "@/lib/booking-total";
 import type { ToolContext, ToolHandler } from "./types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -588,13 +589,34 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
     }
   }
 
-  const roomTotal = assignments.reduce((acc, curr) => acc + curr.rate * nights, 0);
+  // Total = SATU sumber angka (src/lib/booking-total.ts), integer rupiah, dibulatkan
+  // sekali. Rata-rata tarif/malam bisa pecahan; tanpa pembulatan terpusat total
+  // ringkasan konfirmasi dan total DB bisa selisih beberapa sen/rupiah.
+  const roomSubtotalRaw = assignments.reduce((acc, curr) => acc + curr.rate * nights, 0);
   const extraBedRate = assignments
     .map((a) => ctx.rooms.find((r) => r.id === a.roomTypeId)?.extrabed_rate)
     .map((rate) => Number(rate ?? 0))
     .find((rate) => rate > 0) ?? 0;
-  const extraBedTotal = requestedExtraBeds > 0 && extraBedRate > 0 ? requestedExtraBeds * extraBedRate * nights : 0;
-  const total = roomTotal + extraBedTotal;
+  const extraBedTotal = requestedExtraBeds > 0 && extraBedRate > 0 ? toRupiah(requestedExtraBeds * extraBedRate * nights) : 0;
+  const total = computeGrandTotal({
+    roomSubtotal: roomSubtotalRaw,
+    extraBeds: requestedExtraBeds,
+    extraBedRate,
+    nights,
+  });
+
+  // Guard total terkonfirmasi: bila pemanggil (state machine) menyertakan total
+  // yang sudah dikonfirmasi tamu dan hasil hitung server berbeda, BERHENTI
+  // sebelum menulis apa pun — tamu harus mengonfirmasi ulang dengan angka sistem.
+  if (args.expected_total !== undefined && args.expected_total !== null && !totalsMatch(args.expected_total, total)) {
+    return JSON.stringify({
+      ok: false,
+      total_mismatch: true,
+      confirmed_total: toRupiah(args.expected_total),
+      server_total: total,
+      error: `Total yang dikonfirmasi (Rp${toRupiah(args.expected_total).toLocaleString("id-ID")}) berbeda dari hitungan sistem (Rp${total.toLocaleString("id-ID")}).`,
+    });
+  }
   const finalSpecialRequests = [
     specialRequests,
     requestedExtraBeds > 0
