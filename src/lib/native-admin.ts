@@ -102,10 +102,44 @@ async function finishNativeOAuth(rawUrl: string): Promise<void> {
   window.location.assign(next);
 }
 
-function openNotificationTarget(data: Record<string, unknown> | undefined): void {
+/**
+ * Navigate inside the SPA when the router is available. A full document load
+ * re-downloads and re-hydrates the whole admin, which doubled the startup cost
+ * when the app was opened from a notification. Falls back to a full load.
+ */
+export type NativeNavigate = (href: string) => void;
+
+function openNotificationTarget(
+  data: Record<string, unknown> | undefined,
+  navigate?: NativeNavigate,
+): void {
   const url = typeof data?.url === "string" ? data.url : "";
   if (!url.startsWith("/admin")) return;
+  if (navigate) {
+    try {
+      navigate(url);
+      return;
+    } catch (error) {
+      console.info("[push] in-app navigation failed, reloading", error);
+    }
+  }
   window.location.assign(url);
+}
+
+type IdleWindow = Window & {
+  requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+  cancelIdleCallback?: (id: number) => void;
+};
+
+/** Run `task` once the first screen is idle (or after `timeout` ms at the latest). */
+function runWhenIdle(task: () => void, timeout = 3000): Stop {
+  const w = window as IdleWindow;
+  if (w.requestIdleCallback) {
+    const id = w.requestIdleCallback(task, { timeout });
+    return () => w.cancelIdleCallback?.(id);
+  }
+  const id = window.setTimeout(task, Math.min(timeout, 1500));
+  return () => window.clearTimeout(id);
 }
 
 async function registerPushToken(token: string): Promise<void> {
@@ -183,23 +217,48 @@ function attachPullToRefresh(): Stop {
 }
 
 /** Native-only listeners. Safe to call on the website: it returns immediately. */
-export async function startNativeAdmin(): Promise<{ stop: Stop }> {
+export async function startNativeAdmin(
+  options: { navigate?: NativeNavigate } = {},
+): Promise<{ stop: Stop }> {
   const { Capacitor } = await import("@capacitor/core");
   if (!Capacitor.isNativePlatform()) return { stop: () => {} };
+  // Same marker src/client.tsx sets at boot; repeated here in case the bridge
+  // object was injected after the entry script ran.
+  document.documentElement.classList.add("native-app");
 
-  const { App } = await import("@capacitor/app");
-  const { SplashScreen } = await import("@capacitor/splash-screen");
-  const { StatusBar, Style } = await import("@capacitor/status-bar");
+  // Fetch the three plugin chunks together instead of one round trip each.
+  const [{ App }, { SplashScreen }, { StatusBar, Style }] = await Promise.all([
+    import("@capacitor/app"),
+    import("@capacitor/splash-screen"),
+    import("@capacitor/status-bar"),
+  ]);
+
+  // The first screen is already mounted. Drop the splash before any other
+  // bridge call so the listeners below never delay it.
+  void SplashScreen.hide().catch(() => {
+    // Splash may already be hidden.
+  });
+  // Status bar styling is cosmetic; do not wait for it.
+  void (async () => {
+    try {
+      await StatusBar.setStyle({ style: Style.Light });
+      await StatusBar.setBackgroundColor({ color: "#fafaf9" });
+    } catch {
+      // Status bar styling is optional.
+    }
+  })();
 
   const handles: Array<{ remove: () => Promise<void> }> = [];
 
   handles.push(
-    await App.addListener("backButton", ({ canGoBack }) => {
-      if (canGoBack) window.history.back();
-      else void App.exitApp();
-    }),
+    ...(await Promise.all([
+      App.addListener("backButton", ({ canGoBack }) => {
+        if (canGoBack) window.history.back();
+        else void App.exitApp();
+      }),
+      App.addListener("appUrlOpen", ({ url }) => void finishNativeOAuth(url)),
+    ])),
   );
-  handles.push(await App.addListener("appUrlOpen", ({ url }) => void finishNativeOAuth(url)));
 
   try {
     const launch = await App.getLaunchUrl();
@@ -208,20 +267,8 @@ export async function startNativeAdmin(): Promise<{ stop: Stop }> {
     // No launch URL.
   }
 
-  try {
-    await StatusBar.setStyle({ style: Style.Light });
-    await StatusBar.setBackgroundColor({ color: "#fafaf9" });
-  } catch {
-    // Status bar styling is optional.
-  }
-  try {
-    await SplashScreen.hide();
-  } catch {
-    // Splash may already be hidden.
-  }
-
   const stopPull = attachPullToRefresh();
-  const stopPush = await startStaffPush();
+  const stopPush = await startStaffPush(options.navigate);
 
   return {
     stop: () => {
@@ -247,7 +294,7 @@ async function isFirebasePushConfigured(): Promise<boolean> {
 }
 
 /** Listeners and register() run only when Firebase is packaged. Failures are logged. */
-async function startStaffPush(): Promise<Stop> {
+async function startStaffPush(navigate?: NativeNavigate): Promise<Stop> {
   try {
     const configured = await isFirebasePushConfigured();
     if (!configured) {
@@ -290,7 +337,10 @@ async function startStaffPush(): Promise<Stop> {
     );
     handles.push(
       await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-        openNotificationTarget(action.notification.data as Record<string, unknown> | undefined);
+        openNotificationTarget(
+          action.notification.data as Record<string, unknown> | undefined,
+          navigate,
+        );
       }),
     );
     handles.push(
@@ -305,8 +355,11 @@ async function startStaffPush(): Promise<Stop> {
     const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) void syncPush();
     });
-    void syncPush();
+    // Permission prompt + token registration are not needed to paint the first
+    // screen. Listeners above stay immediate so a tapped notification is never missed.
+    const cancelIdleSync = runWhenIdle(() => void syncPush());
     return () => {
+      cancelIdleSync();
       authSub.subscription.unsubscribe();
       for (const handle of handles) void handle.remove();
     };
