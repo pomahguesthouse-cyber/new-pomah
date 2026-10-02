@@ -334,12 +334,13 @@ export const resetSimulation = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ phone: z.string().min(5) }).parse(d))
   .handler(async ({ data }) => {
     await updateBookingState(supabasePublic as any, data.phone, "IDLE", {});
-    await (supabasePublic as any).rpc("update_conversation_topic", {
-      p_phone:       data.phone,
-      p_last_topic:  null,
-      p_last_entity: null,
-      p_slots:       {},
-    });
+    // update_conversation_topic sekarang MENGGABUNG slots (jsonb ||), jadi
+    // p_slots {} tidak lagi menghapus apa pun. Reset eksplisit lewat update
+    // langsung supaya simulator benar-benar mulai dari nol.
+    await (supabaseAdmin as any)
+      .from("wa_booking_states")
+      .update({ slots: {}, last_topic: null, last_entity: null, topic_updated_at: null })
+      .eq("phone", data.phone);
     const { data: thread } = await (supabaseAdmin as any)
       .from("whatsapp_threads")
       .select("id")
