@@ -4,6 +4,7 @@ import { guestCountWasStated, resolveAdultsForBooking } from "@/lib/guest-count"
 import { createBooking } from "@/tools/booking.tool";
 import { computeExtraBedTotal, computeGrandTotal, totalsMatch, toRupiah } from "@/lib/booking-total";
 import { markBookingDraft, saveBookingDraft } from "@/services/booking-draft.service";
+import { runDeferred } from "@/lib/cf-context";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
@@ -97,6 +98,8 @@ export interface BookingContext {
   writeFailedAt?: string;
   /** Tiket handoff staf sudah dibuat untuk kegagalan write ini (cegah tiket ganda). */
   writeFailureTicketed?: boolean;
+  /** Kunci notifikasi staf yang sudah dijadwalkan (satu per draft/konfirmasi). */
+  staffAlertKeys?: string[];
 }
 
 export interface StateRecord {
@@ -1186,6 +1189,38 @@ function guestSafeWriteFailureDetail(result: { error?: unknown; room_conflict?: 
   // Error validasi internal untuk agent (mengandung instruksi tool) — jangan diteruskan.
   if (/panggil ulang|create_booking|tool/i.test(err)) return null;
   return err.replace(/[.\s]+$/, "");
+}
+
+/**
+ * Notifikasi staf saat booking bot tidak tercatat. Fire-and-forget: tidak
+ * menunggu kirim, tidak melempar, tidak mengirim ke tamu. Satu kunci draft
+ * hanya dijadwalkan sekali.
+ */
+function alertStaffBookingWriteFailed(
+  ctx: ToolContext,
+  phone: string,
+  context: BookingContext,
+  draftKey: string,
+  kind: "write_failed" | "total_mismatch",
+): void {
+  const alertKey = `${kind}:${draftKey}`;
+  const sent = context.staffAlertKeys ?? [];
+  if (sent.includes(alertKey)) return;
+  context.staffAlertKeys = [...sent, alertKey];
+  const reason = kind === "total_mismatch" ? "total tidak cocok dengan hitungan sistem" : "gagal dicatat";
+  runDeferred("BookingWrite.notifyStaff", async () => {
+    const { notifyBookingWriteFailed } = await import("@/services/manager-notifier.service");
+    await notifyBookingWriteFailed(ctx.supabaseAdmin as any, {
+      phone: normalizePhone(phone),
+      guestName: context.guestName,
+      roomType: context.roomName,
+      checkIn: context.checkIn,
+      checkOut: context.checkOut,
+      total: context.quotedTotal ?? context.totalPrice ?? null,
+      dedupeKey: alertKey,
+      reason,
+    });
+  });
 }
 
 /** Catat kegagalan write: log terstruktur + tiket handoff staf (best-effort, tidak pernah throw). */
@@ -2285,6 +2320,7 @@ export async function processBookingState(
           status: "failed",
           error: `total_mismatch confirmed=${confirmedTotal} server=${serverTotal}`,
         });
+        alertStaffBookingWriteFailed(ctx, phone, context, draftKey, "total_mismatch");
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
         const fmt = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
         return {
@@ -2310,6 +2346,7 @@ export async function processBookingState(
         await markBookingDraft(supabase, draftKey, { status: "failed", error: writeError });
         context.writeFailedAt = new Date().toISOString();
         context.writeFailureTicketed = staffNotified;
+        alertStaffBookingWriteFailed(ctx, phone, context, draftKey, "write_failed");
         // State tetap CONFIRMING_BOOKING dengan data utuh: "ya" berikutnya = coba lagi,
         // tamu tidak diminta mengisi ulang apa pun.
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);

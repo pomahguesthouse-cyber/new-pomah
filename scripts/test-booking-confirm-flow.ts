@@ -11,6 +11,8 @@
  *      aktif WhatsApp; format 62xxxx.
  *   6. Total: satu sumber integer rupiah; total terkonfirmasi != hitungan server
  *      → write dihentikan & tamu konfirmasi ulang dengan angka sistem.
+ *   7. Write gagal (tiket handoff) dan total mismatch memberitahu staf sekali
+ *      (push + log internal), tanpa memblokir balasan tamu dan tanpa nomor lengkap di push.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -26,11 +28,13 @@ import {
   type StateRecord,
 } from "../src/ai/state-machine/booking-machine";
 import { computeGrandTotal, toRupiah, totalsMatch } from "../src/lib/booking-total";
+import { notifyBookingWriteFailed } from "../src/services/manager-notifier.service";
 import { createBooking } from "../src/tools/booking.tool";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const WA = "6281234567890";
+const THREAD = "11111111-1111-4111-8111-111111111111";
 const ROOM = {
   id: "rt-deluxe",
   name: "Deluxe",
@@ -50,14 +54,42 @@ function makeDb(tables: Record<string, any[]> = {}) {
     upserts: [] as any[],
     updates: [] as any[],
     inserts: [] as any[],
+    pushes: [] as any[],
     states: [] as Array<{ state: string; context: BookingContext }>,
   };
   const builder = (table: string) => {
+    const filters: Record<string, unknown> = {};
     const b: any = {};
-    for (const m of ["select", "eq", "order", "limit", "in", "gte", "lt", "gt", "not"]) b[m] = () => b;
-    b.maybeSingle = async () => ({ data: null, error: null });
+    for (const m of ["select", "order", "limit", "in", "gte", "lt", "gt", "not", "or"]) b[m] = () => b;
+    b.eq = (col: string, val: unknown) => {
+      filters[col] = val;
+      return b;
+    };
+    b.maybeSingle = async () => {
+      if (table !== "notification_logs") return { data: null, error: null };
+      const row = rec.inserts.find(
+        (i) => i.table === "notification_logs" && Object.entries(filters).every(([k, v]) => i.row[k] === v),
+      );
+      return { data: row ? { id: "log-1", status: row.row.status ?? "sent" } : null, error: null };
+    };
     b.single = async () => ({ data: { id: "ticket-1" }, error: null });
     b.insert = (row: any) => {
+      if (table === "notification_logs" && row.dedupe_key) {
+        const dup = rec.inserts.some(
+          (i) =>
+            i.table === "notification_logs" &&
+            i.row.dedupe_key === row.dedupe_key &&
+            (i.row.channel ?? "wa") === (row.channel ?? "wa"),
+        );
+        if (dup) {
+          const err: any = {
+            select: () => err,
+            single: async () => ({ data: null, error: { message: "duplicate key value violates unique constraint" } }),
+            then: (resolve: any) => resolve({ data: null, error: { message: "duplicate key value violates unique constraint" } }),
+          };
+          return err;
+        }
+      }
       rec.inserts.push({ table, row });
       log.push(`insert:${table}`);
       return b;
@@ -80,10 +112,33 @@ function makeDb(tables: Record<string, any[]> = {}) {
     from: (t: string) => builder(t),
     rpc: (name: string, args: any) => {
       if (name === "update_booking_state") rec.states.push({ state: args.p_state, context: JSON.parse(JSON.stringify(args.p_context)) });
+      if (name === "enqueue_staff_push") {
+        rec.pushes.push(args?.p_payload ?? args);
+        log.push("rpc:enqueue_staff_push");
+      }
       return Promise.resolve({ data: null, error: null });
     },
   };
   return { db, rec, log };
+}
+
+function threadTables() {
+  return {
+    whatsapp_threads: [
+      {
+        id: THREAD,
+        phone: WA,
+        canonical_phone: WA,
+        external_chat_id: `${WA}@s.whatsapp.net`,
+        lid_alias: null,
+        last_message_at: "2026-10-02T09:00:00.000Z",
+      },
+    ],
+  };
+}
+
+async function flushStaffAlerts() {
+  for (let i = 0; i < 15; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function makeCtx(db: any): any {
@@ -471,6 +526,110 @@ async function main() {
     assert.deepEqual(writes, [], "tidak ada insert/update/delete saat total beda");
     const pass = JSON.parse(await createBooking({ ...base, expected_total: 1000000 }, ctx).catch(() => "{}") || "{}");
     assert.notEqual(pass.total_mismatch, true, "total sama persis lolos guard");
+  }
+
+  // ── 7. Notifikasi staf: write gagal & total mismatch, sekali, tidak ke tamu ──
+  {
+    const { db, rec } = makeDb(threadTables());
+    const w = makeFakeWriter({ fail: "error" });
+    const res = await processBookingState(makeCtx(db), WA, "ya", record("CONFIRMING_BOOKING", confirmingContext()), {
+      createBookingImpl: w.impl,
+    });
+    await flushStaffAlerts();
+    assert.match(res.reply ?? "", /belum tercatat/i, "balasan tamu tetap jalan");
+    assert.doesNotMatch(res.reply ?? "", /GAGAL tercatat/, "judul notifikasi staf tidak dikirim ke tamu");
+    assert.equal(rec.pushes.length, 1, "satu push staf");
+    const push = rec.pushes[0];
+    assert.equal(push.title, "Booking via bot GAGAL tercatat");
+    assert.equal(push.kind, "booking_write_failed");
+    assert.equal(push.url, `/admin/whatsapp?thread=${THREAD}`);
+    assert.match(push.body, /Budi Santoso/);
+    assert.match(push.body, /Deluxe/);
+    assert.match(push.body, /10 November 2026/);
+    assert.match(push.body, /12 November 2026/);
+    assert.match(push.body, /700\.000/);
+    assert.match(push.body, /···7890/, "push hanya 4 digit akhir");
+    assert.doesNotMatch(JSON.stringify(push), /6281234567890/, "nomor lengkap tidak masuk push");
+    const log = rec.inserts.find((i) => i.table === "notification_logs");
+    assert.ok(log, "log internal tercatat");
+    assert.equal(log.row.event_type, "booking_write_failed");
+    assert.equal(log.row.recipient_role, "staff");
+    assert.equal(log.row.recipient_phone, "staff-push");
+    assert.match(log.row.message, /6281234567890/, "nomor lengkap ada di log internal");
+    assert.match(log.row.message, /\/admin\/whatsapp\?thread=/);
+    assert.ok(rec.inserts.some((i) => i.table === "handoff_tickets"), "tiket handoff tetap dibuat");
+    const saved = rec.states.at(-1)!.context;
+    const again = await processBookingState(
+      makeCtx(db),
+      WA,
+      "ya",
+      record("CONFIRMING_BOOKING", saved, "2026-10-02T10:08:00.000Z"),
+      { createBookingImpl: w.impl },
+    );
+    await flushStaffAlerts();
+    assert.match(again.reply ?? "", /belum tercatat/i);
+    assert.equal(rec.pushes.length, 1, "kegagalan draft yang sama tidak menotifikasi dua kali");
+  }
+  {
+    const { db, rec } = makeDb(threadTables());
+    const mismatch = makeFakeWriter({ fail: "mismatch", serverTotal: 1000000 });
+    const res = await processBookingState(
+      makeCtx(db),
+      WA,
+      "ya",
+      record("CONFIRMING_BOOKING", confirmingContext({ quotedTotal: 999999 })),
+      { createBookingImpl: mismatch.impl },
+    );
+    await flushStaffAlerts();
+    assert.match(res.reply ?? "", /belum saya catat/i);
+    assert.doesNotMatch(res.reply ?? "", /GAGAL tercatat/);
+    assert.equal(rec.inserts.filter((i) => i.table === "handoff_tickets").length, 0);
+    assert.equal(rec.pushes.length, 1, "total mismatch juga menotifikasi staf");
+    assert.match(rec.pushes[0].body, /1\.000\.000/, "push memakai total sistem");
+    assert.equal(rec.pushes[0].url, `/admin/whatsapp?thread=${THREAD}`);
+    const log = rec.inserts.find((i) => i.table === "notification_logs");
+    assert.match(log.row.message, /6281234567890/);
+    assert.match(log.row.message, /total tidak cocok/i);
+  }
+  {
+    const { db, rec } = makeDb(threadTables());
+    const notice = {
+      phone: WA,
+      guestName: "Budi Santoso",
+      roomType: "Deluxe",
+      checkIn: "2026-11-10",
+      checkOut: "2026-11-12",
+      total: 700000,
+      dedupeKey: "write_failed:draft-1",
+      reason: "gagal dicatat",
+    };
+    await Promise.all([notifyBookingWriteFailed(db, notice), notifyBookingWriteFailed(db, notice)]);
+    assert.equal(rec.pushes.length, 1, "dua pemanggilan bersamaan tetap satu push");
+    assert.equal(rec.inserts.filter((i) => i.table === "notification_logs").length, 1);
+  }
+  {
+    const { db, rec } = makeDb(threadTables());
+    db.rpc = (name: string, args: any) => {
+      if (name === "update_booking_state") {
+        rec.states.push({ state: args.p_state, context: JSON.parse(JSON.stringify(args.p_context)) });
+      }
+      if (name === "enqueue_staff_push") throw new Error("push down");
+      return Promise.resolve({ data: null, error: null });
+    };
+    const w = makeFakeWriter({ fail: "throw" });
+    const origErr = console.error;
+    console.error = () => {};
+    let res;
+    try {
+      res = await processBookingState(makeCtx(db), WA, "ya", record("CONFIRMING_BOOKING", confirmingContext()), {
+        createBookingImpl: w.impl,
+      });
+    } finally {
+      console.error = origErr;
+    }
+    await flushStaffAlerts();
+    assert.match(res.reply ?? "", /belum tercatat/i, "kegagalan push tidak menahan balasan tamu");
+    assert.equal(res.handled, true);
   }
 
   console.log("test-booking-confirm-flow: OK");
