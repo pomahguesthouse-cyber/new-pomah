@@ -135,6 +135,9 @@ const AVAILABILITY_OR_PRICE_RE =
 const OTA_RE = /\b(traveloka|agoda|booking\.?com|tiket\.?com|trip\.?com|airbnb|ota)\b/i;
 const EXTRA_BED_RE = /\b(extra\s*bed|ekstra\s*bed|kasur\s+tambahan|bed\s+tambahan)\b/i;
 const BREAKFAST_RE = /\b(sarapan|breakfast|makan\s+pagi)(?:nya)?\b/i;
+/** Air hangat belum tersedia. "shower" sendiri tidak cukup — jangan disamakan. */
+const HOT_WATER_RE =
+  /\b(?:air(?:nya)?\s*(?:panas|hangat)(?:nya)?|hot\s*water|water\s*heater|pemanas\s*air)\b/i;
 const DISTANCE_INTENT_RE = /\b(dekat|deket|jauh|jarak|berapa\s*(?:menit|km|kilo|jauh)|akses|menuju)\b/i;
 const BOOKING_METHOD_RE =
   /\b(cara\s+(?:booking|pesan|order|reservasi)|gimana\s+(?:cara\s+)?(?:booking|pesan)|bagaimana\s+cara\s+(?:booking|pesan)|booking\s+(?:online|lewat\s+wa|via\s+wa|dari\s+sini|di\s*sini)|pesan\s+online|harus\s+(?:datang|ke\s+(?:tempat|lokasi))|datang\s+ke\s+tempat)\b/i;
@@ -209,6 +212,23 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
       reply:
         "Baik Kak, tarif yang tampil sudah merupakan harga terbaik kami saat ini. Tidak apa-apa jika belum cocok. Terima kasih sudah mempertimbangkan Pomah Guesthouse, semoga lain waktu kami bisa menyambut Kakak 🙏",
       intent: "negotiation_closed",
+    };
+  }
+
+  // Air hangat/air panas belum ada di kamar mana pun (fakta pemilik 3 Okt 2026).
+  // Diletakkan sebelum FAQ kamar mandi dan sebelum early-block (kata "kamar")
+  // supaya model tidak mengarang "shower dengan air hangat".
+  if (
+    HOT_WATER_RE.test(raw) &&
+    (raw.match(/\?/g) ?? []).length < 2 &&
+    !DATE_SIGNAL_RE.test(raw) &&
+    !AVAILABILITY_OR_PRICE_RE.test(raw) &&
+    !/\b(booking|pesan|reservasi)\b/i.test(raw)
+  ) {
+    return {
+      reply:
+        "Mohon maaf Kak, saat ini Pomah belum menyediakan air hangat atau air panas di kamar mana pun. Shower yang ada memakai air biasa. Ada yang lain yang bisa saya bantu, misalnya cek ketersediaan atau fasilitas kamar yang memang ada?",
+      intent: "faq_hot_water",
     };
   }
 
