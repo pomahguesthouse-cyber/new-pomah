@@ -1,6 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { classifyIntent } from "@/ai/router/intent-classifier";
 import { guestCountWasStated, resolveAdultsForBooking } from "@/lib/guest-count";
+import { mergeGuestCountReading, readGuestCount } from "@/lib/guest-party";
 import { createBooking } from "@/tools/booking.tool";
 import { computeExtraBedTotal, computeGrandTotal, totalsMatch, toRupiah } from "@/lib/booking-total";
 import { markBookingDraft, saveBookingDraft } from "@/services/booking-draft.service";
@@ -61,6 +62,8 @@ export interface BookingContext {
   bookingCode?: string;
   adults?: number;
   children?: number;
+  /** Usia anak yang disebut tamu. Disimpan di context JSON, tanpa kolom baru. */
+  childAges?: number[];
   rooms?: BookingRoomItem[];
   /** Tipe kamar yang AWALNYA diminta tamu (mis. "Deluxe") tapi penuh. */
   requestedRoomType?: string;
@@ -462,9 +465,13 @@ function buildBookingSummary(
   const adults = context.adults ?? 1;
   const children = context.children ?? 0;
   const totalGuests = getTotalGuests(context);
+  const ageNote =
+    context.childAges && context.childAges.length > 0
+      ? ` (usia ${context.childAges.join(" dan ")} th)`
+      : "";
   const guestLine = children > 0
-    ? `${adults} orang dewasa, ${children} anak`
-    : `${adults} orang dewasa`;
+    ? `${adults} orang dewasa, ${children} anak${ageNote}`
+    : `${adults} orang dewasa${ageNote}`;
 
   // --- Format currency IDR ---
   const fmtRp = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
@@ -1013,43 +1020,30 @@ const INTERRUPT_INTENTS = new Set([
  * Mendukung pola umum berbahasa Indonesia. Mengembalikan patch parsial untuk
  * digabungkan ke BookingContext + bool apakah ada perubahan.
  */
-function parseSlotCorrection(
+export function parseSlotCorrection(
   input: string,
   rooms?: Array<{ id: string; name: string; base_rate?: number | null }>,
 ): {
   patch: Partial<BookingContext>;
   changed: boolean;
 } {
-  const text = input.toLowerCase();
   const patch: Partial<BookingContext> = {};
   let changed = false;
 
-  // Jumlah tamu: "5 tamu", "tamu 5", "jumlah tamu 5", "kami 5 orang"
-  const guestsMatch = text.match(
-    /(?:jumlah\s+)?(?:tamu|orang|pax|dewasa|guest)s?\s*(?:nya|:)?\s*(\d{1,2})|(?:\d{1,2})\s*(?:tamu|orang|pax|dewasa|guest)s?/i,
-  );
-  if (guestsMatch) {
-    const n = Number(guestsMatch[1] ?? guestsMatch[0].match(/\d{1,2}/)?.[0]);
-    if (n && n >= 1 && n <= 16) {
-      patch.adults = n;
+  // Jumlah tamu dan usia anak. "Usia anak 14 dan 6 th" mengisi childAges,
+  // bukan children = 14. Insiden 3 Okt 2026.
+  const guestReading = readGuestCount(input);
+  if (guestReading) {
+    if (guestReading.adults !== undefined) {
+      patch.adults = guestReading.adults;
       changed = true;
     }
-  }
-
-  const adultsMatch = text.match(/(?:dewasa|adult)\s*(?:nya|:)?\s*(\d{1,2})|(\d{1,2})\s*(?:orang\s+)?(?:dewasa|adult)/i);
-  if (adultsMatch) {
-    const n = Number(adultsMatch[1] ?? adultsMatch[2]);
-    if (n && n >= 1 && n <= 16) {
-      patch.adults = n;
+    if (guestReading.children !== undefined) {
+      patch.children = guestReading.children;
       changed = true;
     }
-  }
-
-  const childrenMatch = text.match(/(?:anak|child(?:ren)?|kids?)\s*(?:nya|:)?\s*(\d{1,2})|(\d{1,2})\s*(?:orang\s+)?(?:anak|child(?:ren)?|kids?)/i);
-  if (childrenMatch) {
-    const n = Number(childrenMatch[1] ?? childrenMatch[2]);
-    if (n >= 0 && n <= 16) {
-      patch.children = n;
+    if (guestReading.childAges?.length) {
+      patch.childAges = guestReading.childAges;
       changed = true;
     }
   }
@@ -1860,8 +1854,16 @@ export async function processBookingState(
 
     if (extracted.email) context.guestEmail = extracted.email;
     if (extracted.phone) proposeGuestPhone(context, phone, extracted.phone);
-    if (extracted.adults) context.adults = extracted.adults;
-    if (extracted.children !== undefined) context.children = extracted.children;
+    if (extracted.adults || extracted.children !== undefined || extracted.childAges?.length) {
+      const guest = mergeGuestCountReading(context, {
+        adults: extracted.adults,
+        children: extracted.children,
+        childAges: extracted.childAges,
+      });
+      context.adults = guest.adults;
+      context.children = guest.children;
+      context.childAges = guest.childAges;
+    }
     if (extracted.extra_beds !== undefined) context.extraBeds = extracted.extra_beds;
 
     // Nomor lain yang disebut tamu: tanyakan dulu apakah aktif WhatsApp sebelum dipakai.
@@ -2133,8 +2135,16 @@ export async function processBookingState(
     if (!isPureConfirm && !isPureCancel) {
       const { patch, changed } = parseSlotCorrection(message, ctx.rooms);
       if (changed) {
-        if (patch.adults) context.adults = patch.adults;
-        if (patch.children !== undefined) context.children = patch.children;
+        if (patch.adults || patch.children !== undefined || patch.childAges?.length) {
+          const guest = mergeGuestCountReading(context, {
+            adults: patch.adults,
+            children: patch.children,
+            childAges: patch.childAges,
+          });
+          context.adults = guest.adults;
+          context.children = guest.children;
+          context.childAges = guest.childAges;
+        }
         if (patch.extraBeds !== undefined) context.extraBeds = patch.extraBeds;
         if (patch.roomName) {
           context.roomName = patch.roomName;

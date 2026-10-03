@@ -15,6 +15,7 @@
  * last topic; long messages with explicit keywords override it.
  */
 import type { RoomTypeRow } from "@/ai/context-builder";
+import { mergeGuestCountReading, readGuestCount } from "@/lib/guest-party";
 
 export type TopicKind =
   | "room_facilities"
@@ -39,6 +40,8 @@ export interface PartialSlots {
   nights?: number;
   adults?: number;
   children?: number;
+  /** Usia anak. Bukan jumlah anak. */
+  childAges?: number[];
   roomLabel?: string;
 }
 
@@ -141,17 +144,15 @@ function extractRoomEntity(text: string, rooms: RoomTypeRow[]): EntityRef | unde
 }
 
 const NIGHTS_RE = /\b(\d{1,2})\s*malam\b/i;
-const ADULTS_RE = /\b(\d{1,2})\s*(orang|dewasa|tamu|pax)\b/i;
-const CHILDREN_RE = /\b(\d{1,2})\s*anak\b/i;
 
 function extractSlots(text: string): PartialSlots {
   const slots: PartialSlots = {};
   const nights = text.match(NIGHTS_RE);
   if (nights) slots.nights = Number(nights[1]);
-  const adults = text.match(ADULTS_RE);
-  if (adults) slots.adults = Number(adults[1]);
-  const children = text.match(CHILDREN_RE);
-  if (children) slots.children = Number(children[1]);
+  const guests = readGuestCount(text);
+  if (guests?.adults !== undefined) slots.adults = guests.adults;
+  if (guests?.children !== undefined) slots.children = guests.children;
+  if (guests?.childAges?.length) slots.childAges = guests.childAges;
   return slots;
 }
 
@@ -259,6 +260,17 @@ export function resolveContext(
 
   const priorSlots = (state.slots ?? {}) as PartialSlots;
   const slots: PartialSlots = { ...priorSlots, ...messageSlots };
+  // Pesan usia saja tidak menimpa jumlah anak yang sudah ada. Bila jumlah
+  // anak belum diketahui, jumlah anak = banyaknya usia yang disebut.
+  const guest = mergeGuestCountReading(
+    { adults: priorSlots.adults, children: priorSlots.children, childAges: priorSlots.childAges },
+    { adults: messageSlots.adults, children: messageSlots.children, childAges: messageSlots.childAges },
+  );
+  if (guest.adults !== undefined) slots.adults = guest.adults;
+  else delete slots.adults;
+  if (guest.children !== undefined) slots.children = guest.children;
+  else delete slots.children;
+  if (guest.childAges?.length) slots.childAges = guest.childAges;
   // Jangan kunci roomLabel dari entity yang ambigu — nilai itu akan dipersist
   // ke conversation-state dan menular ke turn-turn berikutnya.
   if (entity?.kind === "room" && entity.label && !entityAmbiguous) slots.roomLabel = entity.label;

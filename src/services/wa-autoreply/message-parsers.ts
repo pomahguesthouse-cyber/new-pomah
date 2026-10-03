@@ -8,6 +8,7 @@ import {
   resolveMonthName,
   resolveYear,
 } from "@/lib/id-date";
+import { readGuestCount } from "@/lib/guest-party";
 
 export { mentionsExplicitDateSignal, resolveMonthName };
 
@@ -188,41 +189,24 @@ export function isAvailabilitySourceContext(message: string): boolean {
 }
 
 export function parseGuestCountFollowup(message: string): ParsedGuestCount | null {
-  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
-  // "bocil"/"bocah" = slang lazim untuk anak — insiden 4 Jul 2026: "2 dewasa
-  // dan 2 bocil" terhitung 2 tamu sehingga filter kapasitas salah.
-  if (
-    !text ||
-    !/\b(orang|dewasa|adult|anak|bocil|bocah|balita|child|children|kids?|pax|tamu)\b/i.test(text)
-  )
-    return null;
+  // "bocil"/"bocah" = slang lazim untuk anak — insiden 4 Jul 2026.
+  // Gaya "5 dewasa 2 anak" vs "dewasa 5 anak 2" — insiden 28 Sep 2026.
+  // Usia ("Usia anak 14 dan 6 th") bukan jumlah — insiden 3 Okt 2026.
+  // Logika jumlah + penyembunyian angka usia ada di @/lib/guest-party.
+  const reading = readGuestCount(message);
+  if (!reading) return null;
+  // Jawaban usia saja bukan follow-up jumlah tamu. Slot yang sudah punya
+  // jumlah anak tidak boleh ditimpa; pengisian awal (jumlah = banyaknya usia)
+  // dilakukan oleh pemanggil yang memegang slot.
+  if (reading.adults === undefined && reading.children === undefined) return null;
 
-  const ADULT = "(?:dewasa|adult|pax|tamu)";
-  const CHILD = "(?:anak|bocil|bocah|balita|child(?:ren)?|kids?)";
-  // Tamu menulis dengan SATU gaya: "5 dewasa 2 anak" (angka dulu) atau
-  // "dewasa 5 anak 2" (label dulu). Regex gabungan lama mengambil pasangan
-  // PERTAMA yang cocok, sehingga "Dewasa 5 anak 2" terbaca anak = 5 (angka
-  // milik dewasa ikut dipakai anak) → 10 tamu. Insiden 28 Sep 2026.
-  const firstPair = text.match(
-    new RegExp(`(\\d{1,2})\\s*(?:orang\\s+)?(?:${ADULT}|${CHILD})\\b|(?:${ADULT}|${CHILD})\\s*:?\\s*(\\d{1,2})`, "i"),
-  );
-  const labelFirst = !!firstPair && firstPair[1] === undefined;
-  const pick = (label: string): number => {
-    const numFirst = text.match(new RegExp(`(\\d{1,2})\\s*(?:orang\\s+)?${label}\\b`, "i"));
-    const lblFirst = text.match(new RegExp(`${label}\\s*:?\\s*(\\d{1,2})`, "i"));
-    const primary = labelFirst ? lblFirst : numFirst;
-    const secondary = labelFirst ? numFirst : lblFirst;
-    const m = primary ?? secondary;
-    return m ? Number(m[1]) : 0;
-  };
-  const genericMatch = text.match(/\b(\d{1,2})\s*(?:orang|pax|tamu)\b/i);
-
-  let adults = pick(ADULT);
-  const children = pick(CHILD);
-
-  if (!adults && !children && genericMatch) {
-    adults = Number(genericMatch[1]);
-  }
+  const adults = reading.adults ?? 0;
+  const children =
+    reading.children !== undefined
+      ? reading.children
+      : adults > 0
+        ? (reading.childAges?.length ?? 0)
+        : 0;
 
   if (!Number.isFinite(adults) || !Number.isFinite(children)) return null;
   if (adults < 0 || adults > 20 || children < 0 || children > 20) return null;

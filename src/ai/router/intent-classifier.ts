@@ -206,7 +206,8 @@ export const RULES: IntentRule[] = [
     patterns: [
       /\b(dewasa|orang dewasa|adult)\s*\d+/i,
       /\d+\s*(dewasa|orang dewasa|adult)/i,
-      /\b(anak|children|child|kids?)\s*\d+/i,
+      // "anak 14" adalah jumlah, kecuali angka itu usia ("anak 14 th", "usia anak 14 dan 6 th").
+      /\b(anak|children|child|kids?)\s*\d+(?!\s*(?:thn|th|tahun|yo|years?)\b)(?!.{0,24}\b(?:thn|th|tahun|yo|years?)\b)/i,
       /\d+\s*(anak|children|child|kids?)/i,
       /\b(kami|kita)\s+(?:ber)?\d+\b/i,
       /\b(\d+|satu|dua|tiga|empat|lima|enam)\s*(orang|tamu|pax)\b/i,

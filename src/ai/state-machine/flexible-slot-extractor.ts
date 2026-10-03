@@ -22,6 +22,7 @@ import {
 import { todayWIB, fmtDateID } from "@/lib/date";
 import { resolveIdDate } from "@/lib/id-date";
 import { extractRequestedExtraBeds } from "./extra-bed-parser";
+import { readGuestCount } from "@/lib/guest-party";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,8 @@ export interface ExtractedSlots {
   phone?: string;
   adults?: number;
   children?: number;
+  /** Usia anak yang disebut tamu. Bukan jumlah anak. */
+  childAges?: number[];
   check_in?: string;   // YYYY-MM-DD
   check_out?: string;  // YYYY-MM-DD
   room_type?: string;  // matched room type name
@@ -344,31 +347,12 @@ export function extractAllSlots(
   }));
 
   // ── 4. Jumlah tamu ────────────────────────────────────────────────────────
-  // "dewasa 5", "5 orang dewasa", "5 dewasa", "orang dewasa 5"
-  const adultsPatterns = [
-    /(\d+)\s*(?:orang\s+)?(?:dewasa|adult|pax|tamu)/i,
-    /(?:dewasa|adult|pax|tamu)\s*(?::?\s*)(\d+)/i,
-  ];
-  for (const re of adultsPatterns) {
-    const m = text.match(re);
-    if (m) {
-      const n = Number(m[1]);
-      if (n >= 1 && n <= 20) { result.adults = n; break; }
-    }
-  }
-
-  // "anak 2", "2 anak", "children 3"
-  const childrenPatterns = [
-    /(\d+)\s*(?:anak|bocil|bocah|balita|child(?:ren)?|kids?)/i,
-    /(?:anak|bocil|bocah|balita|child(?:ren)?|kids?)\s*(?::?\s*)(\d+)/i,
-  ];
-  for (const re of childrenPatterns) {
-    const m = text.match(re);
-    if (m) {
-      const n = Number(m[1] ?? m[2]);
-      if (n >= 0 && n <= 10) { result.children = n; break; }
-    }
-  }
+  // "dewasa 5", "5 orang dewasa", "5 dewasa", "dewasa 5 anak 2".
+  // Angka usia ("Usia anak 14 dan 6 th") tidak masuk ke children.
+  const guestReading = readGuestCount(text);
+  if (guestReading?.adults !== undefined) result.adults = guestReading.adults;
+  if (guestReading?.children !== undefined) result.children = guestReading.children;
+  if (guestReading?.childAges?.length) result.childAges = guestReading.childAges;
 
   // Fallback: "5 orang" (tanpa dewasa/anak qualifier)
   if (result.adults === undefined) {
@@ -396,8 +380,10 @@ export function extractAllSlots(
 
   // Jika tamu sudah menyebut jumlah orang/dewasa tetapi tidak menyebut anak,
   // jangan tanya jumlah anak lagi. Anggap anak = 0 secara eksplisit.
+  // Kecuali pesan ini menyebut usia: jumlah anak = banyaknya usia
+  // ("3 dewasa, usia anak 5 dan 7 tahun" → 2 anak), bukan 0 dan bukan usia itu.
   if (result.adults !== undefined && result.children === undefined) {
-    result.children = 0;
+    result.children = result.childAges?.length ? result.childAges.length : 0;
   }
 
   // ── 5. Tanggal ────────────────────────────────────────────────────────────
@@ -567,6 +553,7 @@ export function formatPartialBookingSummary(context: {
   guestPhone?: string;
   adults?: number;
   children?: number;
+  childAges?: number[];
 }): string {
   const lines: string[] = [];
   // Tanggal ditampilkan format Indonesia ("7 Juli 2026"), bukan ISO — ISO
@@ -585,5 +572,6 @@ export function formatPartialBookingSummary(context: {
   if (context.guestPhone) lines.push(`No HP: ${context.guestPhone}`);
   if (context.adults) lines.push(`Dewasa: ${context.adults}`);
   if (context.children) lines.push(`Anak: ${context.children}`);
+  if (context.childAges?.length) lines.push(`Usia anak: ${context.childAges.join(" dan ")} th`);
   return lines.length > 0 ? lines.join(", ") : "(belum ada data)";
 }
