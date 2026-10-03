@@ -1100,11 +1100,15 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   const partialRoomType = typeof priorSlots.partialRoomType === "string" ? priorSlots.partialRoomType : undefined;
   const partialAdults = typeof priorSlots.partialAdults === "number" ? priorSlots.partialAdults : undefined;
   const partialChildren = typeof priorSlots.partialChildren === "number" ? priorSlots.partialChildren : undefined;
-  if (partialRoomType || partialAdults !== undefined || partialChildren !== undefined) {
+  const partialChildAges = Array.isArray(priorSlots.childAges)
+    ? priorSlots.childAges.filter((n): n is number => typeof n === "number" && Number.isFinite(n))
+    : undefined;
+  if (partialRoomType || partialAdults !== undefined || partialChildren !== undefined || partialChildAges?.length) {
     input.agentCtx.partialBooking = {
       roomType: partialRoomType,
       adults: partialAdults,
       children: partialChildren,
+      childAges: partialChildAges?.length ? partialChildAges : undefined,
     };
   }
 
@@ -1152,14 +1156,20 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
 
 
   // Tipe kamar / jumlah tamu: merge live extraction di atas nilai prior.
+  // Pesan usia saja tidak menimpa jumlah anak yang sudah diketahui.
   const mergedRoomType = liveSlots.room_type ?? input.agentCtx.partialBooking?.roomType;
   const mergedAdults = liveSlots.adults ?? input.agentCtx.partialBooking?.adults;
-  const mergedChildren = liveSlots.children ?? input.agentCtx.partialBooking?.children;
-  if (mergedRoomType || mergedAdults !== undefined || mergedChildren !== undefined) {
+  let mergedChildren = liveSlots.children ?? input.agentCtx.partialBooking?.children;
+  const mergedChildAges = liveSlots.childAges ?? input.agentCtx.partialBooking?.childAges;
+  if (mergedChildren === undefined && liveSlots.childAges?.length) {
+    mergedChildren = liveSlots.childAges.length;
+  }
+  if (mergedRoomType || mergedAdults !== undefined || mergedChildren !== undefined || mergedChildAges?.length) {
     input.agentCtx.partialBooking = {
       roomType: mergedRoomType,
       adults: mergedAdults,
       children: mergedChildren,
+      childAges: mergedChildAges,
     };
   }
 
@@ -1455,6 +1465,8 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
       finalSlots.partialAdults = input.agentCtx.partialBooking.adults;
     if (input.agentCtx.partialBooking.children !== undefined)
       finalSlots.partialChildren = input.agentCtx.partialBooking.children;
+    if (input.agentCtx.partialBooking.childAges?.length)
+      finalSlots.childAges = input.agentCtx.partialBooking.childAges;
   }
   // Fire-and-forget — failure here must not break the reply path.
   if (resolved.topic || resolved.entity || Object.keys(finalSlots).length) {

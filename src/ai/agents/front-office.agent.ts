@@ -594,7 +594,10 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
 
     when(g.roomFacts, "KEBIJAKAN USIA TAMU (WAJIB DIPATUHI): Bila tamu menyebut membawa anak/anak kecil TANPA menyebut umur, " +
       "WAJIB tanyakan dulu umur anaknya (contoh: 'Boleh tahu usia anaknya berapa ya Kak?') sebelum menghitung " +
-      "kapasitas atau harga — jangan pernah berasumsi. Anak berusia DI BAWAH 3 TAHUN boleh menginap GRATIS, " +
+      "kapasitas atau harga — jangan pernah berasumsi. Angka pada jawaban usia (kata usia/umur, atau diikuti th/thn/tahun, " +
+      "mis. 'Usia anak 14 dan 6 th', 'anaknya 4 th dan 9 th') adalah UMUR tiap anak, BUKAN jumlah anak — jangan mengisi " +
+      "`children` dengan usia itu. Jumlah anak tetap yang sudah disebut; bila belum diketahui, jumlah anak = banyaknya usia. " +
+      "Anak berusia DI BAWAH 3 TAHUN boleh menginap GRATIS, " +
       "TIDAK mengurangi kapasitas kamar, dan TIDAK dikenai biaya tambahan/extra bed (berbagi tempat tidur dengan " +
       "orang tua). Anak berusia 3 tahun ke atas (termasuk TK, SD, SMP, SMA, mahasiswa) dihitung sebagai tamu " +
       "dewasa untuk kapasitas kamar: masukkan ke `adults` saat memanggil `check_room_availability` / " +
@@ -801,6 +804,9 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
           ctx.partialBooking.roomType ? `tipe kamar = ${ctx.partialBooking.roomType}` : null,
           ctx.partialBooking.adults !== undefined ? `dewasa = ${ctx.partialBooking.adults}` : null,
           ctx.partialBooking.children !== undefined ? `anak = ${ctx.partialBooking.children}` : null,
+          ctx.partialBooking.childAges?.length
+            ? `usia anak = ${ctx.partialBooking.childAges.join(", ")} (bukan jumlah anak)`
+            : null,
         ]
           .filter(Boolean)
           .join(", ") +

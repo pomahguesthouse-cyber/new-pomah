@@ -101,7 +101,7 @@ export interface AgentContext {
    * tapi belum lengkap untuk memanggil `start_booking_details`. Diinject
    * dari `wa_booking_states.slots`.
    */
-  partialBooking?: { roomType?: string; adults?: number; children?: number };
+  partialBooking?: { roomType?: string; adults?: number; children?: number; childAges?: number[] };
   /**
    * Tamu memakai kata tunjuk ("yang ini bisa berapa orang ya") tanpa pernah
    * menyebut tipe kamar. Bila diisi, agent WAJIB mengkonfirmasi tipe kamar yang
