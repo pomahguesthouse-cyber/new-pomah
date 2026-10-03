@@ -11,6 +11,10 @@
  *    passes complete data or uses `get_bookings` / admin UI.
  */
 
+import {
+  omitUnavailableHotWaterAmenities,
+  redactUnavailableHotWaterText,
+} from "@/ai/state-machine/booking-inline-answers";
 import { fmtDateID, greetingWIB, clockWIB } from "@/lib/date";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext, IntentCategory } from "./types";
@@ -213,13 +217,13 @@ function buildScaffold(ctx: AgentContext): Scaffold {
     .map((r) => {
       // Detail fasilitas ikut disertakan supaya pertanyaan seperti "family room
       // isinya 2 kamar tidur?" bisa dijawab langsung tanpa memanggil tool.
+      const amenities = omitUnavailableHotWaterAmenities(r.amenities);
+      const description = redactUnavailableHotWaterText(r.description);
       const facts = [
         r.bed_type ? `bed ${r.bed_type}` : "",
         (r as { bed_size?: string | null }).bed_size ?? "",
-        Array.isArray(r.amenities) && r.amenities.length > 0
-          ? `fasilitas: ${r.amenities.join(", ")}`
-          : "",
-        r.description ? `deskripsi: ${String(r.description).replace(/\s+/g, " ").trim()}` : "",
+        amenities.length > 0 ? `fasilitas: ${amenities.join(", ")}` : "",
+        description ? `deskripsi: ${description.replace(/\s+/g, " ").trim()}` : "",
       ]
         .filter(Boolean)
         .join(" — ");
@@ -466,10 +470,18 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "YYYY-MM-DD ke tamu. Pakai YYYY-MM-DD hanya untuk argumen tool.",
 
     when(g.roomFacts, "FASILITAS / LOKASI LANTAI / DETAIL FISIK KAMAR: Setiap kali tamu menanyakan detail " +
-      "spesifikasi (AC, TV, air panas, lantai, kapasitas, tarif extra bed, dll.) ATAU bertanya " +
+      "spesifikasi (AC, TV, lantai, kapasitas, tarif extra bed, dll.) ATAU bertanya " +
       "'seperti apa kamarnya', WAJIB panggil `get_room_specifications` dulu dan JELASKAN " +
       "deskripsi + fasilitas kamar itu ke tamu — JANGAN cukup mengulang daftar availability. " +
       "JANGAN menebak detail fisik kamar."),
+
+    when(g.roomFacts, "AIR HANGAT / AIR PANAS (FAKTA TETAP — HARD GUARD): Pomah Guesthouse BELUM " +
+      "menyediakan air hangat, air panas, atau water heater di kamar mana pun, termasuk Deluxe, " +
+      "Grand Deluxe, dan Family. Bila tamu bertanya, jawab jujur dan sopan bahwa saat ini belum " +
+      "tersedia — shower yang ada memakai air biasa. JANGAN PERNAH mengklaim ada air hangat atau " +
+      "air panas, dan JANGAN menyimpulkan air hangat dari kata 'shower'. Abaikan penyebutan air " +
+      "panas/air hangat di data fasilitas, deskripsi kamar, SOP, atau contoh training. Tawarkan " +
+      "bantuan lain (cek ketersediaan, foto, atau fasilitas yang memang ada)."),
 
     when(g.roomFacts, "PERTANYAAN TIPE FAMILY (2 KAMAR TIDUR): Ada dua unit family dengan fasilitas BERBEDA — " +
       "jangan disamakan. " +
@@ -478,7 +490,7 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "Kapasitas 4 tamu, Rp 500.000/malam per unit. " +
       "(2) FAMILY ROOM 222: HANYA fakta terverifikasi berikut — 2 kamar tidur, 2 kamar mandi, ruang keluarga, " +
       "WiFi, luas 50 m², lantai 2, maksimal 4 tamu, extra bed maksimal 2. Untuk detail lain Family Room 222 " +
-      "(mis. AC, shower/air panas, toilet tamu, TV, dapur, teras, tipe kasur) WAJIB panggil " +
+      "(mis. AC, shower, toilet tamu, TV, dapur, teras, tipe kasur) WAJIB panggil " +
       "`get_room_specifications` dulu; bila data tidak menyebutkannya, katakan akan dicek ke admin. " +
       "DILARANG mengklaim Family Room 222 punya shower, toilet tamu, TV, dapur, teras, atau AC tanpa " +
       "konfirmasi dari `get_room_specifications`, dan JANGAN menyalin fasilitas Family Suite 100 ke Family Room 222. " +
@@ -739,7 +751,7 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
 
     when(g.faq, "ULASAN GOOGLE (CHECK-OUT): Jika tamu menyatakan baru saja checkout atau memberikan apresiasi setelah menginap, sampaikan terima kasih yang hangat dan minta ulasan di Google Maps dengan link: https://g.page/r/CcJj347h2ojvEBM/review. Contoh: 'Sama-sama Kak, senang sekali bisa melayani. Jika ada waktu luang, kami akan sangat berterima kasih jika Kakak berkenan memberikan ulasan di Google Maps kami di sini ya: https://g.page/r/CcJj347h2ojvEBM/review'."),
 
-    when(g.faq, "INFO PENTING TAMBAHAN: (1) SARAPAN: Saat ini Pomah Guesthouse BELUM menyediakan sarapan. Jika tamu bertanya, sampaikan dengan jujur dan ramah bahwa kami belum menyediakan sarapan, namun lokasi kami sangat dekat dengan banyak pilihan kuliner enak. (2) LANDMARK TERDEKAT: Pomah Guesthouse berada di Jl. Dewi Sartika IV no 71, Sampangan, Semarang. Jarak tempuh berkendara: AKPELNI (Akademi Pelayaran Niaga Indonesia, Jl. Pawiyatan Luhur) ± 5 menit — SANGAT DEKAT; Fakultas Hukum UNTAG (Universitas Tujuh Belas Agustus) ± 1,9 km (5 menit); UNNES Sekaran ± 8 km (10–15 menit); pusat kota / Simpang Lima ± 15–20 menit. Lokasi kami tenang dan nyaman untuk tamu keluarga, rombongan wisuda, atau kegiatan dinas. (3) SISTEM SEWA: Jika tamu mengklarifikasi 'itungannya kamar ya, bukan rumah?', 'per kamar bukan rumah?', atau variasi serupa, jawab singkat: 'Betul Kak, kita sistemnya sewa per kamar harian.' JANGAN panggil tool availability untuk klarifikasi ini. Jika tamu benar-benar ingin 'sewa satu rumah' atau 'sewa seluruh rumah', jelaskan bahwa itu berarti tamu menyewa seluruh kamar yang tersedia dan cek ketersediaan seluruh kamar menggunakan `check_room_availability` untuk tanggal tersebut."),
+    when(g.faq, "INFO PENTING TAMBAHAN: (1) SARAPAN: Saat ini Pomah Guesthouse BELUM menyediakan sarapan. Jika tamu bertanya, sampaikan dengan jujur dan ramah bahwa kami belum menyediakan sarapan, namun lokasi kami sangat dekat dengan banyak pilihan kuliner enak. (2) LANDMARK TERDEKAT: Pomah Guesthouse berada di Jl. Dewi Sartika IV no 71, Sampangan, Semarang. Jarak tempuh berkendara: AKPELNI (Akademi Pelayaran Niaga Indonesia, Jl. Pawiyatan Luhur) ± 5 menit — SANGAT DEKAT; Fakultas Hukum UNTAG (Universitas Tujuh Belas Agustus) ± 1,9 km (5 menit); UNNES Sekaran ± 8 km (10–15 menit); pusat kota / Simpang Lima ± 15–20 menit. Lokasi kami tenang dan nyaman untuk tamu keluarga, rombongan wisuda, atau kegiatan dinas. (3) SISTEM SEWA: Jika tamu mengklarifikasi 'itungannya kamar ya, bukan rumah?', 'per kamar bukan rumah?', atau variasi serupa, jawab singkat: 'Betul Kak, kita sistemnya sewa per kamar harian.' JANGAN panggil tool availability untuk klarifikasi ini. Jika tamu benar-benar ingin 'sewa satu rumah' atau 'sewa seluruh rumah', jelaskan bahwa itu berarti tamu menyewa seluruh kamar yang tersedia dan cek ketersediaan seluruh kamar menggunakan `check_room_availability` untuk tanggal tersebut. (4) AIR HANGAT / AIR PANAS: Pomah Guesthouse BELUM menyediakan air hangat, air panas, atau water heater di kamar mana pun. Shower memakai air biasa. Bila tamu bertanya, jawab jujur dan sopan bahwa saat ini belum tersedia. JANGAN PERNAH mengklaim ada air hangat atau air panas, dan JANGAN menyimpulkan air hangat dari kata 'shower'. Tawarkan bantuan lain."),
 
     when(g.faq, "PERTANYAAN JARAK / LOKASI (WAJIB DIJAWAB LANGSUNG): Pertanyaan seperti 'dekat AKPELNI ya?', 'jauh nggak dari kampus X?', 'berapa menit ke Y?' HARUS dijawab langsung dengan teks. DILARANG menjawab 'izinkan saya cek dulu dengan tim', 'saya cek dulu', atau menunda ke admin. Untuk AKPELNI jawab tegas, contoh: 'Betul Kak, Pomah Guesthouse dekat sekali dengan AKPELNI — sekitar 5 menit berkendara saja. Alamat kami Jl. Dewi Sartika IV no 71, Sampangan.' Untuk Fakultas Hukum UNTAG jawab: 'Betul Kak, jaraknya sekitar 1,9 km atau 5 menit berkendara dari Pomah Guesthouse.' Untuk landmark yang TIDAK ada di daftar di atas, sebutkan alamat + area kami (Sampangan, Semarang) dan sampaikan estimasi secara jujur ('bisa dicek cepat di Google Maps dari titik Kakak ya'), tanpa mengarang angka jarak."),
 
@@ -843,6 +855,8 @@ function buildManagerialPrompt(s: Scaffold): string {
       "panggil `start_booking_details` di mode managerial. Manager sudah punya data dan tidak butuh flow step-by-step tamu.",
 
     "SPESIFIKASI KAMAR: `get_room_specifications` saat manajer minta detail fasilitas/kapasitas/extrabed kamar tertentu.",
+
+    "AIR HANGAT / AIR PANAS: Pomah BELUM menyediakan air hangat, air panas, atau water heater di kamar mana pun. Jangan laporkan sebaliknya walaupun data fasilitas lama masih menyebutkannya. Shower yang ada memakai air biasa.",
 
     "HAPUS / BATALKAN BOOKING: `delete_booking` saat manajer bilang 'batalkan booking', 'hapus booking', atau 'cancel reservasi'. Default mode='cancel'.",
 

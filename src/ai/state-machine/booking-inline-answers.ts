@@ -79,6 +79,43 @@ const MISLEADING_BATHROOM_RE =
 const BATHROOM_AMENITY_RE =
   /\b(kamar\s+mandi|toilet|wc|bathroom|bath\s*room)\b/i;
 
+/**
+ * Fakta pemilik 3 Okt 2026: air hangat / air panas / water heater BELUM ada
+ * di kamar mana pun. Item fasilitas yang menyebutkannya tidak boleh ikut
+ * ke jawaban tamu, walaupun masih tersimpan di data kamar.
+ */
+const UNAVAILABLE_HOT_WATER_AMENITY_RE =
+  /\b(?:air(?:nya)?\s*(?:panas|hangat)(?:nya)?|hot\s*water|water\s*heater|pemanas\s*air)\b/i;
+
+export function isUnavailableHotWaterAmenity(value: string): boolean {
+  return UNAVAILABLE_HOT_WATER_AMENITY_RE.test(value);
+}
+
+/** Buang fasilitas air panas/air hangat sebelum teks dikirim ke tamu. */
+export function omitUnavailableHotWaterAmenities(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((v) => String(v ?? "").trim())
+    .filter((s) => s.length > 0 && !isUnavailableHotWaterAmenity(s));
+}
+
+/**
+ * Hapus klaim air panas/air hangat dari teks yang ikut dirender ke bot
+ * (deskripsi kamar di prompt atau tool). Teks lain dikembalikan apa adanya.
+ */
+export function redactUnavailableHotWaterText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  if (!isUnavailableHotWaterAmenity(value)) return value;
+  const cleaned = value
+    .replace(UNAVAILABLE_HOT_WATER_AMENITY_RE, "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;])/g, "$1")
+    .replace(/([,.;])(?:\s*[,.;])+/g, "$1")
+    .trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 /** Normalisasi untuk dedup: "WI-FI", "WIfi", "wifi" → "wifi". */
 function amenityKey(v: string): string {
   return v.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -103,7 +140,7 @@ function dedupeAmenities(raw: unknown): string[] {
 
   for (const v of raw) {
     const s = String(v).trim();
-    if (!s || MISLEADING_BATHROOM_RE.test(s)) continue;
+    if (!s || MISLEADING_BATHROOM_RE.test(s) || isUnavailableHotWaterAmenity(s)) continue;
     pushUnique(BATHROOM_AMENITY_RE.test(s) ? PRIVATE_BATHROOM_AMENITY : s);
   }
 
@@ -126,10 +163,10 @@ function buildDeluxeGrandDeluxeComparison(mentioned: FacilityRoom[]): string | n
   return [
     "Perbandingan fasilitasnya ya Kak:",
     "",
-    `*Grand Deluxe*: ${grandItems.length ? grandItems.join(", ") : "AC, WI-FI, Air Panas, Kamar mandi dalam"}`,
+    `*Grand Deluxe*: ${grandItems.length ? grandItems.join(", ") : "AC, WI-FI, Kamar mandi dalam"}`,
     `*Deluxe*: ${deluxeItems.length ? deluxeItems.join(", ") : "WIfi, AC, Shower, Dapur Bersama, View Taman, Kamar mandi dalam"}`,
     "",
-    "Perbedaan utamanya: Kamar *Deluxe* berada di Lantai 2 (View Taman & Dapur Bersama), sedangkan kamar *Grand Deluxe* berada di Lantai 1 (Area lebih luas & ada Air Panas).",
+    "Perbedaan utamanya: Kamar *Deluxe* berada di Lantai 2 (View Taman & Dapur Bersama), sedangkan kamar *Grand Deluxe* berada di Lantai 1 (Area lebih luas).",
   ].join("\n");
 }
 
