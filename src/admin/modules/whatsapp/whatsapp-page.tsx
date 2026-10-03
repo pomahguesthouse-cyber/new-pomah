@@ -1,11 +1,19 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   Sparkles,
-  Send,
   Search as SearchIcon,
   Pin,
   PinOff,
@@ -15,7 +23,6 @@ import {
   ArrowUpRight,
   CalendarDays,
   Phone,
-  Wand2,
   MessagesSquare,
   Inbox,
   Plus,
@@ -28,8 +35,6 @@ import {
   RotateCcw,
   FileText,
   Download,
-  Paperclip,
-  X,
   Bell,
   AlertOctagon,
   CheckCircle2,
@@ -77,14 +82,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn, formatDateID, formatRelativeDateID, formatTimeID } from "@/lib/utils";
@@ -97,11 +94,26 @@ import {
   META_WINDOW_CLOSED_MESSAGE,
   WA_FILE_INPUT_ACCEPT,
   buildOutboundObjectPath,
-  formatFileSize,
   lastInboundAt,
   metaCustomerWindowClosed,
   validateClientPick,
 } from "@/services/wa-outbound-attachment";
+import { ReplyComposer, type ReplyComposerHandle } from "@/admin/modules/whatsapp/wa-reply-composer";
+import {
+  canRetryMessage,
+  claimSend,
+  createOutboxItem,
+  markOutboxFailed,
+  mergeOutboxMessages,
+  readClientId,
+  reconcileOutbox,
+  releaseSend,
+  removeOutboxItem,
+  retryPayloadFromMessage,
+  sendFingerprint,
+  type ComposerSendPayload,
+  type OutboxItem,
+} from "@/admin/modules/whatsapp/wa-composer-send";
 
 type ComposerAttachment = {
   phase: "processing" | "uploading" | "ready";
@@ -137,33 +149,6 @@ const INTENT_STYLES: Record<string, { label: string; className: string }> = {
   },
   other: { label: "Other", className: "bg-muted text-muted-foreground border-border" },
 };
-
-const TEMPLATES = [
-  {
-    label: "Welcome",
-    body: "Welcome to Pomah Guesthouse! Let us know if you need anything during your stay.",
-  },
-  {
-    label: "Late check-out",
-    body: "We can arrange a late check-out until 2 PM at no extra charge. Would that work?",
-  },
-  {
-    label: "Check availability",
-    body: "Let me check availability for those dates and get back to you within a few minutes.",
-  },
-  {
-    label: "Rate quote",
-    body: "Our nightly rate for that room category starts at IDR 750.000, breakfast included. Want me to hold a room?",
-  },
-  {
-    label: "Maintenance ack",
-    body: "Sorry about that — I'm sending someone up right away to take a look. Apologies for the inconvenience.",
-  },
-  {
-    label: "Thank you",
-    body: "Thank you so much for staying with us. We hope to welcome you back soon!",
-  },
-];
 
 function timeAgo(iso: string) {
   const d = new Date(iso).getTime();
@@ -503,10 +488,11 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     setActiveId(null);
     void navigate({ to: "/admin/whatsapp", search: {}, replace: true });
   };
-  const [draft, setDraft] = useState("");
+  const [outbox, setOutbox] = useState<OutboxItem[]>([]);
+  const inflightSends = useRef(new Set<string>());
+  const composerHandle = useRef<ReplyComposerHandle>(null);
   const [attachment, setAttachment] = useState<ComposerAttachment | null>(null);
   const attachmentRef = useRef<ComposerAttachment | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const uploadAbortRef = useRef<(() => void) | null>(null);
   const pickGenRef = useRef(0);
   const [manualAlertNote, setManualAlertNote] = useState("");
@@ -587,7 +573,27 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     const seen = new Set(latest.map((m: any) => m.id));
     return [...olderForCurrent.messages.filter((m) => !seen.has(m.id)), ...latest];
   }, [thread?.messages, olderForCurrent]);
+  const visibleMessages = useMemo(
+    () => mergeOutboxMessages(allMessages, outbox, current),
+    [allMessages, outbox, current],
+  );
   const hasOlder = olderForCurrent?.hasMore ?? thread?.hasMore ?? false;
+
+  useEffect(() => {
+    const server = thread?.messages ?? [];
+    setOutbox((prev) => {
+      const next = reconcileOutbox(prev, server);
+      if (next === prev) return prev;
+      for (const item of prev) {
+        if (next.includes(item)) continue;
+        const url = item.attachment?.previewUrl;
+        if (!url?.startsWith("blob:")) continue;
+        if (next.some((other) => other.attachment?.previewUrl === url)) continue;
+        URL.revokeObjectURL(url);
+      }
+      return next;
+    });
+  }, [thread?.messages]);
 
   // Mark as read on open. Memakai unread_count dari detail thread (daftar hanya
   // memuat sebagian thread), dan satu permintaan per thread dalam satu waktu.
@@ -616,14 +622,28 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   const stickRef = useRef(true);
   const initialScrolledRef = useRef<string | null>(null);
   const lastMessageIdRef = useRef<string | null>(null);
+  const lastMessageCountRef = useRef(0);
   const prependRef = useRef<{ height: number; top: number } | null>(null);
 
   const scrollToBottom = useCallback((smooth = false) => {
     const el = scrollRef.current;
     if (!el) return;
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (!smooth && gap < 2) return;
     if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     else el.scrollTop = el.scrollHeight;
   }, []);
+
+  // Scroll ke dasar dijadwalkan di frame berikutnya supaya commit tap Kirim
+  // tidak menunggu layout daftar pesan yang panjang.
+  const stickScrollRaf = useRef<number | null>(null);
+  const queueStickScroll = useCallback(() => {
+    if (stickScrollRaf.current != null) return;
+    stickScrollRaf.current = requestAnimationFrame(() => {
+      stickScrollRaf.current = null;
+      if (stickRef.current) scrollToBottom(false);
+    });
+  }, [scrollToBottom]);
 
   const onScrollMessages = useCallback(() => {
     const el = scrollRef.current;
@@ -639,11 +659,12 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   }, [current, threadReady]);
 
   useLayoutEffect(() => {
-    if (!current || allMessages.length === 0) return;
-    const lastId = allMessages[allMessages.length - 1]?.id ?? null;
+    if (!current || visibleMessages.length === 0) return;
+    const lastId = visibleMessages[visibleMessages.length - 1]?.id ?? null;
     if (initialScrolledRef.current !== current) {
       initialScrolledRef.current = current;
       lastMessageIdRef.current = lastId;
+      lastMessageCountRef.current = visibleMessages.length;
       stickRef.current = true;
       scrollToBottom(false);
       return;
@@ -651,6 +672,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     const pending = prependRef.current;
     if (pending) {
       prependRef.current = null;
+      lastMessageCountRef.current = visibleMessages.length;
       const el = scrollRef.current;
       if (el) {
         const expected = pending.top + (el.scrollHeight - pending.height);
@@ -659,23 +681,34 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
       }
       return;
     }
-    if (lastId !== lastMessageIdRef.current) {
+    const idChanged = lastId !== lastMessageIdRef.current;
+    const countChanged = visibleMessages.length !== lastMessageCountRef.current;
+    if (idChanged || countChanged) {
       lastMessageIdRef.current = lastId;
-      if (stickRef.current) scrollToBottom(false);
+      lastMessageCountRef.current = visibleMessages.length;
+      if (stickRef.current) queueStickScroll();
     }
-  }, [current, allMessages, scrollToBottom]);
+  }, [current, visibleMessages, scrollToBottom, queueStickScroll]);
 
   // Gambar/lampiran yang selesai dimuat mengubah tinggi isi: tetap di dasar.
+  // Callback di-rAF supaya resize keyboard tidak memaksa layout sinkron saat tap.
   useEffect(() => {
     const content = contentRef.current;
     if (!content || typeof ResizeObserver === "undefined") return;
+    let raf = 0;
     const ro = new ResizeObserver(() => {
-      if (stickRef.current) scrollToBottom(false);
+      if (!stickRef.current || raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (stickRef.current) scrollToBottom(false);
+      });
     });
     ro.observe(content);
-    // Wadah menyusut saat keyboard muncul: tetap di dasar bila memang di dasar.
     if (scrollRef.current) ro.observe(scrollRef.current);
-    return () => ro.disconnect();
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
   }, [current, thread?.thread?.id, scrollToBottom]);
 
   // Ganti thread: render pertama thread baru dikenali lewat perbandingan id di
@@ -744,65 +777,88 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     return metaCustomerWindowClosed(newest);
   }, [thread, allMessages]);
 
-  const attachmentReady = attachment?.phase === "ready" && !!attachment.path;
   const attachmentBusy = attachment?.phase === "processing" || attachment?.phase === "uploading";
 
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
+  const submitReply = useCallback(
+    (payload: ComposerSendPayload, replaceClientId?: string | null): boolean => {
+      if (!current || metaWindowClosed) return false;
+      const path = payload.attachment?.path ?? null;
+      const fingerprint = sendFingerprint(current, payload.body, path);
+      if (!claimSend(inflightSends.current, fingerprint)) return false;
 
-  // Kolom ketik HP: tumbuh mengikuti isi sampai batas 120px, lalu scroll internal.
-  const composerRef = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    const el = composerRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  }, [draft, isDesktop, current, thread?.thread?.id]);
+      const clientId = crypto.randomUUID();
+      const item = createOutboxItem({
+        clientId,
+        threadId: current,
+        body: payload.body,
+        attachment: payload.attachment,
+      });
+      const threadId = current;
+      // Daftar pesan boleh menyusul: input sudah dikosongkan di composer.
+      startTransition(() => {
+        setOutbox((prev) => {
+          const base = replaceClientId ? removeOutboxItem(prev, replaceClientId) : prev;
+          return [...base, item];
+        });
+      });
+      stickRef.current = true;
 
-  const sendMut = useMutation({
-    mutationFn: () => {
-      const att = attachmentRef.current;
-      const ready = att?.phase === "ready" && !!att.path;
-      return sendFn({
+      const pending = attachmentRef.current;
+      if (pending && path && pending.path === path) {
+        attachmentRef.current = null;
+        setAttachment(null);
+      }
+
+      void sendFn({
         data: {
-          threadId: current!,
-          body: draftRef.current,
-          ...(ready
+          threadId,
+          body: payload.body,
+          clientId,
+          ...(payload.attachment
             ? {
                 attachment: {
-                  path: att.path as string,
-                  name: att.name,
-                  mime: att.mime,
-                  size: att.size,
+                  path: payload.attachment.path,
+                  name: payload.attachment.name,
+                  mime: payload.attachment.mime,
+                  size: payload.attachment.size,
                 },
               }
             : {}),
         },
-      });
+      })
+        .then((res) => {
+          if (!res.ok) {
+            setOutbox((prev) => markOutboxFailed(prev, clientId, res.error));
+            toast.error(res.error);
+          }
+          void qc.invalidateQueries({ queryKey: ["wa-thread", threadId] });
+          void qc.invalidateQueries({ queryKey: ["wa-threads"] });
+        })
+        .catch((e: unknown) => {
+          const message = e instanceof Error ? e.message : "Pesan gagal dikirim.";
+          setOutbox((prev) => markOutboxFailed(prev, clientId, message));
+          toast.error(message);
+        })
+        .finally(() => {
+          releaseSend(inflightSends.current, fingerprint);
+        });
+      return true;
     },
-    onSuccess: (res) => {
-      if (!res.ok) {
-        toast.error(res.error);
-        qc.invalidateQueries({ queryKey: ["wa-thread", current] });
-        return;
-      }
-      setDraft("");
-      const sent = attachmentRef.current;
-      setComposerAttachment(null);
-      if (sent?.previewUrl) URL.revokeObjectURL(sent.previewUrl);
-      stickRef.current = true;
-      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
-      qc.invalidateQueries({ queryKey: ["wa-threads"] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
+    [current, metaWindowClosed, sendFn, qc],
+  );
 
-  const canSend =
-    !!current &&
-    !metaWindowClosed &&
-    !sendMut.isPending &&
-    !attachmentBusy &&
-    (!!draft.trim() || attachmentReady);
+  const retryRef = useRef<(message: any) => void>(() => {});
+  retryRef.current = (message: any) => {
+    if (!canRetryMessage(message)) return;
+    const payload = retryPayloadFromMessage(message);
+    if (!payload) return;
+    const clientId = readClientId(message);
+    const local = (message.metadata as { local_outbox?: boolean } | null)?.local_outbox === true;
+    submitReply(payload, local ? clientId : null);
+  };
+  const onRetryMessage = useCallback((message: any) => {
+    retryRef.current(message);
+  }, []);
 
   const clearAttachment = () => {
     pickGenRef.current += 1;
@@ -815,7 +871,6 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
 
   const onPickFile = async (list: FileList | null) => {
     const file = list?.[0];
-    if (fileRef.current) fileRef.current.value = "";
     if (!file || !current || metaWindowClosed) return;
     const checked = validateClientPick(file);
     if (!checked.ok) {
@@ -890,7 +945,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
 
   const draftMut = useMutation({
     mutationFn: () => draftFn({ data: { threadId: current! } }),
-    onSuccess: (res) => setDraft(res.draft),
+    onSuccess: (res) => composerHandle.current?.setDraft(res.draft),
     onError: (e) => toast.error((e as Error).message),
   });
 
@@ -1337,192 +1392,27 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                     </Button>
                   </div>
                 )}
-                <MessageStream messages={allMessages} aiLabConfig={aiLabConfig} />
+                <MessageStream messages={visibleMessages} aiLabConfig={aiLabConfig} onRetry={onRetryMessage} />
               </div>
             </div>
 
-            <footer className="relative z-20 min-w-0 max-w-full shrink-0 border-t border-border bg-card p-2 md:max-lg:pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:p-3">
-              {metaWindowClosed && (
-                <p
-                  role="status"
-                  className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs leading-snug text-amber-950"
-                >
-                  {META_WINDOW_CLOSED_MESSAGE}
-                </p>
-              )}
-              <div className="flex flex-wrap items-center gap-1 pb-1.5 lg:gap-1.5 lg:pb-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-9 px-2 text-xs lg:h-7" aria-label="Templates">
-                      <MessagesSquare className="mr-1.5 h-3.5 w-3.5" /> Templates
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-72">
-                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider">
-                      Quick reply templates
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {TEMPLATES.map((t) => (
-                      <DropdownMenuItem key={t.label} onClick={() => setDraft(t.body)}>
-                        <div>
-                          <p className="text-xs font-medium">{t.label}</p>
-                          <p className="line-clamp-1 text-[10px] text-muted-foreground">{t.body}</p>
-                        </div>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 px-2 text-xs lg:h-7"
-                  disabled={draftMut.isPending}
-                  onClick={() => draftMut.mutate()}
-                >
-                  <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                  {draftMut.isPending ? "Drafting…" : "AI draft"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 px-2 text-xs lg:h-7"
-                  disabled={classifyMut.isPending}
-                  onClick={() => classifyMut.mutate()}
-                >
-                  <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-                  {classifyMut.isPending ? "Menganalisis…" : "Auto-tag"}
-                </Button>
-              </div>
-              {attachment && (
-                <div className="mb-2 flex max-w-full items-center gap-2 rounded-md border border-border bg-muted/50 px-2 py-1.5">
-                  {attachment.previewUrl ? (
-                    <img
-                      src={attachment.previewUrl}
-                      alt=""
-                      className="h-10 w-10 shrink-0 rounded object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-red-500 text-white">
-                      <FileText className="h-4 w-4" />
-                    </span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-medium">{attachment.name}</span>
-                    <span className="block text-[10px] text-muted-foreground">
-                      {attachment.phase === "processing"
-                        ? "Memproses gambar…"
-                        : attachment.phase === "uploading"
-                          ? `Mengunggah ${attachment.progress}% · ${formatFileSize(attachment.size)}`
-                          : formatFileSize(attachment.size)}
-                    </span>
-                    {attachment.phase === "uploading" && (
-                      <span className="mt-1 block h-1 overflow-hidden rounded-full bg-black/10">
-                        <span
-                          className="block h-full bg-[#008069]"
-                          style={{ width: `${attachment.progress}%` }}
-                        />
-                      </span>
-                    )}
-                  </span>
-                  <button
-                    type="button"
-                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
-                    aria-label="Hapus lampiran"
-                    onClick={clearAttachment}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-              <input
-                ref={fileRef}
-                type="file"
-                accept={WA_FILE_INPUT_ACCEPT}
-                className="hidden"
-                onChange={(e) => void onPickFile(e.target.files)}
-              />
-              {isDesktop ? (
-                <>
-                  <Textarea
-                    placeholder="Type a reply…  ⌘/Ctrl + Enter to send"
-                    rows={2}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSend) {
-                        e.preventDefault();
-                        sendMut.mutate();
-                      }
-                    }}
-                    className="min-h-16 resize-none text-base md:text-sm"
-                  />
-                  <div className="mt-2 flex min-w-0 items-center gap-2">
-                    <button
-                      type="button"
-                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent disabled:opacity-40"
-                      aria-label="Lampirkan berkas"
-                      title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : "Lampirkan berkas"}
-                      disabled={metaWindowClosed || attachmentBusy || sendMut.isPending}
-                      onClick={() => fileRef.current?.click()}
-                    >
-                      <Paperclip className="h-5 w-5" />
-                    </button>
-                    <p className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted-foreground">
-                      {draft.length} chars
-                    </p>
-                    <Button
-                      size="sm"
-                      className="h-11 shrink-0 px-4"
-                      disabled={!canSend}
-                      title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : undefined}
-                      onClick={() => sendMut.mutate()}
-                    >
-                      <Send className="mr-2 h-3.5 w-3.5" />
-                      {sendMut.isPending ? "Sending…" : "Send"}
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                /* HP / layar lipat: satu baris ringkas [lampir][kolom ketik auto-grow][kirim]. */
-                <div className="flex min-w-0 items-end gap-1.5">
-                  <button
-                    type="button"
-                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent disabled:opacity-40"
-                    aria-label="Lampirkan berkas"
-                    title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : "Lampirkan berkas"}
-                    disabled={metaWindowClosed || attachmentBusy || sendMut.isPending}
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    <Paperclip className="h-5 w-5" />
-                  </button>
-                  <Textarea
-                    ref={composerRef}
-                    placeholder="Ketik balasan…"
-                    rows={1}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSend) {
-                        e.preventDefault();
-                        sendMut.mutate();
-                      }
-                    }}
-                    enterKeyHint="enter"
-                    className="min-h-10 max-h-[120px] min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl px-3 py-2 text-base leading-5"
-                  />
-                  <Button
-                    size="icon"
-                    className="h-10 w-10 shrink-0 rounded-full"
-                    disabled={!canSend}
-                    aria-label={sendMut.isPending ? "Mengirim" : "Kirim"}
-                    title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : "Kirim"}
-                    onClick={() => sendMut.mutate()}
-                  >
-                    <Send className={cn("h-4 w-4", sendMut.isPending && "animate-pulse")} />
-                  </Button>
-                </div>
-              )}
-            </footer>
+            <ReplyComposer
+              key={current}
+              ref={composerHandle}
+              compact={!isDesktop}
+              metaWindowClosed={metaWindowClosed}
+              metaWindowMessage={META_WINDOW_CLOSED_MESSAGE}
+              attachment={attachment}
+              attachmentBusy={attachmentBusy}
+              onSend={submitReply}
+              onPickFile={(list) => void onPickFile(list)}
+              onClearAttachment={clearAttachment}
+              onDraftAi={() => draftMut.mutate()}
+              draftAiPending={draftMut.isPending}
+              onClassify={() => classifyMut.mutate()}
+              classifyPending={classifyMut.isPending}
+              fileAccept={WA_FILE_INPUT_ACCEPT}
+            />
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">
@@ -2180,7 +2070,91 @@ function MessageListSkeleton() {
   );
 }
 
-const MessageStream = memo(function MessageStream({ messages, aiLabConfig }: { messages: any[]; aiLabConfig?: { id: string | null; config: AiLabConfig } }) {
+const MessageBubble = memo(function MessageBubble({
+  m,
+  aiLabConfig,
+  onRetry,
+}: {
+  m: any;
+  aiLabConfig?: { id: string | null; config: AiLabConfig };
+  onRetry: (message: any) => void;
+}) {
+  const meta = (m.metadata ?? null) as {
+    send_status?: string;
+    file_name?: string;
+    local_outbox?: boolean;
+    media_url?: string;
+  } | null;
+  const failed = meta?.send_status === "failed";
+  const sending = meta?.send_status === "sending";
+  const localFile = meta?.local_outbox && !meta.media_url && meta.file_name ? meta.file_name : null;
+
+  return (
+    <div
+      className={cn(
+        "flex min-w-0 max-w-full flex-col",
+        m.direction === "out" ? "items-end pl-6 min-[700px]:pl-16" : "items-start pr-6 min-[700px]:pr-16",
+      )}
+    >
+      <div
+        className={cn(
+          "relative flex min-w-0 max-w-[min(85%,34rem)] flex-col overflow-hidden whitespace-pre-wrap break-words rounded-md px-2 pb-1 pt-1 text-[13px] shadow-sm min-[700px]:max-w-[min(75%,36rem)]",
+          m.direction === "out"
+            ? "rounded-tr-none bg-[#d9fdd3] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]"
+            : "rounded-tl-none bg-[#ffffff] text-[#111b21] dark:bg-[#202c33] dark:text-[#e9edef]",
+          failed && "ring-1 ring-red-400",
+          sending && "opacity-90",
+        )}
+      >
+        <div
+          className={cn(
+            "absolute top-0 h-2.5 w-1.5",
+            m.direction === "out"
+              ? "-right-1.5 bg-[#d9fdd3] dark:bg-[#005c4b] rounded-bl-full"
+              : "-left-1.5 bg-[#ffffff] dark:bg-[#202c33] rounded-br-full",
+          )}
+          style={{
+            clipPath: m.direction === "out" ? "polygon(0 0, 100% 0, 0 100%)" : "polygon(0 0, 100% 0, 100% 100%)",
+          }}
+        />
+        <MessageAttachment m={m} />
+        {localFile && <span className="mb-0.5 block text-[12px] font-medium">📎 {localFile}</span>}
+        {m.body && <span className="leading-[17px]">{m.body}</span>}
+        <div className="mt-px flex items-center gap-1 self-end font-sans text-[9px] text-[#667781] dark:text-[#8596a0]">
+          {formatTimeID(m.sent_at)}
+          {sending && <span className="font-medium">Mengirim</span>}
+          {failed && <span className="font-medium text-red-600 dark:text-red-300">Gagal</span>}
+        </div>
+      </div>
+      <MessageBadges m={m} aiLabConfig={aiLabConfig} />
+      {canRetryMessage(m) && (
+        <button
+          type="button"
+          className="mt-0.5 inline-flex min-h-11 touch-manipulation items-center rounded-full px-3 text-xs font-semibold text-red-700 active:scale-95 dark:text-red-300"
+          style={{ touchAction: "manipulation" }}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            onRetry(m);
+          }}
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          Coba lagi
+        </button>
+      )}
+    </div>
+  );
+});
+
+const MessageStream = memo(function MessageStream({
+  messages,
+  aiLabConfig,
+  onRetry,
+}: {
+  messages: any[];
+  aiLabConfig?: { id: string | null; config: AiLabConfig };
+  onRetry: (message: any) => void;
+}) {
   const groups: { label: string; items: any[] }[] = [];
   let last = "";
   for (const m of messages) {
@@ -2203,49 +2177,7 @@ const MessageStream = memo(function MessageStream({ messages, aiLabConfig }: { m
           </div>
           <div className="space-y-1 relative z-10">
             {g.items.map((m) => (
-              <div
-                key={m.id}
-                className={cn(
-                  "flex min-w-0 max-w-full flex-col group",
-                  m.direction === "out" ? "items-end pl-6 sm:pl-16" : "items-start pr-6 sm:pr-16",
-                )}
-              >
-                <div
-                  className={cn(
-                    "relative flex min-w-0 max-w-[76%] flex-col overflow-hidden whitespace-pre-wrap break-words rounded-md px-2 pb-1 pt-1 text-[13px] shadow-sm",
-                    m.direction === "out"
-                      ? "rounded-tr-none bg-[#d9fdd3] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]"
-                      : "rounded-tl-none bg-[#ffffff] text-[#111b21] dark:bg-[#202c33] dark:text-[#e9edef]",
-                    (m.metadata as { send_status?: string } | null)?.send_status === "failed" &&
-                      "ring-1 ring-red-400",
-                  )}
-                >
-                  {/* Tail for bubbles */}
-                  <div className={cn(
-                    "absolute top-0 h-2.5 w-1.5",
-                    m.direction === "out"
-                      ? "-right-1.5 bg-[#d9fdd3] dark:bg-[#005c4b] rounded-bl-full"
-                      : "-left-1.5 bg-[#ffffff] dark:bg-[#202c33] rounded-br-full"
-                  )} style={{ clipPath: m.direction === "out" ? 'polygon(0 0, 100% 0, 0 100%)' : 'polygon(0 0, 100% 0, 100% 100%)' }} />
-
-                  <MessageAttachment m={m} />
-                  {m.body && <span className="leading-[17px]">{m.body}</span>}
-                  <div
-                    className={cn(
-                      "mt-px self-end font-sans text-[9px] flex items-center gap-1",
-                      m.direction === "out"
-                        ? "text-[#667781] dark:text-[#8596a0]"
-                        : "text-[#667781] dark:text-[#8596a0]",
-                    )}
-                  >
-                    {formatTimeID(m.sent_at)}
-                    {(m.metadata as { send_status?: string } | null)?.send_status === "failed" && (
-                      <span className="font-medium text-red-600 dark:text-red-300">Gagal terkirim</span>
-                    )}
-                  </div>
-                </div>
-                  <MessageBadges m={m} aiLabConfig={aiLabConfig} />
-              </div>
+              <MessageBubble key={m.id} m={m} aiLabConfig={aiLabConfig} onRetry={onRetry} />
             ))}
           </div>
         </div>

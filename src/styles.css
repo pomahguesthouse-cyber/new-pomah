@@ -238,6 +238,13 @@ body:has(.ai-lab-react-flow) {
     overflow: hidden;
   }
 }
+@media (max-width: 1023px) {
+  /* Baris template/AI memakan tinggi di layar depan lipat. Sembunyikan saat
+     keyboard terbuka supaya tombol Kirim tetap di area yang terlihat. */
+  html[data-kb-open="true"] .wa-composer-tools {
+    display: none;
+  }
+}
 @media (max-width: 767px) {
   html[data-kb-open="true"] nav[aria-label="Admin"] {
     display: none;
