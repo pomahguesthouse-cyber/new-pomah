@@ -304,6 +304,9 @@ export const sendMessage = createServerFn({ method: "POST" })
       metadataBase.storage_path = data.attachment.path;
       metadataBase.size = data.attachment.size;
     }
+    // Hanya penanda lokal agar UI bisa mencocokkan gelembung optimistis.
+    // Tidak ikut ke argumen sendWhatsAppMessage.
+    if (data.clientId) metadataBase.client_id = data.clientId;
 
     const insertOutbound = async (
       sendStatus: "sent" | "failed" | "local_only",

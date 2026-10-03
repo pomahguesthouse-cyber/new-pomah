@@ -270,6 +270,11 @@ export const adminSendMessageSchema = z
     threadId: z.string().uuid(),
     body: z.string().max(4000).optional().default(""),
     attachment: attachmentSchema.optional(),
+    /**
+     * Id lokal untuk mencocokkan gelembung optimistis dengan baris tersimpan.
+     * Tidak dikirim ke tamu dan tidak mengubah routing provider.
+     */
+    clientId: z.string().uuid().optional(),
   })
   .superRefine((value, ctx) => {
     if (!value.body.trim() && !value.attachment) {
