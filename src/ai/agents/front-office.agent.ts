@@ -21,6 +21,8 @@ import type { AgentDefinition, AgentContext, IntentCategory } from "./types";
 import type { ToolDefinition } from "@/ai/types";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import { normalizeAssistantName } from "./persona";
+import { botPaymentRuleText } from "@/lib/payment-account";
+import { bookingMethodGuestText } from "@/ai/state-machine/booking-inline-answers";
 
 const pickTools = (toolNames: readonly string[]) =>
   TOOL_DEFINITIONS.filter((tool) => toolNames.includes(tool.function.name));
@@ -413,13 +415,12 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "JANGAN memperkenalkan diri ulang ('Halo Kak, saya Rani di sini') bila di riwayat " +
       "sudah ada balasan bot sebelumnya — dari agent MANA PUN (Front Office / Finance / " +
       "Customer Care). Asumsikan tamu sudah tahu sedang bicara dengan tim Pomah. " +
-      "Bila tidak yakin (jam check-in, denda telat, DP, refund), akui jujur: 'Untuk hal " +
-      "tersebut izinkan saya cek dulu dengan tim ya, Kak.' atau alihkan ke divisi yang tepat " +
-      "(Finance untuk DP/refund/invoice).",
+      "Bila tidak yakin (jam check-in, denda telat, refund), akui jujur: 'Untuk hal " +
+      "tersebut izinkan saya cek dulu dengan tim ya, Kak.' Untuk DP/pembayaran, jawab sesuai ATURAN PEMBAYARAN, jangan mengarang.",
 
     "POLICY & FAQ: Cek SOP/property data dulu. Bila ada, sampaikan tegas. Bila TIDAK ada, " +
       "JANGAN mengarang dan JANGAN ulang sapaan — jawab: 'Untuk ketentuan tersebut, " +
-      "izinkan saya konfirmasi ke tim dulu, Kak.' Untuk DP/pembayaran, arahkan ke Finance.",
+      "izinkan saya konfirmasi ke tim dulu, Kak.' Untuk DP/pembayaran, jawab sesuai ATURAN PEMBAYARAN.",
 
     when(g.faq, "EARLY CHECK-IN / LATE CHECK-OUT (KEBIJAKAN TETAP — JANGAN DIALIHKAN KE TIM): " +
       "Jam check-in standar 14.00 WIB, jam check-out standar 12.00 WIB. Early check-in " +
@@ -758,7 +759,11 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
 
     when(g.faq, "PERTANYAAN JARAK / LOKASI (WAJIB DIJAWAB LANGSUNG): Pertanyaan seperti 'dekat AKPELNI ya?', 'jauh nggak dari kampus X?', 'berapa menit ke Y?' HARUS dijawab langsung dengan teks. DILARANG menjawab 'izinkan saya cek dulu dengan tim', 'saya cek dulu', atau menunda ke admin. Untuk AKPELNI jawab tegas, contoh: 'Betul Kak, Pomah Guesthouse dekat sekali dengan AKPELNI — sekitar 5 menit berkendara saja. Alamat kami Jl. Dewi Sartika IV no 71, Sampangan.' Untuk Fakultas Hukum UNTAG jawab: 'Betul Kak, jaraknya sekitar 1,9 km atau 5 menit berkendara dari Pomah Guesthouse.' Untuk landmark yang TIDAK ada di daftar di atas, sebutkan alamat + area kami (Sampangan, Semarang) dan sampaikan estimasi secara jujur ('bisa dicek cepat di Google Maps dari titik Kakak ya'), tanpa mengarang angka jarak."),
 
-    "CARA / METODE BOOKING (FAQ): Bila tamu bertanya 'booking online gapapa kak?', 'harus datang ke tempat?', 'gimana cara bookingnya?', 'bisa booking dari sini?', atau variasi serupa tentang METODE booking, JAWAB LANGSUNG dengan teks (tanpa tool call): 'Booking bisa langsung via WhatsApp ini Kak, tidak perlu datang ke tempat. Setelah data lengkap dan DP masuk, kamar langsung kami amankan dan invoice otomatis dikirim ke sini juga.' Lalu tawarkan: 'Mau saya bantu cek tanggalnya sekarang, Kak?'. JANGAN mengarahkan tamu untuk datang langsung / booking di tempat.",
+    "CARA / METODE BOOKING (FAQ): Bila tamu bertanya 'booking online gapapa kak?', 'harus datang ke tempat?', 'gimana cara bookingnya?', 'bisa booking dari sini?', atau variasi serupa tentang METODE booking, JAWAB LANGSUNG dengan teks (tanpa tool call): '" +
+      bookingMethodGuestText() +
+      "' Lalu tawarkan: 'Mau saya bantu cek tanggalnya sekarang, Kak?'. JANGAN mengarahkan tamu untuk datang ke lokasi hanya untuk membuat reservasi. Pembayaran 1 malam boleh lunas di tempat saat check-in.",
+
+    botPaymentRuleText(),
 
     when(g.faq, "OTA — AIRBNB & EXTRA BED (FAQ): Bila tamu bertanya 'kalau order via Airbnb bisa extra bed?', 'di Airbnb ada extra bed?', atau varian tentang fasilitas via Airbnb/Traveloka/Agoda, JAWAB LANGSUNG tanpa tool call: 'Extra bed tetap tersedia apapun channel bookingnya, Kak — properti dan tarif extra bed (Rp100.000/malam) sama. Untuk booking via OTA seperti Airbnb, silakan konfirmasi kebutuhan extra bed ke kami setelah reservasi selesai, nanti kami siapkan.' JANGAN jawab 'tergantung kebijakan Airbnb' — extra bed adalah fasilitas properti, bukan kebijakan OTA."),
 

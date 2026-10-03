@@ -11,6 +11,7 @@
 import { isDateString, todayWIB } from "@/lib/date";
 import {
   buildBookingSummaryAsync,
+  getBookingState,
   updateBookingState,
   type BookingContext,
 } from "@/ai/state-machine/booking-machine";
@@ -19,6 +20,44 @@ import type { ToolContext, ToolHandler } from "./types";
 
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
+}
+
+function cappedCount(value: unknown): number | undefined {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.min(8, Math.floor(n));
+}
+
+/**
+ * Jumlah tamu yang sudah disebut (slot/context) tidak boleh tertimpa default
+ * 1 dewasa / 0 anak dari tool. Argumen eksplisit selain default itu tetap menang.
+ */
+export function resolveStartBookingGuests(
+  args: { adults?: unknown; children?: unknown },
+  stored?: Record<string, unknown> | null,
+): { adults?: number; children: number } {
+  const argAdults = cappedCount(args.adults);
+  const argAdultsValid = argAdults !== undefined && argAdults >= 1 ? argAdults : undefined;
+  const childrenGiven = args.children !== undefined && args.children !== null && args.children !== "";
+  const argChildren = childrenGiven ? (cappedCount(args.children) ?? 0) : undefined;
+
+  const storedAdultsRaw = cappedCount(stored?.partialAdults) ?? cappedCount(stored?.adults);
+  const storedAdults = storedAdultsRaw !== undefined && storedAdultsRaw >= 1 ? storedAdultsRaw : undefined;
+  const storedChildren = cappedCount(stored?.partialChildren) ?? cappedCount(stored?.children) ?? 0;
+
+  const argsLookDefault =
+    (argAdultsValid === undefined || argAdultsValid === 1) && (argChildren === undefined || argChildren === 0);
+  const storedTotal = (storedAdults ?? 0) + storedChildren;
+  const argTotal = (argAdultsValid ?? 0) + (argChildren ?? 0);
+  const storedHasParty = storedAdults !== undefined || storedChildren >= 1;
+
+  if (storedHasParty && argsLookDefault && storedTotal > argTotal) {
+    return { adults: storedAdults, children: storedChildren };
+  }
+  if (argAdultsValid === undefined && storedHasParty) {
+    return { adults: storedAdults, children: Math.max(storedChildren, argChildren ?? 0) };
+  }
+  return { adults: argAdultsValid, children: argChildren ?? 0 };
 }
 
 function resolveRoomType(input: string, rooms: RoomTypeRow[]): RoomTypeRow | undefined {
@@ -54,11 +93,21 @@ export const startBookingDetails: ToolHandler = async (
   // JANGAN default adults=1 saat agent tidak menyebutnya — jumlah tamu adalah
   // slot WAJIB yang harus ditanya ke tamu. Insiden 4 Jul 2026: tamu bilang
   // "untuk 4 orang", tool men-default 1 dewasa, slot dianggap terisi, dan
-  // booking nyaris tercipta untuk 1 tamu.
-  const adultsRaw = Number(args.adults);
-  const adults =
-    Number.isFinite(adultsRaw) && adultsRaw >= 1 ? Math.min(8, Math.floor(adultsRaw)) : undefined;
-  const children = Math.max(0, Math.min(8, Number(args.children) || 0));
+  // booking nyaris tercipta untuk 1 tamu. Insiden 3 Okt 2026: "4 (1 anak kecil)"
+  // sudah tersimpan di slot, lalu tool menimpa jadi 1 dewasa.
+  let storedGuests: Record<string, unknown> = {};
+  try {
+    const existing = await getBookingState(ctx.supabaseAdmin, ctx.phone);
+    storedGuests = { ...(existing.context ?? {}), ...(existing.slots ?? {}) };
+  } catch (e) {
+    console.warn("[startBookingDetails] gagal membaca slot tamu (non-fatal):", e);
+  }
+  const resolvedGuests = resolveStartBookingGuests(
+    { adults: args.adults, children: args.children },
+    storedGuests,
+  );
+  const adults = resolvedGuests.adults;
+  const children = resolvedGuests.children;
   const guestName = str(args.guest_name);
 
   if (!checkIn) {

@@ -216,6 +216,25 @@ export function parseGuestCountFollowup(message: string): ParsedGuestCount | nul
   return { adults, children, total };
 }
 
+/** Jumlah tamu yang sudah ada di slot percakapan. Tidak memakai ringkasan sesi lama. */
+export function guestsFromStoredSlots(
+  slots?: Record<string, unknown> | null,
+): ParsedGuestCount | null {
+  if (!slots) return null;
+  const read = (value: unknown): number | undefined => {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0 || n > 20) return undefined;
+    return n;
+  };
+  const adults = read(slots.partialAdults) ?? read(slots.adults);
+  const children = read(slots.partialChildren) ?? read(slots.children) ?? 0;
+  if (adults === undefined && children < 1) return null;
+  const adultCount = adults ?? 0;
+  const total = adultCount + children;
+  if (total < 1 || total > 20) return null;
+  return { adults: adultCount, children, total };
+}
+
 /** Ambil jumlah kamar eksplisit dari pesan, tanpa menganggapnya sebagai jumlah tamu. */
 export function parseRequestedRoomCount(message: string): number | null {
   const text = message.toLowerCase().replace(/\s+/g, " ").trim();

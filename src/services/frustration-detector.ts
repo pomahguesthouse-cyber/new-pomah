@@ -158,7 +158,7 @@ export async function markHumanHandoff(
 export interface CreateHandoffTicketInput {
   phone: string;
   threadId?: string | null;
-  kind: NonNullable<FrustrationKind> | "booking_write_failed";
+  kind: NonNullable<FrustrationKind> | "booking_write_failed" | "capacity_dead_end";
   triggerMessage: string;
   context: any;
 }

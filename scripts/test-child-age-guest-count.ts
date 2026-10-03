@@ -13,10 +13,7 @@ import assert from "node:assert/strict";
 import { parseGuestCountFollowup } from "../src/services/wa-autoreply/message-parsers";
 import { extractAllSlots } from "../src/ai/state-machine/flexible-slot-extractor";
 import { parseSlotCorrection } from "../src/ai/state-machine/booking-machine";
-import {
-  mergeGuestCountReading,
-  readGuestCount,
-} from "../src/lib/guest-party";
+import { mergeGuestCountReading, readGuestCount } from "../src/lib/guest-party";
 import { resolveContext } from "../src/ai/router/context-resolver";
 import { RULES } from "../src/ai/router/intent-classifier";
 
@@ -113,13 +110,30 @@ assert.deepEqual(agesWithAdults.childAges, [5, 7]);
 assert.deepEqual(parseGuestCountFollowup("5 dewasa 2 anak"), { adults: 5, children: 2, total: 7 });
 assert.deepEqual(parseGuestCountFollowup("dewasa 5 anak 2"), { adults: 5, children: 2, total: 7 });
 assert.deepEqual(parseGuestCountFollowup("2 dewasa 1 anak"), { adults: 2, children: 1, total: 3 });
-assert.deepEqual(parseGuestCountFollowup("4 (1 anak kecil)"), { adults: 0, children: 1, total: 1 });
+assert.deepEqual(parseGuestCountFollowup("4 (1 anak kecil)"), { adults: 3, children: 1, total: 4 });
+assert.deepEqual(parseGuestCountFollowup("dewasa 5 (1 anak)"), {
+  adults: 5,
+  children: 1,
+  total: 6,
+});
 assert.deepEqual(parseGuestCountFollowup("3 dewasa, 1 anak"), { adults: 3, children: 1, total: 4 });
 assert.deepEqual(parseGuestCountFollowup("Dewasa 5 anak 2"), { adults: 5, children: 2, total: 7 });
-assert.deepEqual(parseGuestCountFollowup("2 dewasa dan 2 bocil"), { adults: 2, children: 2, total: 4 });
+assert.deepEqual(parseGuestCountFollowup("2 dewasa dan 2 bocil"), {
+  adults: 2,
+  children: 2,
+  total: 4,
+});
 assert.deepEqual(parseGuestCountFollowup("untuk 3 orang"), { adults: 3, children: 0, total: 3 });
-assert.deepEqual(parseGuestCountFollowup("dewasa: 4, anak: 1"), { adults: 4, children: 1, total: 5 });
-assert.deepEqual(parseGuestCountFollowup("3 orang dewasa 1 anak"), { adults: 3, children: 1, total: 4 });
+assert.deepEqual(parseGuestCountFollowup("dewasa: 4, anak: 1"), {
+  adults: 4,
+  children: 1,
+  total: 5,
+});
+assert.deepEqual(parseGuestCountFollowup("3 orang dewasa 1 anak"), {
+  adults: 3,
+  children: 1,
+  total: 4,
+});
 
 for (const message of ["5 dewasa 2 anak", "dewasa 5 anak 2", "2 dewasa 1 anak"]) {
   const extracted = slotsOf(message);
@@ -131,20 +145,20 @@ for (const message of ["5 dewasa 2 anak", "dewasa 5 anak 2", "2 dewasa 1 anak"])
 
 const paren = slotsOf("4 (1 anak kecil)");
 assert.equal(paren.children, 1);
-assert.equal(paren.adults, undefined, "angka 4 tanpa label tetap bukan dewasa");
+assert.equal(paren.adults, 3, "4 (1 anak kecil) = total 4, dewasa 3");
 assert.equal(paren.childAges, undefined);
 
 const parenPatch = parseSlotCorrection("4 (1 anak kecil)");
 assert.equal(parenPatch.patch.children, 1);
-assert.equal(parenPatch.patch.adults, undefined);
+assert.equal(parenPatch.patch.adults, 3);
 assert.equal(parenPatch.patch.childAges, undefined);
 
+const labeledParen = slotsOf("dewasa 5 (1 anak)");
+assert.equal(labeledParen.adults, 5, "angka yang sudah berlabel dewasa tidak diubah");
+assert.equal(labeledParen.children, 1);
+
 // Slot percakapan: usia tidak menimpa children yang sudah ada.
-const resolved = resolveContext(
-  "Usia anak 14 dan 6 th",
-  { slots: { adults: 3, children: 1 } },
-  [],
-);
+const resolved = resolveContext("Usia anak 14 dan 6 th", { slots: { adults: 3, children: 1 } }, []);
 assert.equal(resolved.slots.adults, 3);
 assert.equal(resolved.slots.children, 1);
 assert.deepEqual(resolved.slots.childAges, [14, 6]);

@@ -23,6 +23,7 @@ import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import { normalizeAssistantName } from "./persona";
+import { botPaymentRuleText, resolveBotTransferAccount } from "@/lib/payment-account";
 import { CAPABILITY_HONESTY_BLOCK } from "./capability-guard";
 
 const FINANCE_TOOLS: ToolDefinition[] = [
@@ -148,11 +149,12 @@ function buildScaffold(ctx: AgentContext): Scaffold {
   const persona  = mode === "managerial" ? normalizeAssistantName(managerName) : "Rani";
   const propName = property.name ?? "Pomah Guesthouse";
   const prop     = property as Record<string, unknown>;
+  const account = resolveBotTransferAccount(prop);
   const bankInfo = [
-    prop.payment_bank_name      ? `Bank: ${prop.payment_bank_name}`              : null,
-    prop.payment_account_number ? `No. Rekening: ${prop.payment_account_number}` : null,
-    prop.payment_account_holder ? `Atas Nama: ${prop.payment_account_holder}`    : null,
-  ].filter(Boolean).join("\n");
+    `Bank: ${account.bankName}`,
+    `No. Rekening: ${account.accountNumber}`,
+    `Atas Nama: ${account.accountHolder}`,
+  ].join("\n");
   return {
     persona,
     propName,
@@ -200,6 +202,8 @@ function buildGuestPrompt(s: Scaffold): string {
     s.bankInfo
       ? `Rekening pembayaran hotel:\n${s.bankInfo}\n\nGunakan info ini saat tamu menanyakan cara transfer.`
       : "",
+
+    botPaymentRuleText(),
 
     "ALUR PERTANYAAN PEMBAYARAN:\n" +
       "1. Tanya kode booking atau gunakan nomor HP tamu untuk mencari booking.\n" +

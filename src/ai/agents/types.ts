@@ -265,8 +265,7 @@ export interface AgentRunResult {
  * what to do, instead of inferring from a nullable reply:
  *   - "reply": a reply was produced — send it.
  *   - "noop":  intentionally stay silent — send nothing, do NOT retry.
- *              (Reserved: no producer wired yet. Add when a real silence case
- *              exists, e.g. mid-conversation human takeover.)
+ *              Dipakai saat loop kapasitas sudah diserahkan ke staf.
  *   - "error": the run failed — retryable by the webhook.
  */
 export type OrchestrationStatus = "reply" | "noop" | "error";

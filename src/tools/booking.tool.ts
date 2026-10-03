@@ -9,6 +9,7 @@
 import { guestCountWasStated, resolveAdultsForBooking } from "@/lib/guest-count";
 import { isDateString, fmtDateID } from "@/lib/date";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
+import { toPaymentAccountFields } from "@/lib/payment-account";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeGrandTotal, toRupiah, totalsMatch } from "@/lib/booking-total";
@@ -18,6 +19,33 @@ import type { ToolContext, ToolHandler } from "./types";
 
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
+}
+
+/**
+ * Rencana pembayaran awal. Menginap kurang dari 2 malam tidak memakai DP
+ * dan tidak di-expire (payment_status unpaid tetap valid). 2 malam atau lebih
+ * mempertahankan hitungan DP yang sudah ada.
+ */
+export function planInitialBookingPayment(input: {
+  nights: number;
+  total: number;
+  paymentType?: string | null;
+  dpAmount?: number | null;
+  now?: number;
+}): { paidAmount: number; paymentStatus: "paid" | "partial" | "unpaid"; expiresAt: string | null } {
+  if (!(input.nights >= 2)) {
+    return { paidAmount: 0, paymentStatus: "unpaid", expiresAt: null };
+  }
+  const isDP = (input.paymentType ?? "").toLowerCase() === "dp";
+  const requested = isDP ? Math.max(0, Number(input.dpAmount) || 0) : 0;
+  const paidAmount = isDP ? Math.min(requested, input.total) : 0;
+  const paymentStatus =
+    paidAmount >= input.total && input.total > 0 ? "paid" : paidAmount > 0 ? "partial" : "unpaid";
+  return {
+    paidAmount,
+    paymentStatus,
+    expiresAt: computeBookingExpiryIso(input.now ?? Date.now()),
+  };
 }
 
 async function pickAvailableRooms(
@@ -156,11 +184,7 @@ function buildExistingBookingPayload(ctx: ToolContext, b: any, extra: Record<str
     payment_status: paymentStatus,
     remaining_amount: Math.max(0, Number(b.total_amount ?? 0) - paidAmount),
     guest: { full_name: g?.full_name, email: g?.email, phone: g?.phone },
-    pembayaran: {
-      bank: ctx.property.payment_bank_name ?? null,
-      no_rekening: ctx.property.payment_account_number ?? null,
-      atas_nama: ctx.property.payment_account_holder ?? null,
-    },
+    pembayaran: toPaymentAccountFields(ctx.property),
     invoice_url: (() => {
       const pDom = (ctx.property?.public_domain as string | undefined)?.trim();
       const base = pDom
@@ -658,12 +682,14 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   // Skema pembayaran DP vs lunas.
   // args.payment_type = 'dp' | 'full' (dikirim dari booking-machine via context)
   // args.dp_amount    = nominal DP (jika payment_type='dp')
-  const paymentType = str(args.payment_type).toLowerCase();
-  const isDP = paymentType === "dp";
-  const requestedDpAmount = isDP ? Math.max(0, Number(args.dp_amount) || 0) : 0;
-  const initialPaidAmount = isDP ? Math.min(requestedDpAmount, total) : 0;
-  const initialPaymentStatus =
-    initialPaidAmount >= total && total > 0 ? "paid" : initialPaidAmount > 0 ? "partial" : "unpaid";
+  const paymentPlan = planInitialBookingPayment({
+    nights,
+    total,
+    paymentType: str(args.payment_type),
+    dpAmount: Number(args.dp_amount) || 0,
+  });
+  const initialPaidAmount = paymentPlan.paidAmount;
+  const initialPaymentStatus = paymentPlan.paymentStatus;
 
   async function insertBooking(srcValue: string) {
     return await (ctx.supabaseAdmin as any)
@@ -683,7 +709,7 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
         status: "pending",
         special_requests: finalSpecialRequests || null,
         idempotency_key: idemKey ?? null,
-        expires_at: computeBookingExpiryIso(),
+        expires_at: paymentPlan.expiresAt,
       })
       .select("id, reference_code")
       .single();
@@ -871,11 +897,7 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
     payment_status: initialPaymentStatus,
     remaining_amount: Math.max(0, total - initialPaidAmount),
     guest: { full_name: fullName, email, phone },
-    pembayaran: {
-      bank: ctx.property.payment_bank_name ?? null,
-      no_rekening: ctx.property.payment_account_number ?? null,
-      atas_nama: ctx.property.payment_account_holder ?? null,
-    },
+    pembayaran: toPaymentAccountFields(ctx.property),
     invoice_url: (() => {
       const pDom = (ctx.property?.public_domain as string | undefined)?.trim();
       const base = pDom

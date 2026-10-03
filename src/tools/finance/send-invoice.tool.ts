@@ -15,6 +15,7 @@
  * delivers through WhatsApp gateway).
  */
 
+import { toPaymentAccountFields } from "@/lib/payment-account";
 import {
   bookingBelongsToPhone,
   invalidBookingCodeError,
@@ -182,7 +183,7 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
   const rt = ctx.rooms.find((r) => r.id === br?.room_type_id);
   const roomTypeName = br?.room_types?.name ?? rt?.name ?? "Kamar";
 
-  const prop = ctx.property as Record<string, unknown>;
+  const paymentAccount = toPaymentAccountFields(ctx.property);
   const total = Number(b.total_amount ?? 0);
   const paid = Number(b.paid_amount ?? 0);
   const remaining = Math.max(0, total - paid);
@@ -217,11 +218,7 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
         phone: g?.phone,
       },
     },
-    payment_account: {
-      bank: prop.payment_bank_name ?? null,
-      no_rekening: prop.payment_account_number ?? null,
-      atas_nama: prop.payment_account_holder ?? null,
-    },
+    payment_account: paymentAccount,
     invoice_url: buildInvoiceUrl(b.reference_code ?? b.id, ctx),
   });
 };

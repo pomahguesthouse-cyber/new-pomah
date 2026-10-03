@@ -7,6 +7,6 @@
  */
 const PAYMENT_DEADLINE_MS = 60 * 60 * 1000;
 
-export function computeBookingExpiryIso(): string {
-  return new Date(Date.now() + PAYMENT_DEADLINE_MS).toISOString();
+export function computeBookingExpiryIso(now = Date.now()): string {
+  return new Date(now + PAYMENT_DEADLINE_MS).toISOString();
 }
