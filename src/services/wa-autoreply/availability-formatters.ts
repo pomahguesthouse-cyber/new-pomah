@@ -7,6 +7,7 @@ type FastFaqResult = {
   reply: string;
   intent: string;
   dates?: { checkIn: string; checkOut: string };
+  guests?: ParsedGuestCount;
 };
 
 type RoomCombinationOption = {
@@ -241,7 +242,11 @@ export function formatAvailabilityReply(
   raw: string,
   greet = false,
   focusRoomName?: string | null,
+  knownGuests?: ParsedGuestCount | null,
 ): FastFaqResult | null {
+  if (knownGuests && knownGuests.total >= 1) {
+    return formatAvailabilityForGuestCount(raw, knownGuests);
+  }
   let data: any;
   try {
     data = JSON.parse(raw);

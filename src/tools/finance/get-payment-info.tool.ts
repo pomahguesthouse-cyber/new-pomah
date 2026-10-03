@@ -12,6 +12,7 @@ import {
   normalizeBookingCode,
 } from "@/lib/booking-code";
 import { fmtDateID } from "@/lib/date";
+import { toPaymentAccountFields } from "@/lib/payment-account";
 import type { ToolContext, ToolHandler } from "@/tools/types";
 
 function str(v: unknown): string {
@@ -29,13 +30,7 @@ export const getPaymentInfo: ToolHandler = async (
   const guestPhone =
     ctx.isManager === true ? str(args.guest_phone) : (ctx.phone ?? str(args.guest_phone));
 
-  const prop = ctx.property as Record<string, unknown>;
-
-  const paymentAccount = {
-    bank:       prop.payment_bank_name       ?? null,
-    no_rekening: prop.payment_account_number ?? null,
-    atas_nama:  prop.payment_account_holder  ?? null,
-  };
+  const paymentAccount = toPaymentAccountFields(ctx.property);
 
   // If no lookup key, just return payment account info
   if (!referenceCode && !guestPhone) {

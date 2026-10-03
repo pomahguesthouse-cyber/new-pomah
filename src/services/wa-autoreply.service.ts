@@ -37,6 +37,7 @@ import { runDeferred } from "@/lib/cf-context";
 import { checkRoomAvailability } from "@/tools/availability.tool";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
 import { getBookingState } from "@/ai/state-machine/booking-machine";
+import { STAFF_REPLY_SILENCE_MS, staffSilenceUntil } from "@/services/wa-autoreply/staff-silence";
 import { buildPropertyFaqReply } from "@/services/property-faq";
 import {
   AI_TIMEOUT_MS,
@@ -92,6 +93,7 @@ import {
   mentionsExplicitDateSignal,
   messageOpensWithGreeting,
   parseAvailabilityDateRange,
+  guestsFromStoredSlots,
   parseGuestCountFollowup,
   shouldUseDeterministicAvailability,
   type ParsedGuestCount,
@@ -328,6 +330,7 @@ async function buildDeterministicAvailabilityReply(params: {
   rooms: any[];
   property: any;
   origin: string;
+  bookingSlots?: Record<string, unknown> | null;
 }): Promise<FastFaqResult | null> {
   if (!shouldUseDeterministicAvailability(params.message)) return null;
   // Perintah booking eksplisit → serahkan ke alur booking, jangan balas daftar.
@@ -352,12 +355,20 @@ async function buildDeterministicAvailabilityReply(params: {
     params.message,
     (params.rooms ?? []).map((r: any) => String(r?.name ?? "")),
   );
-  const result = formatAvailabilityReply(raw, messageOpensWithGreeting(params.message), focusRoom);
+  const guests =
+    parseGuestCountFollowup(params.message) ?? guestsFromStoredSlots(params.bookingSlots);
+  const result = formatAvailabilityReply(
+    raw,
+    messageOpensWithGreeting(params.message),
+    focusRoom,
+    guests,
+  );
   // Lampirkan tanggal yang di-parse agar caller bisa mempersist-nya ke
   // conversation-state. Tanpa ini, tanggal hilang karena jalur deterministik
   // melewati orchestrator (satu-satunya tempat slot biasanya disimpan).
   if (result) {
     result.dates = { checkIn: range.checkIn, checkOut: range.checkOut };
+    if (guests) result.guests = guests;
   }
   return result;
 }
@@ -412,7 +423,7 @@ async function buildContextualBookingInquiryReply(params: {
   // Sebelumnya kita ikut mengambil guest_count dari ringkasan sesi lama,
   // sehingga daftar tipe kamar difilter kapasitas prematur (mis. hanya
   // Deluxe untuk 2 tamu) dan tamu tidak diberi tahu tipe lain yang ada.
-  const guests = parseGuestCountFollowup(params.message);
+  const guests = parseGuestCountFollowup(params.message) ?? guestsFromStoredSlots(params.bookingSlots);
   const adults = guests?.adults;
   const children = guests?.children ?? 0;
 
@@ -451,8 +462,22 @@ async function buildContextualBookingInquiryReply(params: {
   if (result) {
     result.dates = { checkIn, checkOut };
     result.intent = `${result.intent}_contextual`;
+    if (guests) result.guests = guests;
   }
   return result;
+}
+
+function availabilitySlotPatch(result: { dates?: { checkIn: string; checkOut: string }; guests?: ParsedGuestCount }) {
+  if (!result.dates) return null;
+  const patch: Record<string, unknown> = {
+    checkIn: result.dates.checkIn,
+    checkOut: result.dates.checkOut,
+  };
+  if (result.guests) {
+    patch.partialAdults = result.guests.adults;
+    patch.partialChildren = result.guests.children;
+  }
+  return patch;
 }
 
 
@@ -697,6 +722,30 @@ export async function executeAutoreplyForPhone(
   }
 
   const isManager = mode === "admin";
+  if (!isManager && c.thread_id) {
+    try {
+      const since = new Date(Date.now() - STAFF_REPLY_SILENCE_MS).toISOString();
+      const { data: recentOut } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("direction, sent_at, metadata")
+        .eq("thread_id", c.thread_id)
+        .eq("direction", "out")
+        .gte("sent_at", since);
+      const silenceUntil = staffSilenceUntil(
+        (recentOut ?? []) as Array<{ direction?: string; sent_at?: string; metadata?: unknown }>,
+      );
+      if (silenceUntil) {
+        await (supabaseAdmin as any)
+          .from("whatsapp_threads")
+          .update({ ai_paused_until: silenceUntil })
+          .eq("id", c.thread_id);
+        console.info(`[Autoreply] Staff replied recently — staying quiet for ${phone.slice(-6)}`);
+        return "skipped_config";
+      }
+    } catch (e) {
+      console.warn("[Autoreply] staff silence check failed (non-fatal):", e);
+    }
+  }
   if ((!isManager && !c.auto_reply_enabled) || !c.wpp_token) {
     return "skipped_config";
   }
@@ -871,7 +920,18 @@ export async function executeAutoreplyForPhone(
   if (!isManager) {
     try {
       const { data: handoffState } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
-      bookingState = (handoffState as { state?: string | null; context?: unknown } | null) ?? null;
+      bookingState = (handoffState as { state?: string | null; context?: unknown; slots?: unknown } | null) ?? null;
+      if (bookingState?.state && bookingState.state !== "IDLE") {
+        try {
+          await (supabaseAdmin as any).rpc("update_booking_state", {
+            p_phone: phone,
+            p_state: bookingState.state,
+            p_context: bookingState.context ?? {},
+          });
+        } catch (touchErr) {
+          console.warn("[Autoreply] gagal memperpanjang TTL booking (non-fatal):", touchErr);
+        }
+      }
       const handoffContext = bookingState?.context;
       if (
         handoffContext &&
@@ -1346,6 +1406,7 @@ export async function executeAutoreplyForPhone(
         rooms: rooms ?? [],
         property: p,
         origin,
+        bookingSlots: ((bookingState as { slots?: Record<string, unknown> } | null)?.slots ?? null),
       });
       if (availabilityReply && repeatsLastBotReply(availabilityReply.reply, rollingMessages)) {
         console.info(`[Autoreply] availability fast-path would repeat last reply for ${phone.slice(-6)} — handing to AI`);
@@ -1367,14 +1428,14 @@ export async function executeAutoreplyForPhone(
         // menanyakan tanggal lagi. Fire-and-forget — tak boleh menggagalkan reply.
         // Catatan: update_conversation_topic MENGGABUNG slots (jsonb ||), jadi cukup
         // kirim {checkIn, checkOut}; slot lama (jumlah tamu, tipe kamar) tetap ada.
-        if (availabilityReply.dates) {
-          const { checkIn, checkOut } = availabilityReply.dates;
+        const availabilitySlots = availabilitySlotPatch(availabilityReply);
+        if (availabilitySlots) {
           void runDeferred("Autoreply.persist-availability-dates", async () => {
             const { error } = await (supabaseAdmin as any).rpc("update_conversation_topic", {
               p_phone: phone,
               p_last_topic: "availability",
               p_last_entity: null,
-              p_slots: { checkIn, checkOut },
+              p_slots: availabilitySlots,
             });
             if (error) console.warn("[Autoreply] persist availability dates failed:", error.message);
           });
@@ -1416,14 +1477,14 @@ export async function executeAutoreplyForPhone(
 
         // Catatan: update_conversation_topic MENGGABUNG slots (jsonb ||), jadi cukup
         // kirim {checkIn, checkOut}; slot lama (jumlah tamu, tipe kamar) tetap ada.
-        if (contextualReply.dates) {
-          const { checkIn, checkOut } = contextualReply.dates;
+        const contextualSlots = availabilitySlotPatch(contextualReply);
+        if (contextualSlots) {
           void runDeferred("Autoreply.persist-contextual-availability-dates", async () => {
             const { error } = await (supabaseAdmin as any).rpc("update_conversation_topic", {
               p_phone: phone,
               p_last_topic: "availability",
               p_last_entity: null,
-              p_slots: { checkIn, checkOut },
+              p_slots: contextualSlots,
             });
             if (error) console.warn("[Autoreply] persist contextual dates failed:", error.message);
           });
@@ -1861,6 +1922,13 @@ export async function executeAutoreplyForPhone(
     }
   }
   if (metrics.aiStartedAt && !metrics.aiFinishedAt) metrics.aiFinishedAt = Date.now();
+
+  if (!reply && orchResult?.status === "noop") {
+    await quickAck.beforeReplySend();
+    try { void setWaTyping(c.wpp_token, sendTarget, false); } catch { /* non-fatal */ }
+    console.info(`[Autoreply] Orchestrator noop — staying silent for ${phone.slice(-6)}`);
+    return "skipped_config";
+  }
 
   let finalFallback = isManager ? MANAGER_FALLBACK_MESSAGE : FALLBACK_MESSAGE;
   if (!reply && !isManager) {

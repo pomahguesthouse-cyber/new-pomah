@@ -11,7 +11,23 @@ import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/
 import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
 import { extractAllSlots, getMissingSlots, formatPartialBookingSummary, TRAILING_FILLER_RE } from "./flexible-slot-extractor";
-import { buildPaymentPolicyAnswer } from "./booking-inline-answers";
+import { buildPaymentPolicyAnswer, isGuestPaymentQuestion } from "./booking-inline-answers";
+import {
+  bookingSummaryLead,
+  formatEmailSummaryLine,
+  formatGuestNameForSummary,
+} from "./booking-summary-text";
+import { formatTransferAccountLine } from "@/lib/payment-account";
+import {
+  buildCapacityAlternatives,
+  capacityBlockerFingerprint,
+  extraBedsFor,
+  fitPartyToOneRoom,
+  formatCapacityAlternativesReply,
+  maxGuestsPerRoom,
+  parseCapacityFollowup,
+  type RoomStock,
+} from "./capacity-alternatives";
 import { todayWIB } from "@/lib/date";
 import { extractRequestedExtraBeds } from "./extra-bed-parser";
 
@@ -103,6 +119,12 @@ export interface BookingContext {
   writeFailureTicketed?: boolean;
   /** Kunci notifikasi staf yang sudah dijadwalkan (satu per draft/konfirmasi). */
   staffAlertKeys?: string[];
+  /** Sidik pesan blocker kapasitas terakhir, supaya pengulangan yang sama terhitung. */
+  capacityBlockerFingerprint?: string;
+  /** Berapa kali pesan blocker kapasitas yang sama sudah dikirim. */
+  capacityBlockerStreak?: number;
+  /** Loop kapasitas sudah diserahkan ke staf; balasan berikutnya diam. */
+  capacityHandoffDone?: boolean;
 }
 
 export interface StateRecord {
@@ -130,6 +152,8 @@ export interface StateMachineResult {
   followUp?: "send_invoice";
   /** Reference code of the booking the follow-up should reference. */
   followUpRef?: string;
+  /** Sengaja tidak membalas (jangan jatuh ke fallback). */
+  silent?: boolean;
 }
 
 const CANCELLATION_PATTERNS = /\b(batal|batalkan|cancel|nggak jadi|ga jadi|gak jadi|tidak jadi)\b/i;
@@ -365,7 +389,14 @@ function countNights(checkIn: string, checkOut: string): number {
 }
 
 function getTotalGuests(context: Pick<BookingContext, "adults" | "children">): number {
-  return Math.max(1, Number(context.adults ?? 1) || 1) + Math.max(0, Number(context.children ?? 0) || 0);
+  const children = Math.max(0, Number(context.children ?? 0) || 0);
+  const adults =
+    context.adults != null
+      ? Math.max(0, Number(context.adults) || 0)
+      : children > 0
+        ? 0
+        : 1;
+  return Math.max(1, adults + children);
 }
 
 /**
@@ -462,8 +493,8 @@ function buildBookingSummary(
   const checkOutDisplay = context.checkOut ? `${formatDateId(context.checkOut)}, 12.00` : "—";
 
   // --- Guests ---
-  const adults = context.adults ?? 1;
   const children = context.children ?? 0;
+  const adults = context.adults ?? (children > 0 ? 0 : 1);
   const totalGuests = getTotalGuests(context);
   const ageNote =
     context.childAges && context.childAges.length > 0
@@ -500,12 +531,15 @@ function buildBookingSummary(
   context.quotedTotal = grandTotal > 0 ? grandTotal : undefined;
 
   const ratePrefix = overrides?.hasDynamicBreakdown ? "rata-rata " : "";
+  const transfer = formatTransferAccountLine();
   const paymentLine =
-    context.paymentType === "dp"
-      ? `• Pembayaran: DP${context.dpAmount ? ` ${fmtRp(context.dpAmount)}` : " dulu"}\n`
-      : context.paymentType === "full"
-        ? `• Pembayaran: Lunas\n`
-        : "";
+    nights != null && nights < 2
+      ? `• Pembayaran: Lunas di tempat saat check-in (tanpa DP), atau transfer ke ${transfer}\n`
+      : context.paymentType === "dp"
+        ? `• Pembayaran: DP${context.dpAmount ? ` ${fmtRp(context.dpAmount)}` : " dulu"} (transfer ke ${transfer})\n`
+        : context.paymentType === "full"
+          ? `• Pembayaran: Lunas\n`
+          : "";
 
   const extraBedLine =
     extraBeds > 0
@@ -521,10 +555,17 @@ function buildBookingSummary(
       `Mohon tambah kamar atau kurangi jumlah tamu.\n`
     : "";
 
+  const summaryComplete =
+    !eb.overCapacity &&
+    !!context.guestName?.trim() &&
+    !!context.checkIn &&
+    !!context.checkOut &&
+    !!(context.roomName || (summaryRooms && summaryRooms.length > 0)) &&
+    ((context.adults ?? 0) >= 1 || children >= 1);
   const summary =
-    `Data pemesanan sudah lengkap! Berikut ringkasannya:\n\n` +
-    `• Nama: ${context.guestName ?? "—"}\n` +
-    `• Email: ${context.guestEmail ?? "(tidak diisi)"}\n` +
+    bookingSummaryLead(summaryComplete) +
+    `• Nama: ${formatGuestNameForSummary(context.guestName)}\n` +
+    formatEmailSummaryLine(context.guestEmail) +
     `• No. HP: ${context.guestPhone ?? "—"}\n` +
     `• Kamar: ${roomsDisplay}\n` +
     `• Check-in: ${checkInDisplay}\n` +
@@ -1299,6 +1340,235 @@ export function buildDraftKey(phone: string, context: BookingContext): string {
 }
 
 const STAFF_REQUEST_PATTERN = /\b(admin|staf|staff|petugas|manusia|cs|customer service)\b/i;
+const SUMMARY_REQUEST_RE = /\b(ringkasan|rincian|detail(?:nya)?|ulangi|ulang(?:i)?)\b/i;
+
+function stockFromCatalog(
+  rooms: Array<{
+    id: string;
+    name: string;
+    base_rate?: number | null;
+    capacity?: number | null;
+    extrabed_capacity?: number | null;
+    extrabed_rate?: number | null;
+  }>,
+  availability: Map<string, number | null> | null,
+  context: BookingContext,
+): RoomStock[] {
+  return rooms.map((room) => {
+    const selected =
+      room.id === context.roomId ||
+      (context.rooms ?? []).some((item) => item.roomTypeId === room.id);
+    const override =
+      selected && context.pricePerNight && context.pricePerNight > 0 ? context.pricePerNight : undefined;
+    return {
+      roomTypeId: room.id,
+      name: room.name,
+      capacity: Number(room.capacity ?? 0) || 1,
+      extrabedCapacity: Number(room.extrabed_capacity ?? 0) || 0,
+      extrabedRate: Number(room.extrabed_rate ?? 0) || 0,
+      pricePerNight: override ?? Number(room.base_rate ?? 0),
+      available: availability ? (availability.get(room.id) ?? null) : null,
+    };
+  });
+}
+
+async function loadRoomAvailability(
+  supabase: SupabaseClient,
+  checkIn: string,
+  checkOut: string,
+): Promise<Map<string, number | null> | null> {
+  try {
+    const { data, error } = await supabase.rpc("room_type_availability_detail", {
+      p_check_in: checkIn,
+      p_check_out: checkOut,
+    });
+    if (error || !Array.isArray(data)) return null;
+    const map = new Map<string, number | null>();
+    for (const row of data as Array<{ room_type_id?: unknown; available?: unknown }>) {
+      const id = String(row.room_type_id ?? "");
+      if (!id) continue;
+      if (row.available == null || row.available === "") {
+        map.set(id, null);
+        continue;
+      }
+      const available = Number(row.available);
+      map.set(id, Number.isFinite(available) ? available : null);
+    }
+    return map;
+  } catch (e) {
+    console.warn("[BookingState] room availability untuk alternatif kapasitas gagal:", e);
+    return null;
+  }
+}
+
+async function openCapacityHandoff(
+  ctx: ToolContext,
+  phone: string,
+  context: BookingContext,
+): Promise<void> {
+  try {
+    const { createHandoffTicket } = await import("@/services/frustration-detector");
+    await createHandoffTicket(ctx.supabaseAdmin, {
+      phone,
+      kind: "capacity_dead_end",
+      triggerMessage: "Kapasitas kamar berulang tanpa solusi. Tamu butuh bantuan staf memilih kamar.",
+      context,
+    });
+  } catch (e) {
+    console.warn("[BookingState] tiket kapasitas gagal (non-fatal):", e);
+  }
+}
+
+/**
+ * Tamu melebihi kapasitas satu kamar: tawarkan jumlah kamar / tipe yang muat.
+ * Pesan blocker yang sama dua kali → satu kali serah ke staf, lalu diam.
+ */
+async function respondToOverCapacity(
+  ctx: ToolContext,
+  phone: string,
+  context: BookingContext,
+  message: string,
+  inlinePrefix = "",
+): Promise<StateMachineResult | null> {
+  const supabase = ctx.supabaseAdmin;
+  const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
+  const policy = resolveRoomExtraBedPolicy(context, ctx.rooms);
+  const guests = getTotalGuests(context);
+  const eb = computeExtraBeds(policy, totalRoomsCount, guests);
+  const followup = parseCapacityFollowup(message);
+  const offeredBefore = (context.capacityBlockerStreak ?? 0) > 0 || context.capacityHandoffDone === true;
+  if (!eb.overCapacity && !(followup && offeredBefore)) return null;
+
+  if (context.capacityHandoffDone && !followup) {
+    return { handled: true, silent: true };
+  }
+
+  const nights =
+    context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : 1;
+  const availability =
+    context.checkIn && context.checkOut
+      ? await loadRoomAvailability(supabase, context.checkIn, context.checkOut)
+      : null;
+  const catalog = stockFromCatalog(ctx.rooms, availability, context);
+  const selected =
+    catalog.find((room) => room.roomTypeId === context.roomId) ??
+    catalog.find((room) => context.roomName?.toLowerCase().includes(room.name.toLowerCase())) ??
+    catalog[0];
+
+  if (followup === "book_one" && selected) {
+    const max = maxGuestsPerRoom(selected);
+    const fitted = fitPartyToOneRoom(context.adults ?? 0, context.children ?? 0, max);
+    context.adults = fitted.adults;
+    context.children = fitted.children;
+    context.rooms = [
+      {
+        roomTypeId: selected.roomTypeId,
+        roomTypeName: selected.name,
+        quantity: 1,
+        pricePerNight: selected.pricePerNight,
+      },
+    ];
+    context.roomId = selected.roomTypeId;
+    context.roomName = selected.name;
+    context.pricePerNight = selected.pricePerNight;
+    context.capacityBlockerStreak = 0;
+    context.capacityBlockerFingerprint = undefined;
+    context.capacityHandoffDone = false;
+    const note = fitted.adjusted
+      ? `Baik Kak, saya catat 1 kamar ${selected.name} dulu. Karena 1 kamar muat ${max} tamu, jumlah tamu saya sesuaikan menjadi ${fitted.adults} dewasa` +
+        `${fitted.children > 0 ? ` dan ${fitted.children} anak` : ""}. Kalau ada yang perlu dikoreksi, sebutkan ya.\n\n`
+      : `Baik Kak, saya catat 1 kamar ${selected.name} dulu.\n\n`;
+    if (context.checkIn && context.checkOut) {
+      context.totalPrice = nights * selected.pricePerNight;
+    }
+    const resolvedRates = await applyResolvedRatesToContext(ctx, context).catch(() => null);
+    await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+    const summary = await buildBookingSummaryFromResolved(ctx, context, resolvedRates);
+    if (summary.reply) summary.reply = inlinePrefix + note + summary.reply;
+    return summary;
+  }
+
+  if (followup === "add_room" && selected) {
+    const perRoom = maxGuestsPerRoom(selected);
+    const qty = Math.max(2, Math.ceil(guests / Math.max(1, perRoom)));
+    const available = selected.available;
+    if (available != null && available < qty) {
+      await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+      return {
+        handled: true,
+        reply:
+          `${inlinePrefix}Stok ${selected.name} yang tersedia ${available} kamar, belum cukup untuk ${qty} kamar. ` +
+          `Mau pilih tipe lain yang muat, atau saya teruskan ke tim kami?`,
+      };
+    }
+    if (available == null) {
+      await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+      return {
+        handled: true,
+        reply:
+          `${inlinePrefix}Saya belum bisa memastikan stok ${selected.name} untuk ${qty} kamar. ` +
+          `Tim kami bisa membantu mengunci kamarnya ya Kak.`,
+      };
+    }
+    const extraBeds = extraBedsFor(selected, qty, guests);
+    context.rooms = [
+      {
+        roomTypeId: selected.roomTypeId,
+        roomTypeName: selected.name,
+        quantity: qty,
+        pricePerNight: selected.pricePerNight,
+      },
+    ];
+    context.roomName = `${qty}x ${selected.name}`;
+    context.roomId = selected.roomTypeId;
+    context.pricePerNight = selected.pricePerNight;
+    context.extraBeds = extraBeds;
+    context.capacityBlockerStreak = 0;
+    context.capacityBlockerFingerprint = undefined;
+    context.capacityHandoffDone = false;
+    if (context.checkIn && context.checkOut) {
+      context.totalPrice = nights * selected.pricePerNight * qty;
+    }
+    const resolvedRates = await applyResolvedRatesToContext(ctx, context).catch(() => null);
+    await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+    return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
+  }
+
+  if (!eb.overCapacity || !selected) return null;
+
+  const fp = capacityBlockerFingerprint(selected.roomTypeId, guests, nights);
+  const prev = context.capacityBlockerFingerprint === fp ? (context.capacityBlockerStreak ?? 0) : 0;
+  if (prev >= 2) {
+    context.capacityHandoffDone = true;
+    context.capacityBlockerFingerprint = fp;
+    context.capacityBlockerStreak = prev;
+    await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+    await openCapacityHandoff(ctx, phone, context);
+    return {
+      handled: true,
+      reply:
+        "Mohon maaf Kak, saya sudah dua kali menemui kendala kapasitas yang sama. " +
+        "Saya teruskan ke tim kami supaya bisa dibantu memilih kamar yang pas. Mohon ditunggu ya.",
+    };
+  }
+
+  const choices = buildCapacityAlternatives({ guests, nights, selected, catalog });
+  context.capacityBlockerFingerprint = fp;
+  context.capacityBlockerStreak = prev + 1;
+  await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+  return {
+    handled: true,
+    reply:
+      inlinePrefix +
+      formatCapacityAlternativesReply({
+        guests,
+        selectedName: selected.name,
+        selectedMax: maxGuestsPerRoom(selected),
+        nights,
+        choices,
+      }),
+  };
+}
 
 export async function processBookingState(
   ctx: ToolContext,
@@ -1329,6 +1599,17 @@ export async function processBookingState(
   const { state } = currentStateRecord;
   // `context` is reassigned below on booking-form submission; `state` is not.
   let { context } = currentStateRecord;
+
+  // Geser jendela 15 menit setiap pesan tamu selama alur masih berjalan.
+  // update_conversation_topic tidak mengubah updated_at, jadi tanpa ini
+  // percakapan yang masih aktif bisa di-reset jadi IDLE.
+  if (state !== "IDLE") {
+    try {
+      await updateBookingState(supabase, phone, state, context);
+    } catch (e) {
+      console.warn("[BookingState] gagal memperpanjang TTL (non-fatal):", e);
+    }
+  }
 
   const formSubmittedMatch = message.match(FORM_SUBMITTED_PATTERN);
   if (formSubmittedMatch) {
@@ -1597,7 +1878,37 @@ export async function processBookingState(
   const awaitingOverrideConfirm =
     !!(currentStateRecord.context as BookingContext | undefined)?.pendingOverride &&
     /\b(ya|iya|setuju|benar|ganti|tidak|jangan|batal|gak|ngga|engga)\b/i.test(message);
-  if (isDataEntryState(state) && !awaitingOverrideConfirm && !isExpectedAnswer(state, message)) {
+  if (
+    (state === "CONFIRMING_BOOKING" || state === "COLLECTING_DATA") &&
+    parseCapacityFollowup(message)
+  ) {
+    const capacityReply = await respondToOverCapacity(ctx, phone, context, message);
+    if (capacityReply) return capacityReply;
+  }
+  const paymentQuestion = isGuestPaymentQuestion(message);
+  if (paymentQuestion && state === "CONFIRMING_BOOKING" && !CONFIRM_PATTERN.test(message)) {
+    const stayNights =
+      context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : null;
+    if (stayNights != null && stayNights < 2) {
+      context.paymentType = undefined;
+      context.dpAmount = undefined;
+      await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+    }
+    return {
+      handled: true,
+      reply: buildPaymentPolicyAnswer({
+        nights: stayNights,
+        totalPrice: context.totalPrice,
+        property: ctx.property,
+      }),
+    };
+  }
+  if (
+    isDataEntryState(state) &&
+    !awaitingOverrideConfirm &&
+    !paymentQuestion &&
+    !isExpectedAnswer(state, message)
+  ) {
     const interruptByQuestion = QUESTION_PATTERN.test(message);
     const interruptByIntent = INTERRUPT_INTENTS.has(
       (
@@ -1931,10 +2242,14 @@ export async function processBookingState(
     let inlineAnswerPrefix = "";
     if (paymentInterrupt) {
       const prop = ctx.property as Record<string, unknown> | undefined;
+      const stayNights =
+        context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : null;
       inlineAnswerPrefix =
         buildPaymentPolicyAnswer({
+          nights: stayNights,
           totalPrice: context.totalPrice,
           includeBank: !!extracted.is_bank_account_request,
+          property: prop as { payment_bank_name?: string | null; payment_account_number?: string | null; payment_account_holder?: string | null },
           bankName: typeof prop?.payment_bank_name === "string" ? prop.payment_bank_name : undefined,
           accountNumber:
             typeof prop?.payment_account_number === "string" ? prop.payment_account_number : undefined,
@@ -1980,17 +2295,9 @@ export async function processBookingState(
         };
       }
 
-      if (eb.overCapacity) {
-        const roomLabel = recomputePolicy.roomTypeName ?? context.roomName ?? "kamar";
-        const totalMaxGuests = (recomputePolicy.capacity + recomputePolicy.extrabedCapacity) * totalRoomsCount;
-        await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
-        return {
-          handled: true,
-          reply:
-            `${inlineAnswerPrefix}Mohon maaf Kak, kapasitas maksimum ${totalRoomsCount} kamar ${roomLabel} ` +
-            `adalah ${totalMaxGuests} tamu (termasuk extra bed), sedangkan jumlah tamu ${getTotalGuests(context)} orang. ` +
-            `Mau tambah 1 kamar lagi, atau ganti ke tipe kamar berkapasitas lebih besar?`,
-        };
+      if (eb.overCapacity || parseCapacityFollowup(message)) {
+        const capacityReply = await respondToOverCapacity(ctx, phone, context, message, inlineAnswerPrefix);
+        if (capacityReply) return capacityReply;
       }
 
       if (context.checkIn && context.checkOut && context.pricePerNight) {
@@ -2132,6 +2439,10 @@ export async function processBookingState(
     const isPureCancel = /^(batal|batalkan|cancel|tidak|gak jadi|ga jadi|nggak jadi)(\s+(kak?|dulu|aja|saja))*[\s.!,]*$/i.test(
       message.trim(),
     );
+    if (parseCapacityFollowup(message)) {
+      const capacityReply = await respondToOverCapacity(ctx, phone, context, message);
+      if (capacityReply) return capacityReply;
+    }
     if (!isPureConfirm && !isPureCancel) {
       const { patch, changed } = parseSlotCorrection(message, ctx.rooms);
       if (changed) {
@@ -2187,9 +2498,29 @@ export async function processBookingState(
 
     // Deteksi preferensi pembayaran DP dari pesan tamu (bisa muncul kapan saja
     // di CONFIRMING_BOOKING, termasuk bersamaan dengan konfirmasi "ya, DP dulu").
+    const stayNights =
+      context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : null;
     const dpMatch = message.match(/\b(dp|down\s*payment|uang\s*muka|dp\s*dulu|bayar\s*sebagian)\b/i);
     const fullPayMatch = message.match(/\b(lunas|full\s*pay|bayar\s*penuh|langsung\s*lunas)\b/i);
-    if (dpMatch && !fullPayMatch) {
+    if (isGuestPaymentQuestion(message) && !CONFIRM_PATTERN.test(message)) {
+      if (stayNights != null && stayNights < 2) {
+        context.paymentType = undefined;
+        context.dpAmount = undefined;
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+      }
+      return {
+        handled: true,
+        reply: buildPaymentPolicyAnswer({
+          nights: stayNights,
+          totalPrice: context.totalPrice,
+          property: ctx.property,
+        }),
+      };
+    }
+    if (stayNights != null && stayNights < 2) {
+      context.paymentType = undefined;
+      context.dpAmount = undefined;
+    } else if (dpMatch && !fullPayMatch) {
       context.paymentType = "dp";
       // Coba ekstrak nominal DP kalau disebut (mis. "DP 200rb", "DP 50%").
       const nominalMatch = message.match(/dp\s+(?:rp\.?\s*)?(\d[\d.,]*(?:rb|ribu|jt|juta)?)/i);
@@ -2239,7 +2570,10 @@ export async function processBookingState(
       const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
       const confirmPolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
       const eb = computeExtraBeds(confirmPolicy, totalRoomsCount, getTotalGuests(context));
-      if (eb.overCapacity) missing.push("kapasitas (jumlah tamu melebihi maksimal)");
+      if (eb.overCapacity) {
+        const capacityReply = await respondToOverCapacity(ctx, phone, context, message);
+        if (capacityReply) return capacityReply;
+      }
       const maxExtraBeds = confirmPolicy.extrabedCapacity * totalRoomsCount;
       const requestedExtraBeds = Math.max(context.extraBeds ?? 0, eb.extraBeds);
       if (requestedExtraBeds > maxExtraBeds) {
@@ -2261,6 +2595,12 @@ export async function processBookingState(
       // WRITE TUNGGAL: satu panggilan create_booking dengan data yang sudah
       // dikonfirmasi tamu. Kunci idempotensi per-ringkasan mencegah duplikat
       // bila pesan "ya" diproses dua kali (retry webhook / tamu ketuk dua kali).
+      const confirmNights =
+        context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : 0;
+      if (confirmNights < 2) {
+        context.paymentType = undefined;
+        context.dpAmount = undefined;
+      }
       const writeBooking = opts?.createBookingImpl ?? createBooking;
       // Catatan sementara di Supabase SEBELUM write final: data tidak hilang bila
       // write gagal / koneksi putus, dan staf bisa melanjutkan dari draft.
@@ -2411,10 +2751,15 @@ export async function processBookingState(
           "Saya tangkap Kakak ingin membatalkan reservasi ini. " +
           'Untuk memastikan, balas "Ya, batalkan". Kalau tidak jadi batal, balas "Jangan".',
       };
-    } else {
-      // Tidak dikenali sebagai konfirmasi maupun koreksi — tampilkan ulang ringkasan
-      // dengan petunjuk yang lebih ramah, jangan kaku.
+    } else if (SUMMARY_REQUEST_RE.test(message)) {
       return await buildBookingSummaryAsync(ctx, context);
+    } else if (QUESTION_PATTERN.test(message)) {
+      return { handled: false };
+    } else {
+      return {
+        handled: true,
+        reply: 'Baik Kak, saya tunggu kabarnya. Kalau datanya sudah sesuai, balas "Ya" ya.',
+      };
     }
   }
 

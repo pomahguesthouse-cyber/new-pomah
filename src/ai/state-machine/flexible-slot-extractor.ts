@@ -23,6 +23,7 @@ import { todayWIB, fmtDateID } from "@/lib/date";
 import { resolveIdDate } from "@/lib/id-date";
 import { extractRequestedExtraBeds } from "./extra-bed-parser";
 import { readGuestCount } from "@/lib/guest-party";
+import { formatGuestNameForSummary } from "./booking-summary-text";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,7 +98,7 @@ const PHONE_WITH_SEPARATORS_RE = /(?:\+62|62|0)[\s\-().]*[2-9](?:[\s\-().]*[0-9]
 // ─── Signal patterns ──────────────────────────────────────────────────────────
 
 const PAYMENT_QUESTION_RE =
-  /\b(bisa dp|dp dulu|bayar berapa dulu|uang muka|down ?payment|dp minimal|dp berapa|cara bayar|metode (?:pembayaran|bayar)|bayar(?:nya)? (?:gimana|bagaimana|berapa)|kebijakan (?:pembayaran|bayar))\b/i;
+  /\b(bisa dp|dp dulu|bayar berapa dulu|uang muka|down ?payment|dp minimal|dp berapa|cara bayar|metode (?:pembayaran|bayar)|bayar(?:nya)? (?:gimana|bagaimana|berapa)|kebijakan (?:pembayaran|bayar)|bayar di tempat|lunas di tempat|tidak bisa bayar di tempat)\b/i;
 
 const BANK_ACCOUNT_RE =
   /\b(norek|no\.?\s*rek|nomor rekening|nomer rekening|transfer (?:ke ?mana|kemana|ke bank apa)|rekening (?:apa|bank|mana)|minta.{0,10}(?:norek|rekening))\b/i;
@@ -568,7 +569,10 @@ export function formatPartialBookingSummary(context: {
   if (context.roomName) lines.push(`Kamar: ${context.roomName}`);
   if (context.checkIn) lines.push(`Check-in: ${fmt(context.checkIn)}`);
   if (context.checkOut) lines.push(`Check-out: ${fmt(context.checkOut)}`);
-  if (context.guestName) lines.push(`Nama: ${context.guestName}`);
+  if (context.guestName) {
+    const name = formatGuestNameForSummary(context.guestName);
+    if (name !== "—") lines.push(`Nama: ${name}`);
+  }
   if (context.guestPhone) lines.push(`No HP: ${context.guestPhone}`);
   if (context.adults) lines.push(`Dewasa: ${context.adults}`);
   if (context.children) lines.push(`Anak: ${context.children}`);

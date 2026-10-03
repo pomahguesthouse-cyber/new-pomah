@@ -969,6 +969,18 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
       knownGuestCount: input.agentCtx.chatSummaryJson?.guest_count ?? null,
     });
 
+    if (stateResult.handled && stateResult.silent) {
+      return {
+        status: "noop",
+        reply: null,
+        toolsUsed: ["booking_state_machine"],
+        agentKey: "front-office",
+        intent: "general",
+        routingConfidence: 1.0,
+        escalated: false,
+      };
+    }
+
     if (stateResult.handled && stateResult.reply) {
       let combinedReply = stateResult.reply;
       const toolsUsed: string[] = ["booking_state_machine"];

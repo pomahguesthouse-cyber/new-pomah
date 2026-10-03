@@ -11,19 +11,67 @@
  * Pure function — tanpa I/O, tanpa database call — agar mudah di-unit-test.
  */
 
+import {
+  formatTransferAccountLine,
+  resolveBotTransferAccount,
+  type PropertyPaymentFields,
+} from "@/lib/payment-account";
+
 // ─── Pembayaran / DP ──────────────────────────────────────────────────────────
 
 export interface PaymentAnswerOpts {
   /** Total harga booking bila sudah diketahui (untuk menghitung nominal DP). */
   totalPrice?: number;
   /** Persentase DP default properti (0-1). Default 0.5 — selaras dengan
-   *  fallback `dpAmount` di CONFIRMING_BOOKING (booking-machine.ts). */
+   *  fallback `dpAmount` di CONFIRMING_BOOKING (booking-machine.ts).
+   *  Jangan diubah: DP 2 malam atau lebih tetap memakai angka ini. */
   dpRatio?: number;
   /** Sertakan info rekening (untuk pertanyaan "minta norek"). */
   includeBank?: boolean;
   bankName?: string;
   accountNumber?: string;
   accountHolder?: string;
+  /** Jumlah malam. < 2 = tanpa DP. >= 2 = aturan DP yang sudah ada. Kosong = belum diketahui. */
+  nights?: number | null;
+  property?: PropertyPaymentFields | null;
+}
+
+/** Pertanyaan cara bayar / DP / bayar di tempat, termasuk "tidak bisa bayar di tempat?". */
+export function isGuestPaymentQuestion(message: string): boolean {
+  return /\b(bisa\s+dp|dp\b|down\s*payment|uang\s*muka|bayar\s+di\s+tempat|lunas\s+di\s+tempat|tidak\s+bisa\s+bayar\s+di\s+tempat|nggak\s+bisa\s+bayar\s+di\s+tempat|ga(?:k)?\s+bisa\s+bayar\s+di\s+tempat|cara\s+bayar|metode\s+(?:pembayaran|bayar)|bayar(?:nya)?\s+(?:gimana|bagaimana|berapa)|transfer(?:nya)?\s+(?:ke\s*mana|kemana|gimana|bagaimana)|minta\s+(?:norek|rekening)|nomor\s+rekening)\b/i.test(
+    message,
+  );
+}
+
+const NIGHT_WORDS: Record<string, number> = {
+  satu: 1,
+  dua: 2,
+  tiga: 3,
+  empat: 4,
+  lima: 5,
+  enam: 6,
+  tujuh: 7,
+};
+
+export function parseStayNightsFromMessage(message: string): number | null {
+  const match = message
+    .toLowerCase()
+    .match(/\b(\d{1,2}|satu|dua|tiga|empat|lima|enam|tujuh)\s+malam\b/);
+  if (!match) return null;
+  const raw = match[1];
+  const nights = /^\d+$/.test(raw) ? Number(raw) : NIGHT_WORDS[raw];
+  if (!Number.isInteger(nights) || nights < 0 || nights > 30) return null;
+  return nights;
+}
+
+export function bookingMethodGuestText(): string {
+  const transfer = formatTransferAccountLine();
+  return (
+    `Booking bisa langsung via WhatsApp ini Kak, tidak perlu datang ke tempat. ` +
+    `Setelah data lengkap, kamar langsung kami amankan dan invoice otomatis dikirim ke sini juga. ` +
+    `Untuk 1 malam, pembayaran lunas di tempat saat check-in atau transfer ke ${transfer}, tanpa DP. ` +
+    `DP berlaku untuk menginap 2 malam atau lebih.`
+  );
 }
 
 const fmtRp = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
@@ -32,31 +80,57 @@ const fmtRp = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
  * Jawaban kebijakan pembayaran yang bisa langsung dikirim tanpa menunggu
  * data booking lengkap.
  */
+function transferLine(opts: PaymentAnswerOpts): string {
+  const fromProperty = resolveBotTransferAccount(opts.property);
+  if (!opts.property && opts.bankName && opts.accountNumber) {
+    const number = opts.accountNumber.replace(/\s+/g, "");
+    if (number === fromProperty.accountNumber) {
+      return formatTransferAccountLine({
+        bankName: opts.bankName.trim() || fromProperty.bankName,
+        accountNumber: number,
+        accountHolder: (opts.accountHolder ?? "").trim() || fromProperty.accountHolder,
+      });
+    }
+  }
+  return formatTransferAccountLine(fromProperty);
+}
+
 export function buildPaymentPolicyAnswer(opts: PaymentAnswerOpts = {}): string {
+  const transfer = transferLine(opts);
+  const nights = opts.nights;
+  if (nights != null && nights < 2) {
+    return (
+      `Untuk menginap 1 malam, Kakak bisa bayar langsung di tempat (lunas saat check-in, tanpa DP) ` +
+      `atau transfer ke ${transfer}. Booking tetap bisa saya catat dulu tanpa pembayaran di muka.`
+    );
+  }
+
   const ratio = opts.dpRatio ?? 0.5;
   const pct = Math.round(ratio * 100);
   const parts: string[] = [];
+
+  if (nights == null) {
+    parts.push(
+      `Kalau menginap 1 malam, pembayarannya langsung lunas di tempat saat check-in tanpa DP, ` +
+        `atau transfer ke ${transfer}, dan booking tetap bisa dicatat. ` +
+        `Untuk menginap 2 malam atau lebih, Kakak bisa DP dulu ${pct}% dari total dan sisanya dilunasi saat check-in, ` +
+        `atau langsung bayar lunas — transfer ke ${transfer}.`,
+    );
+    return parts.join(" ");
+  }
 
   if (opts.totalPrice && opts.totalPrice > 0) {
     const dp = Math.round(opts.totalPrice * ratio);
     parts.push(
       `Untuk pembayaran, Kakak bisa DP dulu ${pct}% (${fmtRp(dp)} dari total ${fmtRp(opts.totalPrice)}) ` +
-        `dan sisanya dilunasi saat check-in, atau langsung bayar lunas — dua-duanya bisa.`,
+        `dan sisanya dilunasi saat check-in, atau langsung bayar lunas — dua-duanya bisa. ` +
+        `Transfer ke ${transfer}.`,
     );
   } else {
     parts.push(
       `Untuk pembayaran, Kakak bisa DP dulu ${pct}% dari total dan sisanya dilunasi saat check-in, ` +
-        `atau langsung bayar lunas — dua-duanya bisa.`,
+        `atau langsung bayar lunas — dua-duanya bisa. Transfer ke ${transfer}.`,
     );
-  }
-
-  if (opts.includeBank) {
-    const bank = (opts.bankName ?? "").trim();
-    const acc = (opts.accountNumber ?? "").trim();
-    const holder = (opts.accountHolder ?? "").trim();
-    if (bank && acc) {
-      parts.push(`Transfer ke ${bank} ${acc}${holder ? ` a.n. ${holder}` : ""}.`);
-    }
   }
 
   return parts.join(" ");
@@ -76,8 +150,7 @@ const PRIVATE_BATHROOM_AMENITY = "Kamar mandi dalam";
 const MISLEADING_BATHROOM_RE =
   /\b(kamar\s+mandi\s+(?:terpisah|luar|bersama)|toilet\s+(?:luar|bersama)|wc\s+(?:luar|bersama)|shared\s+bathroom|bathroom\s+outside|bukan\s+di\s+dalam)\b/i;
 
-const BATHROOM_AMENITY_RE =
-  /\b(kamar\s+mandi|toilet|wc|bathroom|bath\s*room)\b/i;
+const BATHROOM_AMENITY_RE = /\b(kamar\s+mandi|toilet|wc|bathroom|bath\s*room)\b/i;
 
 /**
  * Fakta pemilik 3 Okt 2026: air hangat / air panas / water heater BELUM ada
@@ -122,7 +195,9 @@ function amenityKey(v: string): string {
 }
 
 function roomNameKey(v: unknown): string {
-  return String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return String(v ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function dedupeAmenities(raw: unknown): string[] {
@@ -183,7 +258,9 @@ export function findMentionedRooms<T extends FacilityRoom>(text: string, rooms: 
   let scan = lower;
   const mentioned: T[] = [];
   for (const r of sorted) {
-    const nm = String(r.name ?? "").toLowerCase().trim();
+    const nm = String(r.name ?? "")
+      .toLowerCase()
+      .trim();
     if (nm.length >= 3 && scan.includes(nm)) {
       mentioned.push(r);
       scan = scan.split(nm).join(" ");
@@ -211,7 +288,9 @@ export function buildFacilityReply(text: string, rooms: FacilityRoom[]): string 
     for (const r of mentioned) {
       const items = dedupeAmenities(r.amenities);
       if (items.length > 0) anyData = true;
-      lines.push(`*${String(r.name)}*: ${items.length ? items.join(", ") : "(data fasilitas belum tersedia)"}`);
+      lines.push(
+        `*${String(r.name)}*: ${items.length ? items.join(", ") : "(data fasilitas belum tersedia)"}`,
+      );
     }
     if (!anyData) return null;
 
@@ -243,7 +322,9 @@ export function buildFacilityReply(text: string, rooms: FacilityRoom[]): string 
   }
 
   // Generik: gabungan semua kamar, dedup case-insensitive.
-  const all = dedupeAmenities(rooms.flatMap((r) => (Array.isArray(r.amenities) ? r.amenities : [])));
+  const all = dedupeAmenities(
+    rooms.flatMap((r) => (Array.isArray(r.amenities) ? r.amenities : [])),
+  );
   if (all.length === 0) return null;
   return (
     `Fasilitas tergantung tipe kamar yang dipilih Kak. Beberapa di antaranya: ${all.slice(0, 8).join(", ")}. ` +

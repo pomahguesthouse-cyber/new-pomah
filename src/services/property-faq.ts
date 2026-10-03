@@ -18,7 +18,15 @@
  * mengimpor langsung (tidak ada lagi salinan manual yang bisa drift).
  */
 
-import { buildFacilityReply, findMentionedRooms, type FacilityRoom } from "@/ai/state-machine/booking-inline-answers";
+import {
+  bookingMethodGuestText,
+  buildFacilityReply,
+  buildPaymentPolicyAnswer,
+  findMentionedRooms,
+  isGuestPaymentQuestion,
+  parseStayNightsFromMessage,
+  type FacilityRoom,
+} from "@/ai/state-machine/booking-inline-answers";
 
 export interface PropertyFaqReply {
   reply: string;
@@ -182,6 +190,23 @@ export function parseRequestedHour(text: string, direction: "in" | "out"): numbe
 export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply | null {
   const raw = input.message.toLowerCase().replace(/\s+/g, " ").trim();
   if (!raw || raw.length > 260) return null;
+
+  // Pertanyaan DP / bayar di tempat harus dijawab sebelum sinyal komplain
+  // ("tidak bisa") dan sebelum FAQ_BLOCK yang memuat kata dp/bayar/malam.
+  if (
+    isGuestPaymentQuestion(raw) &&
+    !DATE_SIGNAL_RE.test(raw) &&
+    findMentionedRooms(raw, input.rooms ?? []).length === 0
+  ) {
+    return {
+      reply: buildPaymentPolicyAnswer({
+        nights: parseStayNightsFromMessage(raw),
+        property: input.property,
+      }),
+      intent: "faq_payment_policy",
+    };
+  }
+
   if (COMPLAINT_SIGNAL_RE.test(raw)) return null;
 
   // Guard khusus: keluarga/teman yang datang menjemput atau menunggu sebentar
@@ -423,10 +448,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
     findMentionedRooms(raw, rooms).length === 0
   ) {
     return {
-      reply:
-        `${opener}Booking bisa langsung via WhatsApp ini Kak, tidak perlu datang ke tempat. ` +
-        `Setelah data lengkap dan DP masuk, kamar langsung kami amankan dan invoice otomatis dikirim ke sini juga.\n\n` +
-        `Mau saya bantu cek tanggalnya sekarang, Kak?`,
+      reply: `${opener}${bookingMethodGuestText()}\n\nMau saya bantu cek tanggalnya sekarang, Kak?`,
       intent: "faq_booking_method",
     };
   }

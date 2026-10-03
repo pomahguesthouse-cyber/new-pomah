@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { fmtDateID } from "@/lib/date";
+import { formatTransferAccountLine, resolveBotTransferAccount, type PropertyPaymentFields } from "@/lib/payment-account";
 import { findNotificationThreadId } from "./notification-thread-resolver";
 import {
   CHANNEL_UNAVAILABLE_ERROR,
@@ -7,6 +8,45 @@ import {
   sendGuestWhatsApp,
 } from "./guest-whatsapp.service";
 import { toMetaRecipient } from "./whatsapp-meta.service";
+
+/** Teks status pembayaran di pesan invoice. 1 malam tidak memaksa DP atau batas 1 jam. */
+export function buildInvoicePaymentLines(opts: {
+  paymentStatus: string;
+  paidAmount: number;
+  totalAmount: number;
+  nights: number;
+  expiresAt?: string | null;
+  bankDetails?: string;
+}): string {
+  const isDP = opts.paymentStatus === "partial" && opts.paidAmount > 0;
+  const remainingAmount = Math.max(0, opts.totalAmount - opts.paidAmount);
+  if (isDP) {
+    return (
+      `• Status Pembayaran: SUDAH DP 🔄\n` +
+      `• DP Dibayar: Rp ${opts.paidAmount.toLocaleString("id-ID")}\n` +
+      `• Sisa Pelunasan: Rp ${remainingAmount.toLocaleString("id-ID")}` +
+      (opts.bankDetails ?? "")
+    );
+  }
+  if (opts.paymentStatus === "paid") return `• Status Pembayaran: LUNAS ✅`;
+  if (opts.nights < 2 && opts.paidAmount <= 0) {
+    return (
+      `• Status Pembayaran: Lunas di tempat saat check-in (tanpa DP)\n` +
+      `• Bisa juga transfer ke ${formatTransferAccountLine()}\n` +
+      `• Booking sudah tercatat. Tidak ada DP dan tidak ada batas waktu pembatalan otomatis.`
+    );
+  }
+  const deadlineText = opts.expiresAt
+    ? `\n⏰ Batas waktu pembayaran: 1 jam sejak booking dibuat (${new Date(opts.expiresAt).toLocaleString("id-ID", {
+        timeZone: "Asia/Jakarta",
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })} WIB). Booking otomatis dibatalkan jika belum dibayar.`
+    : "";
+  return `• Status Pembayaran: Menunggu pembayaran ⏳` + deadlineText + (opts.bankDetails ?? "");
+}
 
 async function resolveOrCreateNotificationThread({
   supabase,
@@ -237,36 +277,18 @@ export async function generateAndSendInvoiceNotification({
     const totalFormatted = `Rp ${Number(booking.total_amount ?? 0).toLocaleString("id-ID")}`;
     const paidAmount = Number((booking as any).paid_amount ?? 0);
     const paymentStatus: string = (booking as any).payment_status ?? "unpaid";
-    const isDP = paymentStatus === "partial" && paidAmount > 0;
-    const remainingAmount = Math.max(0, Number(booking.total_amount ?? 0) - paidAmount);
-
-    let bankDetails = "";
-    if (property.payment_bank_name && property.payment_account_number) {
-      bankDetails = `\n\nTransfer Pembayaran:\n🏦 Bank: ${property.payment_bank_name}\n💳 No. Rekening: ${property.payment_account_number}\n👤 Atas Nama: ${property.payment_account_holder ?? "-"}`;
-    }
-
-    let paymentLines = "";
-    if (isDP) {
-      paymentLines =
-        `• Status Pembayaran: SUDAH DP 🔄\n` +
-        `• DP Dibayar: Rp ${paidAmount.toLocaleString("id-ID")}\n` +
-        `• Sisa Pelunasan: Rp ${remainingAmount.toLocaleString("id-ID")}` +
-        bankDetails;
-    } else if (paymentStatus === "paid") {
-      paymentLines = `• Status Pembayaran: LUNAS ✅`;
-    } else {
-      const expiresAt = (booking as any).expires_at as string | null | undefined;
-      const deadlineText = expiresAt
-        ? `\n⏰ Batas waktu pembayaran: 1 jam sejak booking dibuat (${new Date(expiresAt).toLocaleString("id-ID", {
-            timeZone: "Asia/Jakarta",
-            day: "2-digit",
-            month: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-          })} WIB). Booking otomatis dibatalkan jika belum dibayar.`
-        : "";
-      paymentLines = `• Status Pembayaran: Menunggu pembayaran ⏳` + deadlineText + bankDetails;
-    }
+    const account = resolveBotTransferAccount(property as PropertyPaymentFields);
+    const bankDetails = `\n\nTransfer Pembayaran:\n🏦 Bank: ${account.bankName}\n💳 No. Rekening: ${account.accountNumber}\n👤 Atas Nama: ${account.accountHolder}`;
+    const stayNights =
+      Number.isFinite(ciMs) && Number.isFinite(coMs) ? Math.round((coMs - ciMs) / 86_400_000) : 1;
+    const paymentLines = buildInvoicePaymentLines({
+      paymentStatus,
+      paidAmount,
+      totalAmount: Number(booking.total_amount ?? 0),
+      nights: stayNights,
+      expiresAt: (booking as any).expires_at as string | null | undefined,
+      bankDetails,
+    });
 
     const messageBody = `Halo ${guest.full_name},
 

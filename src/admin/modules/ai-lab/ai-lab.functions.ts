@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { normalizeAssistantName } from "@/ai/agents/persona";
+import { STAFF_REPLY_SILENCE_MS } from "@/services/wa-autoreply/staff-silence";
 
 /** Untyped client view — `ai_lab_config` is not in the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -299,12 +300,15 @@ export function mergeAiLabConfig(raw: unknown): AiLabConfig {
   }
   const htMinutesRaw = Number((c.humanTakeover as { autoPauseMinutes?: unknown } | undefined)?.autoPauseMinutes);
   const humanTakeover = {
-    autoPauseMinutes: Number.isFinite(htMinutesRaw) && htMinutesRaw >= 0 ? Math.round(htMinutesRaw) : 1,
+    autoPauseMinutes:
+      Number.isFinite(htMinutesRaw) && htMinutesRaw >= 0
+        ? Math.round(htMinutesRaw)
+        : STAFF_REPLY_SILENCE_MS / 60000,
   };
   return { agents, tools, trainingRag, nodeLayout, humanTakeover };
 }
 
-/** Auto-pause window (ms) after a human reply. 0 = disabled. Default 1 minute. */
+/** Auto-pause window (ms) after a human reply. 0 = disabled. Default 60 minutes. */
 export async function resolveHumanTakeoverMs(client: SupabaseClient): Promise<number> {
   try {
     const { data } = await client.from("properties").select("ai_lab_config").limit(1).maybeSingle();
@@ -312,7 +316,7 @@ export async function resolveHumanTakeoverMs(client: SupabaseClient): Promise<nu
       .humanTakeover.autoPauseMinutes;
     return Math.max(0, minutes) * 60000;
   } catch {
-    return 60000;
+    return STAFF_REPLY_SILENCE_MS;
   }
 }
 

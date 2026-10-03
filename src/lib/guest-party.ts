@@ -99,7 +99,8 @@ export function extractChildAges(message: string): { ages: number[]; masked: str
   const ages = spans.flatMap((s) => s.ages);
   let masked = text;
   for (const span of [...spans].sort((a, b) => b.start - a.start)) {
-    masked = masked.slice(0, span.start) + " ".repeat(span.end - span.start) + masked.slice(span.end);
+    masked =
+      masked.slice(0, span.start) + " ".repeat(span.end - span.start) + masked.slice(span.end);
   }
   return { ages, masked };
 }
@@ -155,6 +156,31 @@ function readExplicitCounts(text: string): CountHit | null {
 }
 
 /**
+ * "4 (1 anak kecil)" = total 4, anak 1, dewasa 3.
+ * "dewasa 5 (1 anak)" tidak ikut: angka di depan sudah berlabel dewasa/anak.
+ */
+const PAREN_PARTY_RE = new RegExp(
+  `\\b(\\d{1,2})\\s*(?:orang\\s*)?\\(\\s*(\\d{1,2})\\s*(?:orang\\s+)?${CHILD}\\b[^)]*\\)`,
+  "gi",
+);
+
+export function readParentheticalParty(text: string): { adults: number; children: number } | null {
+  if (!text) return null;
+  PAREN_PARTY_RE.lastIndex = 0;
+  for (const match of text.matchAll(PAREN_PARTY_RE)) {
+    const index = match.index ?? 0;
+    const before = text.slice(Math.max(0, index - 24), index);
+    if (new RegExp(`(?:${ADULT}|${CHILD})\\s*$`, "i").test(before)) continue;
+    const total = Number(match[1]);
+    const children = Number(match[2]);
+    if (!Number.isInteger(total) || !Number.isInteger(children)) continue;
+    if (total < 1 || total > 20 || children < 0 || children > total) continue;
+    return { adults: total - children, children };
+  }
+  return null;
+}
+
+/**
  * Baca jumlah tamu dan usia anak dari satu pesan. Jumlah anak hanya terisi
  * bila tamu menyebut hitungan ("1 anak"), bukan usia.
  */
@@ -164,8 +190,15 @@ export function readGuestCount(message: string): GuestCountReading | null {
   const reading: GuestCountReading = {};
   if (counts?.adultFound && counts.adults > 0) reading.adults = counts.adults;
   if (counts?.childFound) reading.children = counts.children;
+  // Total di depan kurung menimpa hitungan "1 anak" di dalam kurung.
+  const parenthetical = readParentheticalParty(masked);
+  if (parenthetical) {
+    reading.adults = parenthetical.adults;
+    reading.children = parenthetical.children;
+  }
   if (ages.length > 0) reading.childAges = ages;
-  if (reading.adults === undefined && reading.children === undefined && !reading.childAges) return null;
+  if (reading.adults === undefined && reading.children === undefined && !reading.childAges)
+    return null;
   return reading;
 }
 
@@ -174,10 +207,9 @@ export function readGuestCount(message: string): GuestCountReading | null {
  * Pesan usia saja tidak menimpa jumlah anak yang sudah diketahui.
  * Bila jumlah anak belum ada, jumlah anak = banyaknya usia.
  */
-export function mergeGuestCountReading<T extends { adults?: number; children?: number; childAges?: number[] }>(
-  current: T,
-  reading: GuestCountReading,
-): T {
+export function mergeGuestCountReading<
+  T extends { adults?: number; children?: number; childAges?: number[] },
+>(current: T, reading: GuestCountReading): T {
   const next: T = { ...current };
   if (reading.adults !== undefined) next.adults = reading.adults;
   if (reading.childAges && reading.childAges.length > 0) next.childAges = reading.childAges;
