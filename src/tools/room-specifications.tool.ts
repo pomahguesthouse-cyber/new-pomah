@@ -5,6 +5,10 @@
  * from the pre-loaded context, saving system prompt tokens.
  */
 
+import {
+  omitUnavailableHotWaterAmenities,
+  redactUnavailableHotWaterText,
+} from "@/ai/state-machine/booking-inline-answers";
 import type { ToolContext, ToolHandler } from "./types";
 
 function normalizeRoomName(value: unknown): string {
@@ -66,8 +70,8 @@ export const getRoomSpecifications: ToolHandler = async (
         tipe_tempat_tidur: matched.bed_type ?? null,
         ukuran_tempat_tidur: matched.bed_size ?? null,
         lokasi_lantai: matched.floor_info ?? null,
-        deskripsi: matched.description ?? null,
-        fasilitas: matched.amenities ?? [],
+        deskripsi: redactUnavailableHotWaterText(matched.description),
+        fasilitas: omitUnavailableHotWaterAmenities(matched.amenities),
         kapasitas_extra_bed: extrabedCap,
         tarif_extra_bed_per_malam: extrabedRate,
       });
@@ -86,8 +90,8 @@ export const getRoomSpecifications: ToolHandler = async (
       tipe_tempat_tidur: r.bed_type ?? null,
       ukuran_tempat_tidur: r.bed_size ?? null,
       lokasi_lantai: r.floor_info ?? null,
-      deskripsi: r.description ?? null,
-      fasilitas: r.amenities ?? [],
+      deskripsi: redactUnavailableHotWaterText(r.description),
+      fasilitas: omitUnavailableHotWaterAmenities(r.amenities),
       kapasitas_extra_bed: extrabedCap,
       tarif_extra_bed_per_malam: extrabedRate,
     };
