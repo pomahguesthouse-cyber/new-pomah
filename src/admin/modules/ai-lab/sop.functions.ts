@@ -461,7 +461,7 @@ const DEFAULT_SOPS: { agentKey: string; name: string; content: string }[] = [
 4. PENANGANAN KOMPLAIN
 - Setiap komplain dicatat dengan waktu masuk di sistem
 - Komplain ringan (kebersihan kecil): selesai dalam 1 jam
-- Komplain sedang (AC, air panas): selesai dalam 2 jam
+- Komplain sedang (AC): selesai dalam 2 jam
 - Komplain berat (keamanan/kenyamanan serius): eskalasi ke supervisor SEGERA
 - Follow-up kepuasan tamu setelah komplain ditangani
 
@@ -490,7 +490,6 @@ DARURAT — response dalam 1 jam:
 - Kebakaran / asap → langsung hubungi pemadam 113
 
 TINGGI — response dalam 2–3 jam:
-- Air panas tidak berfungsi
 - Toilet tersumbat
 - TV/remote tidak berfungsi
 - Lampu kamar mati

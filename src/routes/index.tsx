@@ -69,7 +69,7 @@ const BookingDialog = lazy(() =>
 );
 import { BrandLogo, PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { GuideTextLinks, exploreHrefForName } from "@/public/components/guide-links";
-import { cardIntroForName, publicRoomBlurb } from "@/public/content/approved-seo";
+import { cardIntroForName, omitPublicHotWaterAmenities, publicRoomBlurb } from "@/public/content/approved-seo";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 import { DateRangePickerID } from "@/public/components/lazy-public-widgets";
 
@@ -2339,9 +2339,9 @@ function RoomCarousel({
                       {publicRoomBlurb(rt.slug, rt.description)}
                     </p>
                   )}
-                  {rt.amenities && rt.amenities.length > 0 && (
+                  {omitPublicHotWaterAmenities(rt.amenities).length > 0 && (
                     <div className={`flex flex-wrap gap-x-2.5 gap-y-1 border-t border-stone-100 pt-2.5 text-stone-600 ${cartOpen ? "mt-1.5" : "mt-3.5"}`}>
-                      {rt.amenities.map((amenity: string) => {
+                      {omitPublicHotWaterAmenities(rt.amenities).map((amenity: string) => {
                         const icon = getAmenityIcon(amenity);
                         return (
                           <div key={amenity} className={`flex items-center gap-1 text-stone-600 ${cartOpen ? "text-[10px]" : "text-[11px]"}`}>

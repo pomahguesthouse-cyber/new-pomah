@@ -6,6 +6,7 @@
  */
 
 import { fmtDateID, todayWIB } from "@/lib/date";
+import { omitUnavailableHotWaterAmenities, redactUnavailableHotWaterText } from "@/ai/state-machine/booking-inline-answers";
 import type { AiLabConfig } from "./types";
 
 // ─── Input types ──────────────────────────────────────────────────────────────
@@ -64,14 +65,17 @@ export function buildSystemPrompt(params: SystemPromptParams): string {
     .map((k) => `• ${k}: ${aiLabConfig.agents[k].instructions.trim()}`);
 
   // Room catalogue
-  const roomLines = rooms.map(
-    (r) =>
+  const roomLines = rooms.map((r) => {
+    const amenities = omitUnavailableHotWaterAmenities(r.amenities);
+    const description = redactUnavailableHotWaterText(r.description);
+    return (
       `• ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam, ` +
       `kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}${r.bed_size ? ` (${r.bed_size})` : ""}` +
       `${r.floor_info ? `, Lokasi: ${r.floor_info}` : ""}` +
-      `${r.amenities && r.amenities.length ? `, Fasilitas: ${r.amenities.join(", ")}` : ""}` +
-      `${r.description ? `, Deskripsi: ${r.description}` : ""}`,
-  );
+      `${amenities.length ? `, Fasilitas: ${amenities.join(", ")}` : ""}` +
+      `${description ? `, Deskripsi: ${description}` : ""}`
+    );
+  });
 
   const sections: string[] = [
     `Anda adalah asisten AI untuk ${property.name ?? "Pomah Guesthouse"}, sebuah penginapan. ` +

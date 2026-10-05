@@ -14,6 +14,7 @@ import { stripPastEventsFromExploreConfig } from "@/lib/explore-event-date";
 import {
   applyApprovedHomepageSeo,
   applyGuideCardIntros,
+  omitPublicHotWaterAmenities,
   patchUnnesDistance,
   publicRoomBlurb,
 } from "@/public/content/approved-seo";
@@ -254,6 +255,7 @@ function shapePublicSiteData(propertyData: unknown, roomTypesRaw: any[] | null):
   const normalizedRoomTypes = (roomTypesRaw ?? []).map((rt: any) => ({
     ...rt,
     description: publicRoomBlurb(rt.slug, rt.description),
+    amenities: Array.isArray(rt.amenities) ? omitPublicHotWaterAmenities(rt.amenities) : rt.amenities,
     rooms: undefined,
     total_physical_rooms: Array.isArray(rt.rooms) ? rt.rooms.length : 0,
   }));
@@ -987,8 +989,16 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
       roomCount = count ?? 0;
     }
 
-    const withPublicBlurb = <T extends { slug?: string | null; description?: string | null }>(row: T | null) =>
-      row ? { ...row, description: publicRoomBlurb(row.slug, row.description) } : null;
+    const withPublicBlurb = <T extends { slug?: string | null; description?: string | null; amenities?: string[] | null }>(
+      row: T | null,
+    ) =>
+      row
+        ? {
+            ...row,
+            description: publicRoomBlurb(row.slug, row.description),
+            amenities: Array.isArray(row.amenities) ? omitPublicHotWaterAmenities(row.amenities) : row.amenities,
+          }
+        : null;
     const property = toPublicSettings(propertyRow) as PublicProperty | null;
 
     return {

@@ -46,7 +46,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { canonicalHeadTags, publicSeoMeta, resolveRoomPublicSeo } from "@/public/lib/public-seo";
-import { publicRoomBlurb } from "@/public/content/approved-seo";
+import { omitPublicHotWaterAmenities, publicRoomBlurb } from "@/public/content/approved-seo";
 import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
 import { roomPageGraph } from "@/public/lib/structured-data";
 
@@ -437,11 +437,11 @@ function RoomBookingPage() {
               </section>
             )}
 
-            {room.amenities && room.amenities.length > 0 && (
+            {omitPublicHotWaterAmenities(room.amenities).length > 0 && (
               <section className="mt-8">
                 <h2 className="text-lg font-bold">Fasilitas Kamar</h2>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {room.amenities.map((a) => (
+                  {omitPublicHotWaterAmenities(room.amenities).map((a) => (
                     <div
                       key={a}
                       className="flex items-center gap-2 rounded-lg bg-white px-3 py-2.5 text-sm text-stone-700 ring-1 ring-stone-200"
