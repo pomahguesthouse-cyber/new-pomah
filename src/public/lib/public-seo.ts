@@ -10,6 +10,7 @@
 import {
   APPROVED_HOME,
   approvedRoomSeo,
+  containsPublicHotWaterClaim,
   isLegacyHomepageH1,
   isLegacyHomepageMeta,
   isLegacyHomepageTitle,
@@ -131,6 +132,13 @@ function roomSeoField(value: string | null | undefined): string {
   return trimmed;
 }
 
+/** Stored SEO that still claims hot water falls through to the approved sentence. */
+function withoutHotWaterClaim(value: string | null | undefined): string {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed || containsPublicHotWaterClaim(trimmed)) return "";
+  return trimmed;
+}
+
 /** Default document title when a room has no custom SEO title yet. */
 export function defaultRoomSeoTitle(name: string): string {
   return `${name} – Pomah Guesthouse Semarang`;
@@ -147,11 +155,11 @@ export function resolveRoomPublicSeo(room: RoomSeoSource): {
 } {
   const name = firstNonEmpty(room.name, "Kamar");
   const approved = approvedRoomSeo(room.slug);
-  const title = firstNonEmpty(roomSeoField(room.seo_title), approved?.title, defaultRoomSeoTitle(name));
+  const title = firstNonEmpty(withoutHotWaterClaim(roomSeoField(room.seo_title)), approved?.title, defaultRoomSeoTitle(name));
   const description = firstNonEmpty(
-    room.meta_description,
+    withoutHotWaterClaim(room.meta_description),
     approved?.meta,
-    room.description,
+    withoutHotWaterClaim(room.description),
     `${name} di Pomah Guesthouse Semarang.`,
   );
   return {

@@ -3,6 +3,8 @@
  * City Guide articles and the UNNES landing article render from here.
  * Room, homepage, and landing fields that live in the database are also
  * written by supabase/migrations/20260927153000_seo_copy_2026_09_27.sql.
+ * Hot-water claims from that copy are removed by
+ * supabase/migrations/20261005020000_remove_hot_water_seo_claims.sql.
  * The source-notes section of the brief is not included.
  */
 /** Same rules as slugifyPlaceName. Kept local so this module stays a leaf import. */
@@ -62,8 +64,8 @@ export const APPROVED_ROOMS: Record<string, ApprovedRoomSeo> = {
     h1: "Kamar Deluxe dengan View Taman untuk Dua Orang",
   },
   "grand-deluxe": {
-    title: "Grand Deluxe Lantai 1 dengan Air Panas | Pomah Semarang",
-    meta: "Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double, air panas, AC, dan WiFi. Kamar lebih lega untuk berdua, mulai Rp300.000/malam.",
+    title: "Grand Deluxe Lantai 1 Lebih Lega | Pomah Semarang",
+    meta: "Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double, AC, dan WiFi. Kamar lebih lega untuk berdua, mulai Rp300.000/malam.",
     h1: "Grand Deluxe: Kamar Lebih Lega di Lantai Satu",
   },
   "family-suite-100": {
@@ -166,7 +168,7 @@ export const APPROVED_LP = {
       size: "20 m²",
       price: "Rp300.000/malam",
       href: "/rooms/grand-deluxe",
-      note: "Kamar di lantai satu dengan kasur double dan air panas, untuk yang ingin sedikit lebih lega.",
+      note: "kamar di lantai satu dengan kasur double dan ruang yang sedikit lebih lega.",
     },
     {
       name: "Family Room 222",
@@ -639,8 +641,116 @@ export function isLegacyHomepageMeta(value: string): boolean {
   return value === PREVIOUS_HOME_META;
 }
 
+/** Public claim that a room has hot water. Denial copy ("belum menyediakan") is not a claim. */
+const PUBLIC_HOT_WATER_CLAIM_RE =
+  /\b(?:air(?:nya)?\s*(?:panas|hangat)(?:nya)?|hot\s*water|hot\s*shower|water\s*heater|pemanas\s*air)\b/i;
+
+const PUBLIC_HOT_WATER_DENIAL_RE =
+  /belum\s+(?:menyediakan|ada|tersedia)|tidak\s+(?:menyediakan|tersedia)|jangan\s+(?:pernah|mengklaim|laporkan|menyimpulkan|klaim)/i;
+
+export function containsPublicHotWaterClaim(value: string | null | undefined): boolean {
+  return PUBLIC_HOT_WATER_CLAIM_RE.test(value ?? "");
+}
+
+/**
+ * Remove a false hot-water claim from public copy.
+ * Text that says hot water is not available is returned unchanged.
+ * Text with no claim is returned unchanged.
+ */
+export function stripPublicHotWaterClaim(value: string | null | undefined): string {
+  const original = value ?? "";
+  if (!containsPublicHotWaterClaim(original) || PUBLIC_HOT_WATER_DENIAL_RE.test(original)) return original;
+  let text = original
+    .replaceAll(
+      "Grand Deluxe Lantai 1 dengan Air Panas | Pomah Semarang",
+      "Grand Deluxe Lantai 1 Lebih Lega | Pomah Semarang",
+    )
+    .replaceAll(
+      "Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double, air panas, AC, dan WiFi. Kamar lebih lega untuk berdua, mulai Rp300.000/malam.",
+      "Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double, AC, dan WiFi. Kamar lebih lega untuk berdua, mulai Rp300.000/malam.",
+    )
+    .replaceAll(
+      "Kamar di lantai satu dengan kasur double dan air panas, untuk yang ingin sedikit lebih lega.",
+      "kamar di lantai satu dengan kasur double dan ruang yang sedikit lebih lega.",
+    )
+    .replaceAll(
+      "kamar di lantai satu dengan kasur double dan air panas, untuk yang ingin sedikit lebih lega.",
+      "kamar di lantai satu dengan kasur double dan ruang yang sedikit lebih lega.",
+    )
+    .replaceAll(
+      "dengan kasur double dan air panas, untuk yang ingin sedikit lebih lega.",
+      "dengan kasur double dan ruang yang sedikit lebih lega.",
+    )
+    .replaceAll(
+      "dengan kasur double dan Air Panas, untuk yang ingin sedikit lebih lega.",
+      "dengan kasur double dan ruang yang sedikit lebih lega.",
+    );
+  if (!containsPublicHotWaterClaim(text)) return text;
+  const phrase =
+    String.raw`\b(?:air(?:nya)?\s*(?:panas|hangat)(?:nya)?|hot\s*water|hot\s*shower|water\s*heater|pemanas\s*air)\b`;
+  text = text
+    .replace(new RegExp(String.raw`\s+\b(?:dan|dengan)\s+${phrase}`, "gi"), "")
+    .replace(new RegExp(String.raw`\s*,\s*${phrase}`, "gi"), "")
+    .replace(new RegExp(String.raw`${phrase}\s*,\s*`, "gi"), "")
+    .replace(new RegExp(phrase, "gi"), "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+([,.;])/g, "$1")
+    .replace(/([,.;])(?:\s*[,.;])+/g, "$1")
+    .replace(/[ \t]{2,}/g, " ");
+  return text;
+}
+
+/** Drop amenity labels that claim hot water. Other amenities stay in order. */
+export function omitPublicHotWaterAmenities(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => String(item ?? "").trim())
+    .filter((item) => item.length > 0 && !containsPublicHotWaterClaim(item));
+}
+
+function isHotWaterAmenityNode(item: unknown): boolean {
+  if (typeof item === "string") return containsPublicHotWaterClaim(item);
+  if (!item || typeof item !== "object") return false;
+  const record = item as Record<string, unknown>;
+  return containsPublicHotWaterClaim(`${record.name ?? ""} ${record.value ?? ""}`);
+}
+
+/** Remove hot-water claims from stored public JSON, including schema.org amenityFeature entries. */
+export function stripHotWaterFromPublicJson<T>(value: T): T {
+  return stripHotWaterNode(value) as T;
+}
+
+function stripHotWaterNode(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(stripHotWaterNode);
+  if (typeof node === "string") return stripPublicHotWaterClaim(node);
+  if (!node || typeof node !== "object") return node;
+  const input = node as Record<string, unknown>;
+  const output: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(input)) {
+    if ((key === "amenityFeature" || key === "amenities") && Array.isArray(child)) {
+      output[key] = child.filter((item) => !isHotWaterAmenityNode(item)).map(stripHotWaterNode);
+      continue;
+    }
+    output[key] = stripHotWaterNode(child);
+  }
+  return output;
+}
+
+/** Strip a JSON-LD string. Invalid JSON falls back to plain-text claim removal. */
+export function stripPublicHotWaterJsonText(raw: string | null | undefined): string {
+  const value = raw ?? "";
+  const trimmed = value.trim();
+  if (!trimmed || !containsPublicHotWaterClaim(trimmed)) return value;
+  try {
+    return JSON.stringify(stripHotWaterFromPublicJson(JSON.parse(trimmed)));
+  } catch {
+    return stripPublicHotWaterClaim(value);
+  }
+}
+
 export function publicRoomBlurb(slug: string | null | undefined, text: string | null | undefined): string {
-  const value = text ?? "";
+  const value = stripPublicHotWaterClaim(text ?? "");
   if (!value.includes(FAMILY_SUITE_DESCRIPTION_OLD)) return value;
   if (slug && slug !== "family-suite-100" && !value.includes("di pusat kota")) return value;
   return value.replaceAll(FAMILY_SUITE_DESCRIPTION_OLD, FAMILY_SUITE_DESCRIPTION_NEW);

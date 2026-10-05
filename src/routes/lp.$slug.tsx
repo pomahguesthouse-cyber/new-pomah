@@ -34,7 +34,14 @@ import {
   type LPDatePickerSection,
 } from "@/admin/modules/seo/landing-page.functions";
 import { canonicalHeadTags, isUnoptimizedSharePng, shareOgImageTags } from "@/public/lib/public-seo";
-import { APPROVED_LP, applyApprovedHomepageSeo, patchUnnesDistance } from "@/public/content/approved-seo";
+import {
+  APPROVED_LP,
+  applyApprovedHomepageSeo,
+  patchUnnesDistance,
+  stripHotWaterFromPublicJson,
+  stripPublicHotWaterClaim,
+  stripPublicHotWaterJsonText,
+} from "@/public/content/approved-seo";
 import { UnnesLanding } from "@/public/components/unnes-landing";
 import { rewritePublicHref } from "@/public/lib/public-href";
 import { buildStorageImageUrl, heroPreloadLinks } from "@/lib/storage-image";
@@ -65,8 +72,8 @@ export const Route = createFileRoute("/lp/$slug")({
     const p = loaderData?.page as SeoLandingPage | undefined;
     if (!p) return {};
     const approved = p.slug === APPROVED_LP.slug;
-    const title = approved ? APPROVED_LP.title : p.meta_title || p.title;
-    const description = approved ? APPROVED_LP.meta : p.meta_description || "";
+    const title = approved ? APPROVED_LP.title : stripPublicHotWaterClaim(p.meta_title || p.title);
+    const description = approved ? APPROVED_LP.meta : stripPublicHotWaterClaim(p.meta_description || "");
     const canonical = canonicalHeadTags(`/lp/${p.slug || ""}`);
     const heroImage = approved
       ? mergeHomepageConfig(loaderData?.property?.homepage_config).hero.slides?.[0]?.imageUrl
@@ -100,10 +107,11 @@ export const Route = createFileRoute("/lp/$slug")({
     if (patched.homepage_config) {
       patched.homepage_config = applyApprovedHomepageSeo(patched.homepage_config);
     }
+    const cleaned = stripHotWaterFromPublicJson(patched);
     const page =
-      patched.slug === APPROVED_LP.slug
+      cleaned.slug === APPROVED_LP.slug
         ? {
-            ...patched,
+            ...cleaned,
             title: APPROVED_LP.title,
             meta_title: APPROVED_LP.title,
             meta_description: APPROVED_LP.meta,
@@ -111,7 +119,7 @@ export const Route = createFileRoute("/lp/$slug")({
             hero_subheadline: APPROVED_LP.cardIntro,
             target_keyword: null,
           }
-        : patched;
+        : cleaned;
     const site = siteData as { property?: unknown; roomTypes?: unknown[] } | null;
     return { page, property: site?.property, roomTypes: site?.roomTypes ?? [] };
   },
@@ -180,11 +188,11 @@ function LandingPage() {
   // Google tag scripts wait until load or the first tap.
   useEffect(() => {
     const cleanups: Array<() => void> = [];
-    if (page.custom_head) cleanups.push(mountCustomHead(page.custom_head));
+    if (page.custom_head) cleanups.push(mountCustomHead(stripPublicHotWaterClaim(page.custom_head)));
     if (page.slug !== APPROVED_LP.slug && page.json_ld_enabled && page.custom_json_ld?.trim()) {
       const sc = document.createElement("script");
       sc.type = "application/ld+json";
-      sc.textContent = page.custom_json_ld;
+      sc.textContent = stripPublicHotWaterJsonText(page.custom_json_ld);
       document.head.appendChild(sc);
       cleanups.push(() => sc.parentNode?.removeChild(sc));
     }
@@ -272,7 +280,7 @@ function LandingPage() {
           {page.body_content && (
             <section className="mx-auto max-w-3xl px-6 py-16">
               <div className="prose prose-stone prose-headings:font-serif prose-a:text-amber-800 max-w-none"
-                dangerouslySetInnerHTML={{ __html: page.body_content.replace(/href=(["'])\/rooms\/?\1/g, 'href=$1/#rooms$1') }} />
+                dangerouslySetInnerHTML={{ __html: stripPublicHotWaterClaim(page.body_content).replace(/href=(["'])\/rooms\/?\1/g, 'href=$1/#rooms$1') }} />
             </section>
           )}
 

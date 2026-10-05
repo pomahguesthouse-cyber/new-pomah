@@ -2,6 +2,7 @@
  * Per-page JSON-LD. Prices and review counts must come from the same
  * objects the page renders — do not hardcode room rates here.
  */
+import { stripPublicHotWaterClaim } from "@/public/content/approved-seo";
 import { CANONICAL_ORIGIN, canonicalUrlForPath } from "@/public/lib/public-seo";
 import {
   POMAH_GEO,
@@ -117,11 +118,12 @@ function hotelRoomNode(room: SchemaRoom) {
   const name = (room.name ?? "").trim() || "Kamar";
   const slug = (room.slug ?? "").trim();
   const price = priceNumber(room.base_rate);
+  const description = stripPublicHotWaterClaim((room.description ?? "").trim());
   const node: Record<string, unknown> = {
     "@type": "HotelRoom",
     "@id": slug ? roomId(slug) : undefined,
     name,
-    description: (room.description ?? "").trim() || `${name} di ${POMAH_NAME} Semarang.`,
+    description: description || `${name} di ${POMAH_NAME} Semarang.`,
     url: slug ? canonicalUrlForPath(`/rooms/${slug}`) : `${CANONICAL_ORIGIN}/`,
     containedInPlace: { "@id": LODGING_ID },
   };
