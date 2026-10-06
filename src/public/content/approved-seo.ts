@@ -2,6 +2,9 @@
  * Approved public copy, 27 Sep 2026.
  * City Guide articles and the UNNES landing article render from here.
  * Lawang Sewu (/explore/lawang-sewu-semarang) was revised 6 Oct 2026.
+ * Nasi Ayam Bu Wido (/explore/nasi-ayam-bu-wido) was revised 6 Oct 2026.
+ * Its card intro and street address are also written by
+ * supabase/migrations/20261006153000_nasi_ayam_bu_wido_explore_copy.sql.
  * Room, homepage, and landing fields that live in the database are also
  * written by supabase/migrations/20260927153000_seo_copy_2026_09_27.sql.
  * Hot-water claims from that copy are removed by
@@ -35,6 +38,20 @@ export type ApprovedSection = {
   blocks?: ApprovedSectionBlock[];
 };
 
+export type CityGuidePostalAddress = {
+  streetAddress: string;
+  addressLocality: string;
+  addressRegion: string;
+  postalCode: string;
+  addressCountry: string;
+};
+
+export type CityGuideRestaurantSchema = {
+  servesCuisine: string;
+  address: CityGuidePostalAddress;
+  geo: { latitude: number; longitude: number };
+};
+
 export type CityGuideArticle = {
   canonicalSlug: string;
   /** Names whose slug should show this article. */
@@ -43,6 +60,10 @@ export type CityGuideArticle = {
   meta: string;
   h1: string;
   cardIntro: string;
+  /** Street line shown on the page and explore card. Replaces a stored Plus Code. */
+  displayAddress?: string;
+  /** Restaurant JSON-LD. Hours, price, phone, and rating stay off the schema. */
+  restaurant?: CityGuideRestaurantSchema;
   sections: ApprovedSection[];
   faq: ApprovedFaq[];
   links: ApprovedLink[];
@@ -357,6 +378,110 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
       { anchor: "Kamar Single", href: "/rooms/kamar-single" },
       { anchor: "jalan kaki keliling Kota Lama Semarang", href: "/explore/kota-lama-semarang" },
       { anchor: "lunpia khas Semarang untuk oleh-oleh", href: "/explore/lcm-lunpia-cik-me-me" },
+    ],
+  },
+  {
+    canonicalSlug: "nasi-ayam-bu-wido",
+    names: ["Nasi Ayam Bu Wido"],
+    title: "Nasi Ayam Bu Wido Semarang: Lokasi, Jam Buka & Menu | Pomah",
+    meta: "Nasi Ayam Bu Wido di Jl. Melati Selatan dekat Simpang Lima, buka 15.30–22.30. Nasi pincuk, ayam suwir, kuah opor & aneka sate. 8 km dari Pomah.",
+    h1: "Nasi Ayam Bu Wido Semarang: Lokasi, Jam Buka & Rute dari Pomah",
+    cardIntro:
+      "Nasi ayam legendaris Semarang yang diracik di pincuk daun pisang: nasi, ayam suwir, telur, tahu bacem, sayur labu siam, dan krecek, lalu disiram kuah opor. Warungnya di Jl. Melati Selatan dekat Simpang Lima, buka setiap hari sekitar pukul 15.30–22.30 WIB.",
+    displayAddress:
+      "Jl. Melati Selatan, Brumbungan, Kec. Semarang Tengah, Kota Semarang, Jawa Tengah 50135",
+    restaurant: {
+      servesCuisine: "Nasi ayam Semarang",
+      address: {
+        streetAddress: "Jl. Melati Selatan",
+        addressLocality: "Semarang",
+        addressRegion: "Jawa Tengah",
+        postalCode: "50135",
+        addressCountry: "ID",
+      },
+      geo: { latitude: -6.98329, longitude: 110.42230 },
+    },
+    sections: [
+      {
+        heading: "Info praktis Nasi Ayam Bu Wido",
+        paragraphs: [],
+        bullets: [
+          '**Lokasi:** Jl. Melati Selatan, Brumbungan, Semarang Tengah, Kota Semarang. Masuk dari Jl. Gajahmada, tidak jauh dari Simpang Lima. Paling mudah cari "Nasi Ayam Bu Wido" di aplikasi peta.',
+          "**Jam buka:** setiap hari sekitar 15.30–22.30 WIB (menurut Google Maps). Saat libur panjang atau Ramadan jamnya bisa berbeda.",
+          "**Menu andalan:** nasi ayam di pincuk daun pisang berisi nasi, ayam suwir, telur, tahu bacem, sayur labu siam, dan krecek, disiram kuah opor dan areh.",
+          "**Lauk tambahan:** aneka sate (telur puyuh, ampela, ati, usus, jantung), potongan ayam (paha, sayap, dada), dan kerupuk terung.",
+          "**Harga:** tergolong terjangkau untuk sekali makan. Harga terbaru cek langsung di warung.",
+          "**Dari Pomah Guesthouse:** sekitar 8 km, kurang lebih 20–30 menit berkendara lewat Jl. Kaligarang, Jl. Dr. Sutomo, dan Simpang Lima.",
+          "**Parkir:** di tepi jalan, berbayar.",
+          "**Bisa dibungkus:** ya, kalau ingin makan di kamar setelah seharian jalan.",
+        ],
+      },
+      {
+        heading: "Sekilas tentang Nasi Ayam Bu Wido",
+        paragraphs: [
+          "Kalau Solo punya nasi liwet, Semarang punya nasi ayam. Rasanya mirip: nasi hangat dengan lauk ayam dan kuah santan yang gurih. Salah satu warung yang paling sering disebut untuk nasi ayam Semarang adalah Nasi Ayam Bu Wido.",
+          "Bu Wido sudah berjualan nasi ayam lebih dari 60 tahun, dengan resep yang diwariskan dari orang tuanya. Dulu nasi ayamnya dijajakan keliling kampung, dan sejak 2008 warungnya menetap di Jl. Melati Selatan. Sekarang warung sederhana ini diteruskan oleh keluarganya.",
+          "Seporsi nasi ayam diracik langsung di depan pembeli. Di atas pincuk daun pisang ditata nasi, telur, ayam suwir, tahu bacem, sayur labu siam, dan krecek, lalu disiram kuah opor dan areh yang kental. Kreceknya pedas-gurih. Pelengkap favorit pengunjung adalah aneka sate, misalnya sate usus, ati, ampela, jantung, dan telur puyuh.",
+        ],
+      },
+      {
+        heading: "Cara ke sana dari Pomah Guesthouse",
+        paragraphs: [
+          "Jaraknya sekitar 8 km dari Pomah di Sampangan. Dari Jl. Dewi Sartika lewat Jl. Menoreh Raya dan Jl. Kelud Raya, turun ke Jl. Kaligarang dan Jl. Dr. Sutomo, lalu lewat Jl. Pahlawan ke Simpang Lima. Dari Simpang Lima masuk Jl. Gajahmada, lalu belok ke Jl. Melati Selatan. Dengan mobil atau motor biasanya 20–30 menit. Sore menjelang malam, jalur Simpang Lima sering padat, jadi sediakan waktu lebih.",
+          'Kalau tidak membawa kendaraan, taksi atau ojek online paling praktis. Ketik tujuan "Nasi Ayam Bu Wido, Jl. Melati Selatan" supaya titik turunnya tepat. Untuk pulang, ikuti petunjuk aplikasi peta karena rutenya bisa berbeda dengan rute berangkat.',
+        ],
+      },
+      {
+        heading: "Jam buka & waktu terbaik datang",
+        paragraphs: [
+          "Nasi Ayam Bu Wido buka setiap hari sekitar pukul 15.30–22.30 WIB, menurut Google Maps. Pada akhir pekan dan jam pulang kerja warung ini biasanya ramai, dan pembeli sering harus menunggu meja.",
+        ],
+        bullets: [
+          "Datang tidak lama setelah warung buka supaya antrean lebih pendek dan lauk masih lengkap.",
+          "Kalau datang larut malam, beberapa lauk atau sate bisa sudah habis.",
+          "Jam buka bisa berbeda saat libur panjang atau Ramadan, jadi cek jam terbaru di Google Maps sebelum berangkat.",
+        ],
+      },
+      {
+        heading: "Tips makan bersama keluarga",
+        paragraphs: [],
+        bullets: [
+          "Porsinya tidak besar. Banyak pengunjung menambah sate atau memesan dua porsi.",
+          "Kreceknya pedas. Untuk anak kecil, tanyakan dulu ke penjual apakah krecek bisa dipisah.",
+          "Warungnya sederhana dan sering ramai, jadi untuk rombongan besar lebih nyaman datang lebih awal.",
+          "Setelah makan, bisa lanjut kuliner malam di Pasar Semawis atau beli lunpia untuk oleh-oleh di Jl. Gajahmada.",
+        ],
+      },
+      {
+        heading: "Menginap di Pomah setelah kulineran malam",
+        paragraphs: [
+          "Nasi Ayam Bu Wido baru buka sore, jadi jadwalnya pas dengan check-in di Pomah Guesthouse yang mulai pukul 14.00. Taruh barang, istirahat sebentar, lalu berangkat makan malam. Pomah ada di Sampangan, di sisi kota yang lebih tenang, sekitar 8 km atau 20–30 menit dari Jl. Melati Selatan. Untuk berdua ada **Kamar Deluxe** mulai Rp230.000/malam. Untuk keluarga, **Family Room 222** adalah unit 50 m² di lantai 2 dengan dua kamar tidur, dua kamar mandi, dan ruang keluarga untuk hingga empat tamu, mulai Rp500.000/malam. Kalau datang sendiri, ada **Kamar Single** mulai Rp175.000/malam. Check-out sampai pukul 12.00, jadi besok paginya tidak perlu terburu-buru. Cek ketersediaan dan pesan langsung lewat halaman kamar atau WhatsApp kami.",
+        ],
+      },
+    ],
+    faq: [
+      {
+        question: "Nasi Ayam Bu Wido Semarang ada di mana?",
+        answer:
+          'Di Jl. Melati Selatan, Brumbungan, Semarang Tengah, tidak jauh dari Simpang Lima dan Jl. Gajahmada. Paling mudah cari "Nasi Ayam Bu Wido" di aplikasi peta.',
+      },
+      {
+        question: "Nasi Ayam Bu Wido buka jam berapa?",
+        answer:
+          "Menurut Google Maps, warung di Jl. Melati Selatan buka setiap hari sekitar pukul 15.30–22.30 WIB. Datang tidak lama setelah buka supaya antrean lebih pendek dan lauk masih lengkap. Saat libur panjang atau Ramadan jamnya bisa berbeda, jadi cek Google Maps sebelum berangkat.",
+      },
+      {
+        question: "Berapa jauh Nasi Ayam Bu Wido dari Pomah Guesthouse?",
+        answer:
+          "Sekitar 8 km atau kurang lebih 20–30 menit berkendara lewat Jl. Kaligarang dan Simpang Lima, tergantung lalu lintas.",
+      },
+    ],
+    links: [
+      { anchor: "Kamar Deluxe untuk berdua", href: "/rooms/deluxe" },
+      { anchor: "Family Room 222 untuk keluarga", href: "/rooms/family-room-222" },
+      { anchor: "Kamar Single", href: "/rooms/kamar-single" },
+      { anchor: "kuliner malam di Pasar Semawis", href: "/explore/wisata-kuliner-malam-pasar-semawis" },
+      { anchor: "lunpia untuk oleh-oleh", href: "/explore/lcm-lunpia-cik-me-me" },
     ],
   },
   {
@@ -890,7 +1015,15 @@ export function applyGuideCardIntros(config: unknown): unknown {
       const name = String(row.name ?? row.title ?? "");
       const article = cityGuideArticleForSlug(slugifyPlaceName(name));
       if (!article) return row;
-      return { ...row, desc: article.cardIntro, metaDescription: article.meta };
+      const next: Record<string, unknown> = {
+        ...row,
+        desc: article.cardIntro,
+        metaDescription: article.meta,
+      };
+      if (article.displayAddress && (key === "destinations" || key === "culinary")) {
+        next.address = article.displayAddress;
+      }
+      return next;
     });
   }
   return cloned;

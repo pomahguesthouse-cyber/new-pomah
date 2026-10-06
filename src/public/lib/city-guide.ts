@@ -8,7 +8,7 @@
  */
 import { isPublicExploreEventVisible } from "@/lib/explore-event-date";
 import { canonicalUrlForPath } from "@/public/lib/public-seo";
-import { cityGuideArticleForSlug } from "@/public/content/approved-seo";
+import { cityGuideArticleForSlug, type CityGuideArticle } from "@/public/content/approved-seo";
 import { isRetiredExploreSlug, placeSlugMatches, slugifyPlaceName } from "@/public/lib/seo-redirects";
 
 export type CityGuideCategory = "destinasi" | "kuliner" | "event" | "berita" | "tips";
@@ -262,7 +262,7 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
         existing.description = existing.description || draft.description;
         existing.metaDescription = existing.metaDescription || draft.metaDescription;
         existing.imageUrl = existing.imageUrl || draft.imageUrl;
-        existing.location = existing.location || draft.location;
+        existing.location = article?.displayAddress || existing.location || draft.location;
         existing.rating = existing.rating || draft.rating;
         existing.dateText = existing.dateText || draft.dateText;
         existing.updatedAt = laterStamp(existing.updatedAt, draft.updatedAt);
@@ -280,7 +280,7 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
       metaDescription: draft.metaDescription,
       imageUrl: draft.imageUrl,
       category: draft.category,
-      location: draft.location,
+      location: article?.displayAddress || draft.location,
       rating: draft.rating,
       dateText: draft.dateText,
       updatedAt: draft.updatedAt,
@@ -288,6 +288,26 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
     });
   }
   return places;
+}
+
+/** Page fields for an approved article. Stored Plus Code addresses do not win. */
+export function approvedCityGuidePlace(
+  article: CityGuideArticle,
+  catalog: CityGuidePlace | null | undefined,
+): CityGuidePlace {
+  return {
+    slug: article.canonicalSlug,
+    name: catalog?.name || article.names[0] || article.h1,
+    description: article.cardIntro,
+    metaDescription: article.meta,
+    imageUrl: catalog?.imageUrl ?? null,
+    category: catalog?.category ?? (article.restaurant ? "kuliner" : "destinasi"),
+    location: article.displayAddress || catalog?.location || null,
+    rating: catalog?.rating ?? null,
+    dateText: catalog?.dateText ?? null,
+    updatedAt: catalog?.updatedAt ?? null,
+    createdAt: catalog?.createdAt ?? null,
+  };
 }
 
 export function cityGuideLastmod(

@@ -196,4 +196,39 @@ assert.doesNotMatch(xml, /http:\/\/pomahguesthouse/);
 assert.match(xml, /<lastmod>2026-07-02T03:04:05.000Z<\/lastmod>/);
 assert.match(xml, /<loc>https:\/\/pomahguesthouse.com\/explore\/sam-poo-kong<\/loc>/);
 
+const WIDO_ADDRESS =
+  "Jl. Melati Selatan, Brumbungan, Kec. Semarang Tengah, Kota Semarang, Jawa Tengah 50135";
+const PLUS_CODE_ADDRESS =
+  "2C8C+MWM, Jl. Melati Selatan, Brumbungan, Kec. Semarang Tengah, Kota Semarang, Jawa Tengah 50135, Indonesia";
+const widoPlaces = collectCityGuidePlaces({
+  propertyUpdatedAt: "2026-09-27T00:00:00.000Z",
+  culinary: [
+    {
+      name: "Nasi Ayam Bu Wido",
+      desc: "Nasi gurih, telur pindang, dan sambal khas Jawa Tengah.",
+      address: PLUS_CODE_ADDRESS,
+      rating: "4.6",
+    },
+    { name: "Wingko Babat", desc: "Oleh-oleh", address: "2C8C+MWM, Jl. Contoh" },
+  ],
+});
+const widoPlace = widoPlaces.find((place) => place.slug === "nasi-ayam-bu-wido");
+assert.ok(widoPlace);
+assert.equal(widoPlace.location, WIDO_ADDRESS);
+assert.equal(widoPlace.rating, "4.6");
+assert.doesNotMatch(widoPlace.location ?? "", /2C8C|\+/);
+assert.equal(
+  widoPlaces.find((place) => place.slug === "wingko-babat")?.location,
+  "2C8C+MWM, Jl. Contoh",
+);
+const widoSitemap = cityGuideSitemapUrls(widoPlaces);
+assert.equal(
+  widoSitemap.find((url) => url.loc.endsWith("/nasi-ayam-bu-wido"))?.loc,
+  canonicalUrlForPath("/explore/nasi-ayam-bu-wido"),
+);
+assert.equal(
+  widoSitemap.find((url) => url.loc.endsWith("/nasi-ayam-bu-wido"))?.lastmod,
+  "2026-09-27T00:00:00.000Z",
+);
+
 console.log("test-city-guide: ok");
