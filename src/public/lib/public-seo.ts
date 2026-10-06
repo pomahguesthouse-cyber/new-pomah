@@ -85,6 +85,29 @@ function firstNonEmpty(...values: Array<string | null | undefined>): string {
   return "";
 }
 
+/**
+ * City Guide place pages. Title, meta description, Open Graph, and Twitter
+ * cards use the same sentences.
+ */
+export function explorePlaceSeoMeta(input: {
+  title: string;
+  description: string;
+  ogImageUrl?: string | null;
+}): PublicSeoMetaTag[] {
+  const title = input.title.trim();
+  const description = input.description.trim();
+  return publicSeoMeta(
+    {
+      title,
+      description,
+      twitterTitle: title,
+      twitterDescription: description,
+      ogImageUrl: input.ogImageUrl,
+    },
+    { title, description },
+  );
+}
+
 /** Build title / description / OG / Twitter tags from saved SEO fields. */
 export function publicSeoMeta(
   input: PublicSeoInput,

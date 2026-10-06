@@ -1,4 +1,4 @@
-import type { CityGuideArticle } from "@/public/content/approved-seo";
+import type { ApprovedSection, CityGuideArticle } from "@/public/content/approved-seo";
 import { canonicalUrlForPath } from "@/public/lib/public-seo";
 import { faqPageGraph } from "@/public/lib/structured-data";
 
@@ -16,6 +16,48 @@ function RichText({ text }: { text: string }) {
   );
 }
 
+function SectionBody({ section }: { section: ApprovedSection }) {
+  if (section.blocks && section.blocks.length > 0) {
+    return (
+      <>
+        {section.blocks.map((block, index) =>
+          block.type === "paragraph" ? (
+            <p key={`${section.heading}-block-${index}`} className="mt-3">
+              <RichText text={block.text} />
+            </p>
+          ) : (
+            <ul key={`${section.heading}-block-${index}`} className="mt-3 list-disc space-y-2 pl-5">
+              {block.items.map((item) => (
+                <li key={item}>
+                  <RichText text={item} />
+                </li>
+              ))}
+            </ul>
+          ),
+        )}
+      </>
+    );
+  }
+  return (
+    <>
+      {section.paragraphs.map((paragraph, index) => (
+        <p key={`${section.heading}-${index}`} className="mt-3">
+          <RichText text={paragraph} />
+        </p>
+      ))}
+      {section.bullets && section.bullets.length > 0 && (
+        <ul className="mt-3 list-disc space-y-2 pl-5">
+          {section.bullets.map((item) => (
+            <li key={item}>
+              <RichText text={item} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
 /** Approved City Guide body: H2 sections, visible FAQ, and crawlable links. */
 export function CityGuideArticleBody({ article }: { article: CityGuideArticle }) {
   const pageUrl = canonicalUrlForPath(`/explore/${article.canonicalSlug}`);
@@ -24,20 +66,7 @@ export function CityGuideArticleBody({ article }: { article: CityGuideArticle })
       {article.sections.map((section) => (
         <section key={section.heading}>
           <h2 className="text-xl font-bold text-stone-950">{section.heading}</h2>
-          {section.paragraphs.map((paragraph, index) => (
-            <p key={`${section.heading}-${index}`} className="mt-3">
-              <RichText text={paragraph} />
-            </p>
-          ))}
-          {section.bullets && section.bullets.length > 0 && (
-            <ul className="mt-3 list-disc space-y-2 pl-5">
-              {section.bullets.map((item) => (
-                <li key={item}>
-                  <RichText text={item} />
-                </li>
-              ))}
-            </ul>
-          )}
+          <SectionBody section={section} />
         </section>
       ))}
       {article.faq.length > 0 && (
