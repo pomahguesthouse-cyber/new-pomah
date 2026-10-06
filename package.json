@@ -41,6 +41,7 @@
     "test:booking-confirm-flow": "tsx scripts/test-booking-confirm-flow.ts",
     "test:hot-water": "tsx scripts/test-hot-water-unavailable.ts",
     "test:quick-ack": "tsx scripts/test-quick-ack.ts",
+    "test:mcp-availability": "tsx scripts/test-mcp-check-availability.ts",
     "test:meta-inbound-enqueue": "tsx scripts/test-meta-inbound-enqueue.ts",
     "test:guest-whatsapp": "tsx scripts/test-guest-whatsapp.ts",
     "test:wa-outbound-attachment": "tsx scripts/test-wa-outbound-attachment.ts",
