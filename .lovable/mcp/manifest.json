@@ -35,7 +35,7 @@
       {
         "name": "check_availability",
         "title": "Check room availability",
-        "description": "Check available room types at Pomah Guesthouse for a given check-in / check-out date range (YYYY-MM-DD).",
+        "description": "Check published room types at Pomah Guesthouse for a check-in / check-out range (YYYY-MM-DD). Each room includes units_available and available (false when none are left, including sold-out types). A failed lookup is an error and must not be treated as free rooms.",
         "annotations": {
           "readOnlyHint": true,
           "openWorldHint": false
