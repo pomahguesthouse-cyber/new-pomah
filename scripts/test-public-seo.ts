@@ -4,6 +4,7 @@
  * leak "Gunungpati" on those public routes.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -11,6 +12,7 @@ import { DEFAULT_HOMEPAGE_CONFIG, mergeHomepageConfig } from "../src/admin/modul
 import { DEFAULT_EXPLORE_CONFIG, mergeExploreConfig } from "../src/admin/modules/explore/explore.config";
 import { buildStorageImageUrl, heroImageSrcSet, heroImageUrlForViewport, heroImageVariants, heroPreloadLinks } from "../src/lib/storage-image";
 import { isAnalyticsSnippet } from "../src/public/lib/defer-analytics";
+import { approvedCityGuidePlace } from "../src/public/lib/city-guide";
 import { cityGuideGraph, cityGuidePageGraph, faqPageGraph, homepageLodgingGraph, postalAddress, roomPageGraph, unnesLandingGraph } from "../src/public/lib/structured-data";
 import { CityGuideArticleBody } from "../src/public/components/city-guide-article";
 import { POMAH_NAP_ADDRESS, POMAH_NAP_LINE, POMAH_POSTAL_CODE } from "../src/public/lib/site-identity";
@@ -809,5 +811,220 @@ assert.equal(lawangCards.destinations[0]?.desc, lawangArticle.cardIntro);
 assert.equal(lawangCards.destinations[0]?.metaDescription, LAWANG_META);
 assert.equal(lawangCards.events[0]?.desc, "acara film");
 assert.equal(lawangCards.events[0]?.metaDescription, undefined);
+
+const WIDO_TITLE = "Nasi Ayam Bu Wido Semarang: Lokasi, Jam Buka & Menu | Pomah";
+const WIDO_META =
+  "Nasi Ayam Bu Wido di Jl. Melati Selatan dekat Simpang Lima, buka 15.30–22.30. Nasi pincuk, ayam suwir, kuah opor & aneka sate. 8 km dari Pomah.";
+const WIDO_H1 = "Nasi Ayam Bu Wido Semarang: Lokasi, Jam Buka & Rute dari Pomah";
+const WIDO_ADDRESS =
+  "Jl. Melati Selatan, Brumbungan, Kec. Semarang Tengah, Kota Semarang, Jawa Tengah 50135";
+const WIDO_PLUS_CODE =
+  "2C8C+MWM, Jl. Melati Selatan, Brumbungan, Kec. Semarang Tengah, Kota Semarang, Jawa Tengah 50135, Indonesia";
+const WIDO_OLD_DESC =
+  "Nasi Ayam Semarang adalah makanan khas Semarang yang terdiri dari nasi gurih, ayam suwir, kuah opor santan, telur pindang, dan sambal khas Jawa Tengah.";
+const WIDO_FORBIDDEN_SCHEMA = [
+  "priceRange",
+  "telephone",
+  "aggregateRating",
+  "openingHoursSpecification",
+] as const;
+
+const widoArticle = cityGuideArticleForSlug("nasi-ayam-bu-wido");
+assert.ok(widoArticle);
+assert.equal(widoArticle.title, WIDO_TITLE);
+assert.equal(widoArticle.title.length, 59);
+assert.equal(widoArticle.meta, WIDO_META);
+assert.equal(widoArticle.meta.length, 143);
+assert.equal(widoArticle.h1, WIDO_H1);
+assert.equal(widoArticle.canonicalSlug, "nasi-ayam-bu-wido");
+assert.equal(widoArticle.displayAddress, WIDO_ADDRESS);
+assert.doesNotMatch(JSON.stringify(widoArticle), /air panas|air hangat|\bpromo\b|telur pindang|sambal khas|2C8C|\+/i);
+assert.deepEqual(
+  widoArticle.sections.map((section) => section.heading),
+  [
+    "Info praktis Nasi Ayam Bu Wido",
+    "Sekilas tentang Nasi Ayam Bu Wido",
+    "Cara ke sana dari Pomah Guesthouse",
+    "Jam buka & waktu terbaik datang",
+    "Tips makan bersama keluarga",
+    "Menginap di Pomah setelah kulineran malam",
+  ],
+);
+assert.deepEqual(widoArticle.links, [
+  { anchor: "Kamar Deluxe untuk berdua", href: "/rooms/deluxe" },
+  { anchor: "Family Room 222 untuk keluarga", href: "/rooms/family-room-222" },
+  { anchor: "Kamar Single", href: "/rooms/kamar-single" },
+  { anchor: "kuliner malam di Pasar Semawis", href: "/explore/wisata-kuliner-malam-pasar-semawis" },
+  { anchor: "lunpia untuk oleh-oleh", href: "/explore/lcm-lunpia-cik-me-me" },
+]);
+assert.equal(widoArticle.faq.length, 3);
+
+const widoHtml = renderToStaticMarkup(
+  createElement(CityGuideArticleBody, { article: widoArticle }),
+);
+const widoVisible = decodeHtml(
+  widoHtml.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<[^>]+>/g, ""),
+);
+const widoOrder = [
+  "Info praktis Nasi Ayam Bu Wido",
+  "Jam buka: setiap hari sekitar 15.30–22.30 WIB (menurut Google Maps).",
+  "Sekilas tentang Nasi Ayam Bu Wido",
+  "Cara ke sana dari Pomah Guesthouse",
+  "Jam buka & waktu terbaik datang",
+  "Tips makan bersama keluarga",
+  "kuliner malam di Pasar Semawis",
+  "lunpia untuk oleh-oleh",
+  "Menginap di Pomah setelah kulineran malam",
+  "Kamar Deluxe",
+  "Family Room 222",
+  "Kamar Single",
+  widoArticle.faq[0]!.question,
+  widoArticle.faq[2]!.answer,
+];
+assert.match(widoHtml, /href="\/rooms\/deluxe"/);
+assert.match(widoHtml, /href="\/rooms\/family-room-222"/);
+assert.match(widoHtml, /href="\/rooms\/kamar-single"/);
+assert.match(widoHtml, /href="\/explore\/wisata-kuliner-malam-pasar-semawis"/);
+assert.match(widoHtml, /href="\/explore\/lcm-lunpia-cik-me-me"/);
+let widoCursor = -1;
+for (const marker of widoOrder) {
+  const at = widoVisible.indexOf(marker);
+  assert.ok(at > widoCursor, marker);
+  widoCursor = at;
+}
+assert.doesNotMatch(widoVisible, /2C8C|\+|telur pindang|sambal khas|air panas|air hangat|\bpromo\b/i);
+
+const widoFaqScript = widoHtml.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+assert.ok(widoFaqScript);
+const widoFaqLd = JSON.parse(widoFaqScript[1]) as {
+  "@graph": Array<{
+    "@type": string;
+    mainEntity?: Array<{ name: string; acceptedAnswer: { text: string } }>;
+  }>;
+};
+assert.deepEqual(
+  widoFaqLd,
+  faqPageGraph(canonicalUrlForPath("/explore/nasi-ayam-bu-wido"), widoArticle.faq),
+);
+const widoFaqNode = widoFaqLd["@graph"].find((node) => node["@type"] === "FAQPage");
+assert.ok(widoFaqNode?.mainEntity);
+const widoQuestions = [...widoHtml.matchAll(/<dt[^>]*>([\s\S]*?)<\/dt>/g)].map((match) =>
+  decodeHtml(match[1]),
+);
+const widoAnswers = [...widoHtml.matchAll(/<dd[^>]*>([\s\S]*?)<\/dd>/g)].map((match) =>
+  decodeHtml(match[1]),
+);
+assert.equal(widoQuestions.length, widoArticle.faq.length);
+assert.equal(widoAnswers.length, widoArticle.faq.length);
+for (let index = 0; index < widoArticle.faq.length; index += 1) {
+  assert.equal(widoQuestions[index], widoArticle.faq[index]?.question);
+  assert.equal(widoAnswers[index], widoArticle.faq[index]?.answer);
+  assert.equal(widoFaqNode.mainEntity[index]?.name, widoQuestions[index]);
+  assert.equal(widoFaqNode.mainEntity[index]?.acceptedAnswer.text, widoAnswers[index]);
+}
+
+const widoShown = approvedCityGuidePlace(widoArticle, {
+  slug: "nasi-ayam-bu-wido",
+  name: "Nasi Ayam Bu Wido",
+  description: WIDO_OLD_DESC,
+  metaDescription: "",
+  imageUrl: null,
+  category: "kuliner",
+  location: WIDO_PLUS_CODE,
+  rating: "4.6",
+  dateText: null,
+  updatedAt: "2026-09-27T00:00:00.000Z",
+  createdAt: null,
+});
+assert.equal(widoShown.location, WIDO_ADDRESS);
+assert.equal(widoShown.description, widoArticle.cardIntro);
+assert.equal(widoShown.metaDescription, WIDO_META);
+assert.equal(widoShown.rating, "4.6");
+assert.equal(widoShown.category, "kuliner");
+assert.doesNotMatch(`${widoShown.location} ${widoShown.description}`, /2C8C|\+|telur pindang|sambal khas/);
+
+const widoCards = applyGuideCardIntros({
+  culinary: [
+    {
+      name: "Nasi Ayam Bu Wido",
+      desc: WIDO_OLD_DESC,
+      address: WIDO_PLUS_CODE,
+      rating: "4.6",
+      image: "https://example.com/wido.jpg",
+    },
+    { name: "Tahu Gimbal Pak Edy", desc: "tetap", address: "Jl. Sriwijaya No. 29, Semarang", rating: "4.6" },
+  ],
+}) as {
+  culinary: Array<{ name: string; desc: string; address: string; rating: string; metaDescription?: string }>;
+};
+assert.equal(widoCards.culinary[0]?.desc, widoArticle.cardIntro);
+assert.equal(widoCards.culinary[0]?.metaDescription, WIDO_META);
+assert.equal(widoCards.culinary[0]?.address, WIDO_ADDRESS);
+assert.equal(widoCards.culinary[0]?.rating, "4.6");
+assert.equal(widoCards.culinary[1]?.desc, "tetap");
+assert.equal(widoCards.culinary[1]?.address, "Jl. Sriwijaya No. 29, Semarang");
+assert.doesNotMatch(widoCards.culinary[0]?.address ?? "", /2C8C|\+/);
+
+const widoGraph = JSON.parse(
+  JSON.stringify(
+    cityGuidePageGraph(
+      {
+        slug: "nasi-ayam-bu-wido",
+        name: "Nasi Ayam Bu Wido",
+        category: "kuliner",
+        description: WIDO_OLD_DESC,
+        location: WIDO_PLUS_CODE,
+      },
+      widoArticle,
+    ),
+  ),
+) as { "@graph": Array<Record<string, unknown>> };
+const widoRestaurant = widoGraph["@graph"].find((node) => node["@type"] === "Restaurant");
+assert.ok(widoRestaurant);
+assert.equal(widoRestaurant.name, "Nasi Ayam Bu Wido");
+assert.equal(widoRestaurant.description, WIDO_META);
+assert.equal(widoRestaurant.url, "https://pomahguesthouse.com/explore/nasi-ayam-bu-wido");
+assert.equal(widoRestaurant.servesCuisine, "Nasi ayam Semarang");
+assert.deepEqual(widoRestaurant.address, {
+  "@type": "PostalAddress",
+  streetAddress: "Jl. Melati Selatan",
+  addressLocality: "Semarang",
+  addressRegion: "Jawa Tengah",
+  postalCode: "50135",
+  addressCountry: "ID",
+});
+const widoGeo = widoRestaurant.geo as { "@type": string; latitude: number; longitude: number };
+assert.equal(widoGeo["@type"], "GeoCoordinates");
+assert.equal(widoGeo.latitude.toFixed(5), "-6.98329");
+assert.equal(widoGeo.longitude.toFixed(5), "110.42230");
+const widoSchemaJson = JSON.stringify(widoGraph);
+for (const key of WIDO_FORBIDDEN_SCHEMA) {
+  assert.equal(Object.prototype.hasOwnProperty.call(widoRestaurant, key), false, key);
+  assert.equal(widoSchemaJson.includes(`"${key}"`), false, key);
+}
+assert.doesNotMatch(widoSchemaJson, /2C8C|\+|4\.6|telur pindang|sambal khas|aggregateRating|openingHours/);
+
+const widoHead = explorePlaceSeoMeta({
+  title: widoArticle.title,
+  description: widoArticle.meta,
+});
+assert.equal(metaContent(widoHead, "title", "title"), WIDO_TITLE);
+assert.equal(metaContent(widoHead, "name", "description"), WIDO_META);
+assert.equal(metaContent(widoHead, "property", "og:title"), WIDO_TITLE);
+assert.equal(metaContent(widoHead, "property", "og:description"), WIDO_META);
+assert.equal(metaContent(widoHead, "name", "twitter:title"), WIDO_TITLE);
+assert.equal(metaContent(widoHead, "name", "twitter:description"), WIDO_META);
+
+const widoSql = readFileSync(
+  new URL("../supabase/migrations/20261006153000_nasi_ayam_bu_wido_explore_copy.sql", import.meta.url),
+  "utf8",
+);
+assert.ok(widoSql.includes(widoArticle.cardIntro));
+assert.ok(widoSql.includes(WIDO_META));
+assert.ok(widoSql.includes(WIDO_ADDRESS));
+assert.ok(widoSql.includes("00000000-0000-0000-0000-000000000001"));
+assert.match(widoSql, /label = 'Nasi Ayam Bu Wido'/);
+assert.match(widoSql, /IS DISTINCT FROM/);
+assert.doesNotMatch(widoSql, /Pamularsih|2C8C|priceRange|telephone|aggregateRating|openingHoursSpecification/);
 
 console.log("test-public-seo: ok");

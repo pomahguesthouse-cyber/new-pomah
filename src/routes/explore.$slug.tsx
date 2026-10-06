@@ -9,7 +9,12 @@ import { StayNearby } from "@/public/components/guide-links";
 import { CityGuideArticleBody } from "@/public/components/city-guide-article";
 import { cityGuideArticleForSlug, type CityGuideArticle } from "@/public/content/approved-seo";
 import { cityGuidePageGraph } from "@/public/lib/structured-data";
-import { cityGuideMetaContent, findCityGuidePlace, type CityGuidePlace } from "@/public/lib/city-guide";
+import {
+  approvedCityGuidePlace,
+  cityGuideMetaContent,
+  findCityGuidePlace,
+  type CityGuidePlace,
+} from "@/public/lib/city-guide";
 import { buildStorageImageUrl } from "@/lib/storage-image";
 import { canonicalHeadTags, explorePlaceSeoMeta, preferredOgImage } from "@/public/lib/public-seo";
 import { exploreAliasTarget, slugifyPlaceName } from "@/public/lib/seo-redirects";
@@ -67,19 +72,7 @@ export const Route = createFileRoute("/explore/$slug")({
         findCityGuidePlace(places, requested)
       : findCityGuidePlace(places, params.slug);
     if (article) {
-      const place: CityGuidePlace = {
-        slug: article.canonicalSlug,
-        name: catalog?.name ?? article.names[0],
-        description: article.cardIntro,
-        metaDescription: article.meta,
-        imageUrl: catalog?.imageUrl ?? null,
-        category: catalog?.category ?? "destinasi",
-        location: catalog?.location ?? null,
-        rating: catalog?.rating ?? null,
-        dateText: catalog?.dateText ?? null,
-        updatedAt: catalog?.updatedAt ?? null,
-        createdAt: catalog?.createdAt ?? null,
-      };
+      const place = approvedCityGuidePlace(article, catalog);
       return { place, article, rooms: site.roomTypes ?? [] };
     }
     if (!catalog) throw notFound();

@@ -290,21 +290,59 @@ export function unnesLandingGraph(input: {
   };
 }
 
+export type GuideRestaurantSchema = {
+  servesCuisine: string;
+  address: {
+    streetAddress: string;
+    addressLocality: string;
+    addressRegion: string;
+    postalCode: string;
+    addressCountry: string;
+  };
+  geo: { latitude: number; longitude: number };
+};
+
 /**
  * JSON-LD for one /explore place. An approved article's meta is the
- * TouristAttraction description. Opening hours are not emitted here:
- * Monday hours for Lawang Sewu are still unconfirmed.
+ * place description. Opening hours, price, phone, and rating are not
+ * emitted: those facts are either unconfirmed or third-party reviews.
  */
 export function cityGuidePageGraph(
   place: GuideSchemaInput,
-  article?: { canonicalSlug: string; names: readonly string[]; meta: string } | null,
+  article?: {
+    canonicalSlug: string;
+    names: readonly string[];
+    meta: string;
+    restaurant?: GuideRestaurantSchema;
+  } | null,
 ) {
-  return cityGuideGraph({
+  const graph = cityGuideGraph({
     ...place,
     slug: article?.canonicalSlug || place.slug,
     name: article?.names[0] || place.name,
     description: article?.meta || place.description,
+    category: article?.restaurant ? "kuliner" : place.category,
+    location: article?.restaurant ? null : place.location,
   });
+  const restaurant = article?.restaurant;
+  if (!restaurant) return graph;
+  const node = graph["@graph"][0] as Record<string, unknown>;
+  node["@type"] = "Restaurant";
+  node.address = {
+    "@type": "PostalAddress",
+    streetAddress: restaurant.address.streetAddress,
+    addressLocality: restaurant.address.addressLocality,
+    addressRegion: restaurant.address.addressRegion,
+    postalCode: restaurant.address.postalCode,
+    addressCountry: restaurant.address.addressCountry,
+  };
+  node.geo = {
+    "@type": "GeoCoordinates",
+    latitude: restaurant.geo.latitude,
+    longitude: restaurant.geo.longitude,
+  };
+  node.servesCuisine = restaurant.servesCuisine;
+  return graph;
 }
 
 export function cityGuideGraph(place: GuideSchemaInput) {
