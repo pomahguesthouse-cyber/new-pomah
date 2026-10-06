@@ -4,12 +4,15 @@
  * leak "Gunungpati" on those public routes.
  */
 import assert from "node:assert/strict";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 import { DEFAULT_HOMEPAGE_CONFIG, mergeHomepageConfig } from "../src/admin/modules/homepage/homepage.config";
 import { DEFAULT_EXPLORE_CONFIG, mergeExploreConfig } from "../src/admin/modules/explore/explore.config";
 import { buildStorageImageUrl, heroImageSrcSet, heroImageUrlForViewport, heroImageVariants, heroPreloadLinks } from "../src/lib/storage-image";
 import { isAnalyticsSnippet } from "../src/public/lib/defer-analytics";
-import { cityGuideGraph, faqPageGraph, homepageLodgingGraph, postalAddress, roomPageGraph, unnesLandingGraph } from "../src/public/lib/structured-data";
+import { cityGuideGraph, cityGuidePageGraph, faqPageGraph, homepageLodgingGraph, postalAddress, roomPageGraph, unnesLandingGraph } from "../src/public/lib/structured-data";
+import { CityGuideArticleBody } from "../src/public/components/city-guide-article";
 import { POMAH_NAP_ADDRESS, POMAH_NAP_LINE, POMAH_POSTAL_CODE } from "../src/public/lib/site-identity";
 import { PUBLIC_HTML_CACHE_CONTROL, publicHtmlCacheControl } from "../src/public/lib/public-cache";
 import { buildLogoImageUrl } from "../src/lib/storage-image";
@@ -23,6 +26,7 @@ import {
   HOME_SEO,
   isUnoptimizedSharePng,
   preferredOgImage,
+  explorePlaceSeoMeta,
   publicSeoMeta,
   SHARE_OG_IMAGE,
   shareOgImageTags,
@@ -40,6 +44,7 @@ import {
   CITY_GUIDE_ARTICLES,
   FAMILY_SUITE_DESCRIPTION_NEW,
   FAMILY_SUITE_DESCRIPTION_OLD,
+  applyGuideCardIntros,
   cardIntroForName,
   cityGuideArticleForSlug,
   omitPublicHotWaterAmenities,
@@ -629,5 +634,180 @@ assert.equal(
   }),
   null,
 );
+
+const LAWANG_TITLE = "Lawang Sewu: Jam Buka & Harga Tiket 2026 | Pomah";
+const LAWANG_META =
+  "Lawang Sewu umumnya buka 08.00–20.00 WIB, Sabtu sampai 22.00. Tiket dewasa Rp20.000, anak Rp10.000. Plus rute 6 km dari Pomah Guesthouse Sampangan.";
+const LAWANG_H1 = "Lawang Sewu Semarang: Jam Buka, Harga Tiket 2026 & Rute dari Pomah";
+const STALE_LAWANG_HOURS = /07\.00|21\.00|07:00|21:00/;
+
+function decodeHtml(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+const lawangArticle = cityGuideArticleForSlug("lawang-sewu-semarang");
+assert.ok(lawangArticle);
+assert.equal(lawangArticle.title, LAWANG_TITLE);
+assert.equal(lawangArticle.title.length, 48);
+assert.equal(lawangArticle.meta, LAWANG_META);
+assert.equal(lawangArticle.meta.length, 147);
+assert.equal(lawangArticle.h1, LAWANG_H1);
+assert.equal(
+  lawangArticle.cardIntro,
+  'Gedung "seribu pintu" di Tugu Muda ini dulu kantor perusahaan kereta api zaman Belanda, sekarang jadi museum yang selalu ramai pengunjung. Dari Pomah cukup sekali jalan lewat pusat kota, dan paling enak didatangi pagi atau menjelang sore.',
+);
+assert.deepEqual(
+  lawangArticle.sections.map((section) => section.heading),
+  [
+    "Info praktis Lawang Sewu",
+    "Sekilas tentang Lawang Sewu",
+    "Cara ke sana dari Pomah Guesthouse",
+    "Jam buka & harga tiket Lawang Sewu 2026",
+    "Tips berkunjung bersama keluarga",
+    "Menginap di Pomah setelah ke Lawang Sewu",
+  ],
+);
+assert.equal(lawangArticle.faq.length, 3);
+assert.equal(
+  lawangArticle.links.find((link) => link.href === "/rooms/kamar-single")?.anchor,
+  "Kamar Single",
+);
+assert.doesNotMatch(JSON.stringify(lawangArticle), STALE_LAWANG_HOURS);
+assert.doesNotMatch(
+  JSON.stringify(lawangArticle),
+  /openingHoursSpecification|LOFF|\bSenin\b|Rp15\.000/,
+);
+assert.doesNotMatch(JSON.stringify(lawangArticle), /air panas|air hangat/i);
+
+const lawangHtml = renderToStaticMarkup(
+  createElement(CityGuideArticleBody, { article: lawangArticle }),
+);
+const lawangVisible = decodeHtml(
+  lawangHtml.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<[^>]+>/g, ""),
+);
+const lawangOrder = [
+  "Info praktis Lawang Sewu",
+  "Jam buka: umumnya 08.00–20.00 WIB, Sabtu sampai 22.00 WIB (menurut KAI).",
+  "Sekilas tentang Lawang Sewu",
+  "Rutenya mudah: dari Jl. Dewi Sartika lewat Jl. Menoreh Raya",
+  "Kalau tidak membawa kendaraan, taksi atau ojek online",
+  "Jam buka & harga tiket Lawang Sewu 2026",
+  "Menurut KAI selaku pemilik gedung, jam buka Lawang Sewu umumnya:",
+  "Hari biasa: 08.00–20.00 WIB",
+  "Sabtu: 08.00–22.00 WIB",
+  "Jadi umumnya Lawang Sewu tutup pukul 20.00 WIB",
+  "Harga tiket masuk gedung:",
+  "Dewasa & mahasiswa: Rp20.000/orang",
+  "Area immersive memakai tiket terpisah. Jam dan harga bisa berbeda saat Ramadan",
+  "Tips berkunjung bersama keluarga",
+  "Menginap di Pomah setelah ke Lawang Sewu",
+  "Kamar Single",
+];
+let lawangCursor = -1;
+for (const marker of lawangOrder) {
+  const at = lawangVisible.indexOf(marker);
+  assert.ok(at > lawangCursor, marker);
+  lawangCursor = at;
+}
+assert.doesNotMatch(lawangHtml, STALE_LAWANG_HOURS);
+assert.doesNotMatch(lawangVisible, /Menginap dekat sini/);
+
+const lawangFaqScript = lawangHtml.match(
+  /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+);
+assert.ok(lawangFaqScript);
+const lawangFaqLd = JSON.parse(lawangFaqScript[1]) as {
+  "@graph": Array<{
+    "@type": string;
+    mainEntity?: Array<{ name: string; acceptedAnswer: { text: string } }>;
+  }>;
+};
+assert.deepEqual(
+  lawangFaqLd,
+  faqPageGraph(canonicalUrlForPath("/explore/lawang-sewu-semarang"), lawangArticle.faq),
+);
+const lawangFaqNode = lawangFaqLd["@graph"].find((node) => node["@type"] === "FAQPage");
+assert.ok(lawangFaqNode?.mainEntity);
+const lawangQuestions = [...lawangHtml.matchAll(/<dt[^>]*>([\s\S]*?)<\/dt>/g)].map((match) =>
+  decodeHtml(match[1]),
+);
+const lawangAnswers = [...lawangHtml.matchAll(/<dd[^>]*>([\s\S]*?)<\/dd>/g)].map((match) =>
+  decodeHtml(match[1]),
+);
+assert.equal(lawangQuestions.length, lawangArticle.faq.length);
+assert.equal(lawangAnswers.length, lawangArticle.faq.length);
+for (let index = 0; index < lawangArticle.faq.length; index += 1) {
+  assert.equal(lawangQuestions[index], lawangArticle.faq[index]?.question);
+  assert.equal(lawangAnswers[index], lawangArticle.faq[index]?.answer);
+  assert.equal(lawangFaqNode.mainEntity[index]?.name, lawangQuestions[index]);
+  assert.equal(lawangFaqNode.mainEntity[index]?.acceptedAnswer.text, lawangAnswers[index]);
+}
+assert.doesNotMatch(JSON.stringify(lawangFaqLd), STALE_LAWANG_HOURS);
+
+const lawangGraph = JSON.parse(
+  JSON.stringify(
+    cityGuidePageGraph(
+      {
+        slug: "lawang-sewu",
+        name: "Lawang Sewu Semarang",
+        category: "destinasi",
+        description: "Jam lama 07.00–21.00 WIB yang tidak boleh ikut ke schema.",
+        location: "Jl. Pemuda No. 160",
+      },
+      lawangArticle,
+    ),
+  ),
+) as { "@graph": Array<Record<string, unknown>> };
+const lawangAttraction = lawangGraph["@graph"].find(
+  (node) => node["@type"] === "TouristAttraction",
+);
+assert.ok(lawangAttraction);
+assert.equal(lawangAttraction.description, LAWANG_META);
+assert.equal(lawangAttraction.name, "Lawang Sewu");
+assert.equal(lawangAttraction.url, "https://pomahguesthouse.com/explore/lawang-sewu-semarang");
+assert.equal(JSON.stringify(lawangGraph).includes("openingHoursSpecification"), false);
+assert.doesNotMatch(JSON.stringify(lawangGraph), STALE_LAWANG_HOURS);
+
+const lawangHead = explorePlaceSeoMeta({
+  title: lawangArticle.title,
+  description: lawangArticle.meta,
+});
+function metaContent(
+  tags: typeof lawangHead,
+  key: "title" | "name" | "property",
+  name: string,
+): string | undefined {
+  for (const tag of tags) {
+    if (key === "title" && "title" in tag && name === "title") return tag.title;
+    if (key === "name" && "name" in tag && tag.name === name) return tag.content;
+    if (key === "property" && "property" in tag && tag.property === name) return tag.content;
+  }
+  return undefined;
+}
+assert.equal(metaContent(lawangHead, "title", "title"), LAWANG_TITLE);
+assert.equal(metaContent(lawangHead, "name", "description"), LAWANG_META);
+assert.equal(metaContent(lawangHead, "property", "og:title"), LAWANG_TITLE);
+assert.equal(metaContent(lawangHead, "property", "og:description"), LAWANG_META);
+assert.equal(metaContent(lawangHead, "name", "twitter:title"), LAWANG_TITLE);
+assert.equal(metaContent(lawangHead, "name", "twitter:description"), LAWANG_META);
+
+const lawangCards = applyGuideCardIntros({
+  destinations: [
+    { name: "Lawang Sewu", desc: "blurb lama", metaDescription: "meta lama 07.00–21.00" },
+  ],
+  events: [{ title: "Lawang Sewu Short Film Festival (LOFF) 2026", desc: "acara film" }],
+}) as {
+  destinations: Array<{ desc: string; metaDescription: string }>;
+  events: Array<{ title: string; desc: string; metaDescription?: string }>;
+};
+assert.equal(lawangCards.destinations[0]?.desc, lawangArticle.cardIntro);
+assert.equal(lawangCards.destinations[0]?.metaDescription, LAWANG_META);
+assert.equal(lawangCards.events[0]?.desc, "acara film");
+assert.equal(lawangCards.events[0]?.metaDescription, undefined);
 
 console.log("test-public-seo: ok");

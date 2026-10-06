@@ -8,10 +8,10 @@ import { PublicFooter, PublicNav } from "@/public/components/public-shell";
 import { StayNearby } from "@/public/components/guide-links";
 import { CityGuideArticleBody } from "@/public/components/city-guide-article";
 import { cityGuideArticleForSlug, type CityGuideArticle } from "@/public/content/approved-seo";
-import { cityGuideGraph } from "@/public/lib/structured-data";
+import { cityGuidePageGraph } from "@/public/lib/structured-data";
 import { cityGuideMetaContent, findCityGuidePlace, type CityGuidePlace } from "@/public/lib/city-guide";
 import { buildStorageImageUrl } from "@/lib/storage-image";
-import { canonicalHeadTags, preferredOgImage } from "@/public/lib/public-seo";
+import { canonicalHeadTags, explorePlaceSeoMeta, preferredOgImage } from "@/public/lib/public-seo";
 import { exploreAliasTarget, slugifyPlaceName } from "@/public/lib/seo-redirects";
 
 const CATEGORY_LABEL: Record<CityGuidePlace["category"], string> = {
@@ -109,14 +109,12 @@ export const Route = createFileRoute("/explore/$slug")({
     const ogImage = preferredOgImage(place.imageUrl);
     return {
       meta: [
-        { title },
-        { name: "description", content: description },
-        { property: "og:title", content: title },
-        { property: "og:description", content: description },
+        ...explorePlaceSeoMeta({
+          title,
+          description,
+          ogImageUrl: ogImage ? buildStorageImageUrl(ogImage, { width: 1200, quality: 60 }) : "",
+        }),
         { property: "og:type", content: "article" },
-        ...(ogImage
-          ? [{ property: "og:image", content: buildStorageImageUrl(ogImage, { width: 1200, quality: 60 }) }]
-          : []),
         ...canonical.meta,
       ],
       links: canonical.links,
@@ -135,14 +133,7 @@ function ExplorePlacePage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(
-            cityGuideGraph({
-              ...place,
-              slug: article?.canonicalSlug || place.slug,
-              name: article?.names[0] || place.name,
-              description: article?.meta || place.description,
-            }),
-          ),
+          __html: JSON.stringify(cityGuidePageGraph(place, article)),
         }}
       />
       <main className="mx-auto max-w-3xl px-6 py-10">

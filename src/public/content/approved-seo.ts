@@ -1,6 +1,7 @@
 /**
  * Approved public copy, 27 Sep 2026.
  * City Guide articles and the UNNES landing article render from here.
+ * Lawang Sewu (/explore/lawang-sewu-semarang) was revised 6 Oct 2026.
  * Room, homepage, and landing fields that live in the database are also
  * written by supabase/migrations/20260927153000_seo_copy_2026_09_27.sql.
  * Hot-water claims from that copy are removed by
@@ -20,10 +21,18 @@ function slugifyPlaceName(name: string): string {
 
 export type ApprovedFaq = { question: string; answer: string };
 export type ApprovedLink = { anchor: string; href: string };
+export type ApprovedSectionBlock =
+  | { type: "paragraph"; text: string }
+  | { type: "list"; items: string[] };
 export type ApprovedSection = {
   heading: string;
   paragraphs: string[];
   bullets?: string[];
+  /**
+   * Ordered body for a section that mixes paragraphs and lists.
+   * When present, the page renders `blocks` and ignores paragraphs/bullets.
+   */
+  blocks?: ApprovedSectionBlock[];
 };
 
 export type CityGuideArticle = {
@@ -246,12 +255,25 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
   {
     canonicalSlug: "lawang-sewu-semarang",
     names: ["Lawang Sewu", "Lawang Sewu Semarang"],
-    title: "Lawang Sewu Semarang: Tiket, Jam Buka & Rute | Pomah",
-    meta: "Panduan ke Lawang Sewu dari Pomah Guesthouse Sampangan: rute, perkiraan waktu tempuh, harga tiket, jam buka, dan tips berkunjung bersama keluarga.",
-    h1: "Lawang Sewu Semarang: Panduan Berkunjung dari Pomah Guesthouse",
+    title: "Lawang Sewu: Jam Buka & Harga Tiket 2026 | Pomah",
+    meta: "Lawang Sewu umumnya buka 08.00–20.00 WIB, Sabtu sampai 22.00. Tiket dewasa Rp20.000, anak Rp10.000. Plus rute 6 km dari Pomah Guesthouse Sampangan.",
+    h1: "Lawang Sewu Semarang: Jam Buka, Harga Tiket 2026 & Rute dari Pomah",
     cardIntro:
       'Gedung "seribu pintu" di Tugu Muda ini dulu kantor perusahaan kereta api zaman Belanda, sekarang jadi museum yang selalu ramai pengunjung. Dari Pomah cukup sekali jalan lewat pusat kota, dan paling enak didatangi pagi atau menjelang sore.',
     sections: [
+      {
+        heading: "Info praktis Lawang Sewu",
+        paragraphs: [],
+        bullets: [
+          "**Jam buka:** umumnya 08.00–20.00 WIB, Sabtu sampai 22.00 WIB (menurut KAI). Jam bisa berbeda di hari tertentu, jadi cek dulu sebelum berangkat.",
+          "**Tiket masuk gedung:** dewasa & mahasiswa Rp20.000, anak & pelajar Rp10.000, wisatawan mancanegara Rp30.000 per orang.",
+          "**Area immersive:** memakai tiket terpisah.",
+          "**Alamat:** Jl. Pemuda No. 160, Sekayu, Semarang Tengah, Kota Semarang, tepat di sisi Bundaran Tugu Muda.",
+          "**Dari Pomah Guesthouse:** sekitar 6 km, kurang lebih 15–25 menit berkendara lewat Jl. Kaligarang dan Jl. Dr. Sutomo.",
+          "**Lama kunjungan:** 1–2 jam cukup untuk gedung utama, museum, dan berfoto.",
+          "**Sebelum berangkat:** jam dan harga bisa berubah saat Ramadan, libur panjang, promo, atau acara khusus. Cek Instagram resmi @wisata.lawangsewu.",
+        ],
+      },
       {
         heading: "Sekilas tentang Lawang Sewu",
         paragraphs: [
@@ -262,20 +284,39 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
       {
         heading: "Cara ke sana dari Pomah Guesthouse",
         paragraphs: [
-          "Jaraknya sekitar 6 km dari Pomah di Sampangan. Dengan mobil atau motor, perjalanan biasanya sekitar 15–25 menit, tergantung kepadatan di jalur menuju Tugu Muda. Pada jam berangkat dan pulang kantor atau malam minggu, sediakan waktu lebih.",
+          "Jaraknya sekitar 6 km dari Pomah di Sampangan. Rutenya mudah: dari Jl. Dewi Sartika lewat Jl. Menoreh Raya dan Jl. Kelud Raya, lalu turun ke Jl. Kaligarang dan Jl. Dr. Sutomo sampai Bundaran Tugu Muda. Dengan mobil atau motor, perjalanan biasanya sekitar 15–25 menit, tergantung kepadatan di jalur menuju Tugu Muda. Pada jam berangkat dan pulang kantor atau malam minggu, sediakan waktu lebih.",
           "Kalau tidak membawa kendaraan, taksi atau ojek online adalah pilihan paling praktis karena titik turunnya jelas: Lawang Sewu, Jl. Pemuda. Di sekitar gedung tersedia area parkir, ikuti arahan petugas di lokasi.",
         ],
       },
       {
-        heading: "Jam buka & harga tiket",
-        paragraphs: [
-          "Menurut KAI Wisata selaku pengelola, harga tiket masuk gedung adalah:",
-          "Lawang Sewu biasanya buka setiap hari, dan menurut KAI Wisata jam operasionalnya pukul 07.00–21.00 WIB. Ada juga area immersive yang biasanya memakai tiket terpisah. Jam buka dan harga bisa berubah saat libur panjang atau ada acara khusus, jadi sebaiknya cek info terbaru di Instagram resmi @wisata.lawangsewu sebelum berangkat.",
-        ],
-        bullets: [
-          "Dewasa & mahasiswa: Rp20.000/orang",
-          "Anak-anak & pelajar: Rp10.000/orang",
-          "Wisatawan mancanegara: Rp30.000/orang",
+        heading: "Jam buka & harga tiket Lawang Sewu 2026",
+        paragraphs: [],
+        blocks: [
+          {
+            type: "paragraph",
+            text: "Menurut KAI selaku pemilik gedung, jam buka Lawang Sewu umumnya:",
+          },
+          {
+            type: "list",
+            items: ["Hari biasa: 08.00–20.00 WIB", "Sabtu: 08.00–22.00 WIB"],
+          },
+          {
+            type: "paragraph",
+            text: "Jadi umumnya Lawang Sewu tutup pukul 20.00 WIB, kecuali Sabtu yang buka sampai 22.00 WIB. Jam di hari tertentu bisa berbeda.",
+          },
+          { type: "paragraph", text: "Harga tiket masuk gedung:" },
+          {
+            type: "list",
+            items: [
+              "Dewasa & mahasiswa: Rp20.000/orang",
+              "Anak-anak & pelajar: Rp10.000/orang",
+              "Wisatawan mancanegara: Rp30.000/orang",
+            ],
+          },
+          {
+            type: "paragraph",
+            text: "Area immersive memakai tiket terpisah. Jam dan harga bisa berbeda saat Ramadan, libur panjang, atau ada promo. Contohnya, selama Ramadan 2026 jam kunjungan sempat diubah menjadi sore sampai malam. Jadi cek Instagram resmi @wisata.lawangsewu sebelum berangkat.",
+          },
         ],
       },
       {
@@ -289,29 +330,31 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
         ],
       },
       {
-        heading: "Menginap dekat sini",
+        heading: "Menginap di Pomah setelah ke Lawang Sewu",
         paragraphs: [
-          "Setelah seharian keliling kota, kembali ke tempat yang tenang itu terasa melegakan. Pomah Guesthouse ada di Sampangan, di sisi kota yang lebih teduh, tetapi Lawang Sewu tetap terjangkau sekitar 6 km. Untuk rombongan keluarga, **Family Room 222** punya dua kamar tidur dan dua kamar mandi untuk hingga empat tamu, sehingga semua bisa istirahat dengan leluasa. Cek ketersediaan dan pesan langsung lewat halaman kamar atau WhatsApp kami.",
+          "Setelah seharian keliling kota, kembali ke tempat yang tenang itu terasa melegakan. Pomah Guesthouse ada di Sampangan, di sisi kota yang lebih teduh, dan Lawang Sewu hanya sekitar 6 km atau 15–25 menit berkendara. Untuk rombongan keluarga, **Family Room 222** punya dua kamar tidur dan dua kamar mandi untuk hingga empat tamu, mulai Rp500.000/malam. Kalau datang sendiri, ada **Kamar Single** mulai Rp175.000/malam. Check-in mulai pukul 14.00, jadi setelah menaruh barang masih sempat ke Lawang Sewu sore harinya. Cek ketersediaan dan pesan langsung lewat halaman kamar atau WhatsApp kami.",
         ],
       },
     ],
     faq: [
       {
-        question: "Berapa harga tiket Lawang Sewu?",
+        question: "Lawang Sewu buka dan tutup jam berapa?",
         answer:
-          "Menurut KAI Wisata, Rp20.000 untuk dewasa/mahasiswa, Rp10.000 untuk anak/pelajar, dan Rp30.000 untuk wisatawan mancanegara. Sebaiknya cek info terbaru sebelum berangkat.",
+          "Menurut KAI, Lawang Sewu umumnya buka pukul 08.00–20.00 WIB, dan Sabtu sampai pukul 22.00 WIB. Saat Ramadan, libur panjang, atau acara khusus jamnya bisa berubah, jadi cek Instagram @wisata.lawangsewu sebelum berangkat.",
       },
       {
-        question: "Berapa lama waktu yang dibutuhkan untuk keliling Lawang Sewu?",
-        answer: "Biasanya 1–2 jam sudah cukup untuk melihat gedung utama, museum, dan berfoto.",
+        question: "Berapa harga tiket masuk (HTM) Lawang Sewu 2026?",
+        answer:
+          "Tiket masuk gedung Rp20.000 untuk dewasa/mahasiswa, Rp10.000 untuk anak/pelajar, dan Rp30.000 untuk wisatawan mancanegara. Area immersive memakai tiket terpisah.",
       },
       {
         question: "Berapa jauh Lawang Sewu dari Pomah Guesthouse?",
-        answer: "Sekitar 6 km atau kurang lebih 15–25 menit berkendara, tergantung lalu lintas.",
+        answer: "Sekitar 6 km atau kurang lebih 15–25 menit berkendara lewat Jl. Kaligarang, tergantung lalu lintas.",
       },
     ],
     links: [
       { anchor: "Family Room 222 untuk keluarga", href: "/rooms/family-room-222" },
+      { anchor: "Kamar Single", href: "/rooms/kamar-single" },
       { anchor: "jalan kaki keliling Kota Lama Semarang", href: "/explore/kota-lama-semarang" },
       { anchor: "lunpia khas Semarang untuk oleh-oleh", href: "/explore/lcm-lunpia-cik-me-me" },
     ],

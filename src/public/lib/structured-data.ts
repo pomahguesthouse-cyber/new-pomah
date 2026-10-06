@@ -290,6 +290,23 @@ export function unnesLandingGraph(input: {
   };
 }
 
+/**
+ * JSON-LD for one /explore place. An approved article's meta is the
+ * TouristAttraction description. Opening hours are not emitted here:
+ * Monday hours for Lawang Sewu are still unconfirmed.
+ */
+export function cityGuidePageGraph(
+  place: GuideSchemaInput,
+  article?: { canonicalSlug: string; names: readonly string[]; meta: string } | null,
+) {
+  return cityGuideGraph({
+    ...place,
+    slug: article?.canonicalSlug || place.slug,
+    name: article?.names[0] || place.name,
+    description: article?.meta || place.description,
+  });
+}
+
 export function cityGuideGraph(place: GuideSchemaInput) {
   const pageUrl = canonicalUrlForPath(`/explore/${place.slug}`);
   const type = guideType(place.category);
