@@ -1,3 +1,5 @@
+import { MONTHS_ID, clockWIB, fmtDateID, nextDay, todayWIB } from "@/lib/date";
+
 /**
  * Primitif parsing tanggal Bahasa Indonesia — SATU sumber kebenaran.
  *
@@ -160,5 +162,477 @@ export function mentionsExplicitDateSignal(message: string): boolean {
   if (/\b(hari ini|malam ini|nanti malam|besok|tomorrow|lusa|today)\b/i.test(text)) return true;
   if (/\b(?:tanggal|tangga|tgl)\.?\s*\d{1,2}\b/i.test(text)) return true;
   if (/\b\d{1,2}\s*[/.]\s*\d{1,2}\b/i.test(text)) return true;
-  return (text.match(/[a-z]{4,}/gi) ?? []).some((token) => resolveMonthName(token) !== null);
+  if ((text.match(/[a-z]{4,}/gi) ?? []).some((token) => resolveMonthName(token) !== null)) return true;
+  // Nama hari, weekend, malming — sinyal tanggal meski parser butuh konfirmasi.
+  return resolveRelativeDayRange(text, "2026-06-15T12:00:00+07:00") !== null;
+}
+
+const ID_WEEKDAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"] as const;
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"] as const;
+
+/** Nama hari Indonesia → indeks JS (0 = Minggu). */
+const DAY_NAME_SRC = "senin|selasa|rabu|kamis|juma+t|jum'?at|sabtu|minggu|ahad";
+const DAY_NAME_RE = new RegExp(`\\b(?:hari\\s+)?(${DAY_NAME_SRC})\\b`, "gi");
+
+const UNIT_WORD_RE =
+  /^(?:kamar|kamarnya|orang|dewasa|anak|bocil|bocah|balita|malam|hari|jam|ribu|rb|juta|jt|unit|th|thn|tahun|pax|tamu|kg|meter|rp)$/i;
+
+export interface ResolvedStayRange {
+  checkIn: string;
+  checkOut: string;
+  /** Bot harus mengonfirmasi, bukan memakai tanggal ini sebagai fakta. */
+  needsConfirm?: boolean;
+  reason?: string;
+  /** Label untuk tamu, mis. "Sabtu–Minggu, 10–11 Oktober 2026". */
+  echo: string;
+}
+
+export interface WibClock {
+  date: string;
+  hour: number;
+  minute: number;
+}
+
+function weekdayIndex(iso: string): number {
+  return new Date(`${iso}T00:00:00Z`).getUTCDay();
+}
+
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function canonicalDay(raw: string): { name: string; dow: number } | null {
+  const name = raw.toLowerCase().replace(/[^a-z]/g, "");
+  if (/^juma+t$/.test(name) || name === "jumat") return { name: "jumat", dow: 5 };
+  if (name === "ahad" || name === "minggu") return { name: "minggu", dow: 0 };
+  const map: Record<string, number> = {
+    senin: 1,
+    selasa: 2,
+    rabu: 3,
+    kamis: 4,
+    sabtu: 6,
+  };
+  const dow = map[name];
+  if (dow === undefined) return null;
+  return { name, dow };
+}
+
+/** "YYYY-MM-DD", "YYYY-MM-DDTHH:MM", atau Date (dibaca sebagai WIB). Tanpa jam → 12:00. */
+export function parseWibClock(now: Date | string | WibClock): WibClock {
+  if (typeof now === "object" && !(now instanceof Date) && "date" in now) {
+    return { date: now.date, hour: now.hour ?? 12, minute: now.minute ?? 0 };
+  }
+  if (now instanceof Date) {
+    const shifted = new Date(now.getTime() + 7 * 3600 * 1000);
+    return {
+      date: shifted.toISOString().slice(0, 10),
+      hour: shifted.getUTCHours(),
+      minute: shifted.getUTCMinutes(),
+    };
+  }
+  const s = String(now).trim();
+  const dateOnly = /^(\d{4}-\d{2}-\d{2})$/.exec(s);
+  if (dateOnly) return { date: dateOnly[1]!, hour: 12, minute: 0 };
+  const clock = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})/.exec(s);
+  if (clock) return { date: clock[1]!, hour: Number(clock[2]), minute: Number(clock[3]) };
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime())) return parseWibClock(parsed);
+  return { date: todayWIB(), hour: 12, minute: 0 };
+}
+
+/**
+ * Jam hidup hanya bila `today` memang hari ini di WIB. Tanggal historis
+ * (test) dianggap siang supaya cutoff 21:00 tidak bergantung pada jam mesin.
+ */
+export function nowForStayParsing(today?: string, now?: Date | string | WibClock): Date | string | WibClock {
+  if (now) return now;
+  const date = today && /^\d{4}-\d{2}-\d{2}$/.test(today) ? today : todayWIB();
+  if (date === todayWIB()) return `${date}T${clockWIB()}:00+07:00`;
+  return `${date}T12:00:00+07:00`;
+}
+
+export function formatStayEcho(checkIn: string, checkOut: string): string {
+  const inDow = ID_WEEKDAYS[weekdayIndex(checkIn)] ?? "";
+  const outDow = ID_WEEKDAYS[weekdayIndex(checkOut)] ?? "";
+  const d1 = Number(checkIn.slice(8, 10));
+  const m1 = Number(checkIn.slice(5, 7));
+  const y1 = checkIn.slice(0, 4);
+  const d2 = Number(checkOut.slice(8, 10));
+  const m2 = Number(checkOut.slice(5, 7));
+  const y2 = checkOut.slice(0, 4);
+  const month1 = MONTHS_ID[m1 - 1] ?? "";
+  const month2 = MONTHS_ID[m2 - 1] ?? "";
+  if (y1 === y2 && m1 === m2) return `${inDow}–${outDow}, ${d1}–${d2} ${month1} ${y1}`;
+  if (y1 === y2) return `${inDow}–${outDow}, ${d1} ${month1}–${d2} ${month2} ${y1}`;
+  return `${inDow}–${outDow}, ${d1} ${month1} ${y1}–${d2} ${month2} ${y2}`;
+}
+
+/** Baris "hari ini" + kalender 7 hari untuk prompt agent. */
+export function formatTodayLine(todayIso: string): string {
+  const dow = ID_WEEKDAYS[weekdayIndex(todayIso)] ?? "";
+  const upcoming: string[] = [];
+  let cursor = todayIso;
+  for (let i = 0; i < 7; i += 1) {
+    cursor = nextDay(cursor);
+    const day = Number(cursor.slice(8, 10));
+    const month = Number(cursor.slice(5, 7));
+    upcoming.push(`${ID_WEEKDAYS[weekdayIndex(cursor)]} ${day} ${MONTHS_SHORT[month - 1]}`);
+  }
+  return `Hari ini ${dow}, ${fmtDateID(todayIso)} (WIB). Kalender 7 hari: ${upcoming.join(", ")}. Format YYYY-MM-DD: ${todayIso}.`;
+}
+
+export function isRelativeDayResolution(reason?: string): boolean {
+  if (!reason) return false;
+  return /^(day-name|day-range|malam-day|malam-before|malming|weekend|sabtu-depan|minggu-depan|day-depan|weekend-depan)$/.test(
+    reason,
+  );
+}
+
+function nearestWeekday(today: string, targetDow: number, hour: number, minute: number): string {
+  const todayDow = weekdayIndex(today);
+  let delta = (targetDow - todayDow + 7) % 7;
+  if (delta === 0 && hour * 60 + minute >= 21 * 60) delta = 7;
+  return addDaysIso(today, delta);
+}
+
+function rangeFromDows(
+  today: string,
+  dowIn: number,
+  dowOut: number,
+  hour: number,
+  minute: number,
+): { checkIn: string; checkOut: string } {
+  const checkIn = nearestWeekday(today, dowIn, hour, minute);
+  let checkOut = nearestWeekday(checkIn, dowOut, 12, 0);
+  if (checkOut <= checkIn) checkOut = addDaysIso(checkOut, 7);
+  return { checkIn, checkOut };
+}
+
+function nightBeforeDay(
+  today: string,
+  targetDow: number,
+  hour: number,
+  minute: number,
+): { checkIn: string; checkOut: string } {
+  const named = nearestWeekday(today, targetDow, hour, minute);
+  let checkOut = named;
+  let checkIn = addDaysIso(checkOut, -1);
+  if (checkIn < today) {
+    checkOut = addDaysIso(checkOut, 7);
+    checkIn = addDaysIso(checkIn, 7);
+  }
+  return { checkIn, checkOut };
+}
+
+interface DayHit {
+  dow: number;
+  name: string;
+  index: number;
+  end: number;
+  raw: string;
+}
+
+function findDayHits(text: string): DayHit[] {
+  const hits: DayHit[] = [];
+  for (const match of text.matchAll(DAY_NAME_RE)) {
+    const raw = match[1] ?? "";
+    const day = canonicalDay(raw);
+    if (!day || match.index === undefined) continue;
+    const index = match.index;
+    const end = index + match[0].length;
+    if (day.name === "minggu") {
+      const before = text.slice(Math.max(0, index - 16), index);
+      if (/(?:akhir|tiap|setiap|\d+)\s+$/i.test(before)) continue;
+    }
+    hits.push({ dow: day.dow, name: day.name, index, end, raw: match[0] });
+  }
+  return hits;
+}
+
+function hasDepanAfter(text: string, end: number): boolean {
+  return /^\s+depan\b/i.test(text.slice(end));
+}
+
+function nightCount(text: string): number | null {
+  const match = text.match(
+    new RegExp(`\\b(\\d{1,2})\\s*malam\\b(?!\\s+(?:hari\\s+)?(?:${DAY_NAME_SRC})\\b)`, "i"),
+  );
+  if (!match) return null;
+  const n = Number(match[1]);
+  if (!Number.isInteger(n) || n < 1 || n > 30) return null;
+  return n;
+}
+
+function bareDayInMonth(day: number, month: number, year: number, today: string): string | null {
+  let checkIn = makeIsoDate(day, month, year);
+  if (!checkIn) return null;
+  if (checkIn < today) {
+    let nextMonth = month + 1;
+    let nextYear = year;
+    if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear += 1;
+    }
+    checkIn = makeIsoDate(day, nextMonth, nextYear);
+  }
+  return checkIn;
+}
+
+function bareDayRange(startDay: number, endDay: number, today: string): { checkIn: string; checkOut: string } | null {
+  if (startDay < 1 || startDay > 31 || endDay < 1 || endDay > 31 || startDay === endDay) return null;
+  const year = Number(today.slice(0, 4));
+  const month = Number(today.slice(5, 7));
+  const checkIn = bareDayInMonth(startDay, month, year, today);
+  if (!checkIn) return null;
+  const inYear = Number(checkIn.slice(0, 4));
+  const inMonth = Number(checkIn.slice(5, 7));
+  let checkOut = makeIsoDate(endDay, inMonth, inYear);
+  if (!checkOut || checkOut <= checkIn) {
+    let nextMonth = inMonth + 1;
+    let nextYear = inYear;
+    if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear += 1;
+    }
+    checkOut = makeIsoDate(endDay, nextMonth, nextYear);
+  }
+  if (!checkOut || checkOut <= checkIn) return null;
+  return { checkIn, checkOut };
+}
+
+function followingWord(text: string, end: number): string {
+  return /^[\s,.:;!?-]*([a-z]+)/i.exec(text.slice(end))?.[1]?.toLowerCase() ?? "";
+}
+
+function tryExplicitStay(text: string, today: string): { checkIn: string; checkOut: string } | null {
+  const monthRange =
+    /\b(\d{1,2})(?:\s*(?:-|–|—|sampai|sd|s\/d|to|dan)\s*|\s+)(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/gi;
+  for (const match of text.matchAll(monthRange)) {
+    const month = resolveMonthName(match[3] ?? "");
+    if (!month) continue;
+    const year = resolveYear(month, match[4], today);
+    const checkIn = makeIsoDate(Number(match[1]), month, year);
+    const checkOut = makeIsoDate(Number(match[2]), month, year);
+    if (checkIn && checkOut && checkOut > checkIn) return { checkIn, checkOut };
+  }
+
+  const monthFirst =
+    /\b([a-z]+)\s+(?:tanggal|tangga|tgl\.?)?\s*(\d{1,2})(?:\s*(?:-|–|—|sampai|sd|s\/d|to|dan)\s*(\d{1,2}))?\b/gi;
+  for (const match of text.matchAll(monthFirst)) {
+    const month = resolveMonthName(match[1] ?? "");
+    if (!month) continue;
+    const year = resolveYear(month, undefined, today);
+    const checkIn = makeIsoDate(Number(match[2]), month, year);
+    if (!checkIn) continue;
+    if (match[3]) {
+      const checkOut = makeIsoDate(Number(match[3]), month, year);
+      if (checkOut && checkOut > checkIn) return { checkIn, checkOut };
+      continue;
+    }
+    return { checkIn, checkOut: nextDay(checkIn) };
+  }
+
+  const dayMonth = /\b(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/gi;
+  for (const match of text.matchAll(dayMonth)) {
+    const month = resolveMonthName(match[2] ?? "");
+    if (!month) continue;
+    const checkIn = makeIsoDate(Number(match[1]), month, resolveYear(month, match[3], today));
+    if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
+  }
+
+  const slash = /\b(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2,4}))?\b/gi;
+  for (const match of text.matchAll(slash)) {
+    const month = Number(match[2]);
+    if (month < 1 || month > 12) continue;
+    const checkIn = makeIsoDate(Number(match[1]), month, resolveYear(month, match[3], today));
+    if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
+  }
+
+  const labeled =
+    /\b(?:tanggal|tangga|tgl)\.?\s*(\d{1,2})(?:\s*(?:-|–|—|sampai|sd|s\/d|to|dan)\s*|\s+)(\d{1,2})\b/gi;
+  for (const match of text.matchAll(labeled)) {
+    if (match.index === undefined) continue;
+    const end = match.index + match[0].length;
+    const after = followingWord(text, end);
+    if (UNIT_WORD_RE.test(after)) continue;
+    const month = after ? resolveMonthName(after) : null;
+    if (month) {
+      const year = resolveYear(month, undefined, today);
+      const checkIn = makeIsoDate(Number(match[1]), month, year);
+      const checkOut = makeIsoDate(Number(match[2]), month, year);
+      if (checkIn && checkOut && checkOut > checkIn) return { checkIn, checkOut };
+      continue;
+    }
+    const range = bareDayRange(Number(match[1]), Number(match[2]), today);
+    if (range) return range;
+  }
+
+  const separated =
+    /\b(\d{1,2})\s*(?:-|–|—|sampai|sd|s\/d|to|dan)\s*(\d{1,2})\b/gi;
+  for (const match of text.matchAll(separated)) {
+    if (match.index === undefined) continue;
+    const after = followingWord(text, match.index + match[0].length);
+    if (UNIT_WORD_RE.test(after) || resolveMonthName(after)) continue;
+    const range = bareDayRange(Number(match[1]), Number(match[2]), today);
+    if (range) return range;
+  }
+
+  const barePair = /\b(\d{1,2})\s+(\d{1,2})\b/gi;
+  for (const match of text.matchAll(barePair)) {
+    if (match.index === undefined) continue;
+    const end = match.index + match[0].length;
+    const after = followingWord(text, end);
+    if (UNIT_WORD_RE.test(after) || resolveMonthName(after)) continue;
+    const before = text.slice(0, match.index).match(/([a-z]+)\s*$/i)?.[1]?.toLowerCase() ?? "";
+    if (UNIT_WORD_RE.test(before) || before === "tgl" || before === "tanggal" || before === "tangga") continue;
+    const range = bareDayRange(Number(match[1]), Number(match[2]), today);
+    if (range) return range;
+  }
+
+  const iso = text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (iso && makeIsoDate(Number(iso[1]!.slice(8, 10)), Number(iso[1]!.slice(5, 7)), Number(iso[1]!.slice(0, 4)))) {
+    return { checkIn: iso[1]!, checkOut: nextDay(iso[1]!) };
+  }
+
+  return null;
+}
+
+/**
+ * Resolver deterministik tanggal relatif Bahasa Indonesia (Asia/Jakarta).
+ * Tanggal angka selalu menang atas kata relatif. `needsConfirm` berarti
+ * jangan menebak — bot harus mengonfirmasi ke tamu.
+ */
+export function resolveRelativeDayRange(
+  message: string,
+  nowWIB: Date | string | WibClock,
+): ResolvedStayRange | null {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  const clock = parseWibClock(nowWIB);
+  const today = clock.date;
+
+  const done = (
+    checkIn: string,
+    checkOut: string,
+    reason: string,
+    opts?: { needsConfirm?: boolean; nights?: boolean },
+  ): ResolvedStayRange => {
+    let out = checkOut;
+    if (opts?.nights) {
+      const nights = nightCount(text);
+      if (nights && nights !== 1) out = addDaysIso(checkIn, nights);
+    }
+    return {
+      checkIn,
+      checkOut: out,
+      needsConfirm: opts?.needsConfirm || undefined,
+      reason,
+      echo: formatStayEcho(checkIn, out),
+    };
+  };
+
+  const explicit = tryExplicitStay(text, today);
+  if (explicit) return done(explicit.checkIn, explicit.checkOut, "explicit");
+
+  if (/\bmalming\b/i.test(text)) {
+    const span = rangeFromDows(today, 6, 0, clock.hour, clock.minute);
+    return done(span.checkIn, span.checkOut, "malming");
+  }
+
+  const pair = text.match(
+    new RegExp(`\\b(?:hari\\s+)?(${DAY_NAME_SRC})\\s+malam\\s+(?:hari\\s+)?(${DAY_NAME_SRC})\\b`, "i"),
+  );
+  if (pair) {
+    const start = canonicalDay(pair[1] ?? "");
+    const end = canonicalDay(pair[2] ?? "");
+    if (start && end) {
+      const span = rangeFromDows(today, start.dow, end.dow, clock.hour, clock.minute);
+      return done(span.checkIn, span.checkOut, "malam-day");
+    }
+  }
+
+  const nightOf = text.match(new RegExp(`\\bmalam\\s+(?:hari\\s+)?(${DAY_NAME_SRC})\\b`, "i"));
+  if (nightOf && nightOf.index !== undefined) {
+    const before = text.slice(0, nightOf.index);
+    const precededByDay = new RegExp(`(?:${DAY_NAME_SRC})\\s+$`, "i").test(before);
+    if (!precededByDay) {
+      const day = canonicalDay(nightOf[1] ?? "");
+      if (day) {
+        const span = nightBeforeDay(today, day.dow, clock.hour, clock.minute);
+        const reason = day.name === "minggu" ? "malming" : "malam-before";
+        return done(span.checkIn, span.checkOut, reason);
+      }
+    }
+  }
+
+  const hits = findDayHits(text);
+  const weekend = /\b(?:weekend|akhir\s+pekan|akhir\s+minggu)(?:\s+ini)?\b/i.test(text);
+  if (weekend && hits.length === 0) {
+    if (/\b(?:weekend|akhir\s+pekan|akhir\s+minggu)\s+depan\b/i.test(text)) {
+      const span = rangeFromDows(today, 6, 0, clock.hour, clock.minute);
+      const later = { checkIn: addDaysIso(span.checkIn, 7), checkOut: addDaysIso(span.checkOut, 7) };
+      return done(later.checkIn, later.checkOut, "weekend-depan", { needsConfirm: true });
+    }
+    const span = rangeFromDows(today, 6, 0, clock.hour, clock.minute);
+    return done(span.checkIn, span.checkOut, "weekend");
+  }
+
+  if (hits.length === 1 && hasDepanAfter(text, hits[0]!.end)) {
+    const hit = hits[0]!;
+    // "Sabtu depan" / "minggu depan" ambigu: hari terdekat vs minggu berikutnya.
+    const nearest = nearestWeekday(today, hit.dow, clock.hour, clock.minute);
+    const proposedIn = addDaysIso(nearest, 7);
+    const reason = hit.name === "sabtu" ? "sabtu-depan" : hit.name === "minggu" ? "minggu-depan" : "day-depan";
+    return done(proposedIn, nextDay(proposedIn), reason, { needsConfirm: true });
+  }
+
+  // "minggu depan" tanpa nama hari lain (kata "minggu" = minggu kalender).
+  if (hits.length === 0 && /\bminggu\s+depan\b/i.test(text)) {
+    const checkIn = addDaysIso(today, 7);
+    return done(checkIn, nextDay(checkIn), "minggu-depan", { needsConfirm: true });
+  }
+
+  if (hits.length >= 2) {
+    const start = hits[0]!;
+    const end = hits[1]!;
+    if (hasDepanAfter(text, start.end) && end.index > start.end) {
+      const reason = start.name === "sabtu" ? "sabtu-depan" : "day-depan";
+      const span = rangeFromDows(today, start.dow, end.dow, clock.hour, clock.minute);
+      return done(addDaysIso(span.checkIn, 7), addDaysIso(span.checkOut, 7), reason, { needsConfirm: true });
+    }
+    const between = text.slice(start.end, end.index);
+    const cue =
+      /\b(?:malam|pagi|siang|sore|sampai|sd|hingga|dan|check\s*-?out|checkout|ceck)\b/i.test(between) ||
+      /\b(?:check\s*-?in|checkin|ceck\s*-?in|cek\s*in|ceck\s+in)\b/i.test(text);
+    if (cue || hits.length === 2) {
+      const span = rangeFromDows(today, start.dow, end.dow, clock.hour, clock.minute);
+      return done(span.checkIn, span.checkOut, "day-range");
+    }
+  }
+
+  if (hits.length === 1) {
+    const hit = hits[0]!;
+    const checkIn = nearestWeekday(today, hit.dow, clock.hour, clock.minute);
+    return done(checkIn, nextDay(checkIn), "day-name", { nights: true });
+  }
+
+  if (/\b(malam ini|nanti malam|hari ini|today)\b/i.test(text)) {
+    return done(today, nextDay(today), "today", { nights: true });
+  }
+  if (/\blusa\b/i.test(text)) {
+    const checkIn = addDaysIso(today, 2);
+    return done(checkIn, nextDay(checkIn), "lusa", { nights: true });
+  }
+  if (/\b(besok|tomorrow)\b/i.test(text)) {
+    const checkIn = nextDay(today);
+    const early = clock.hour < 5;
+    return done(checkIn, nextDay(checkIn), early ? "besok-early" : "besok", {
+      needsConfirm: early,
+      nights: true,
+    });
+  }
+
+  return null;
 }

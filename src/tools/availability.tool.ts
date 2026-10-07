@@ -25,7 +25,7 @@ import { isDateString, nextDay, fmtDateID, todayWIB } from "@/lib/date";
 // coerceDate sendiri yang TIDAK menaikkan tahun untuk bulan yang sudah lewat
 // ("3 Januari" → 3 Jan tahun ini = tanggal lampau, B2) dan tidak memvalidasi
 // tanggal nyata ("31 Februari" diteruskan mentah ke Postgres).
-import { makeIsoDate, resolveIdDate } from "@/lib/id-date";
+import { formatStayEcho, makeIsoDate, nowForStayParsing, resolveIdDate, resolveRelativeDayRange } from "@/lib/id-date";
 import {
   getDailyRatesForRange,
   resolveRoomNightlyRates,
@@ -91,10 +91,6 @@ function coerceDate(v: unknown, today: string): string | null {
   if (!s) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
-  if (/\b(malam ini|nanti malam|hari ini|today)\b/i.test(s)) return today;
-  if (/\b(besok|tomorrow)\b/i.test(s)) return nextDay(today);
-  if (/\blusa\b/i.test(s)) return nextDay(nextDay(today));
-
   // YYYY/MM/DD
   let m = s.match(/^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})$/);
   if (m) {
@@ -108,6 +104,12 @@ function coerceDate(v: unknown, today: string): string | null {
     const [, d, mo, yRaw] = m;
     const year = yRaw.length === 2 ? Number(`20${yRaw}`) : Number(yRaw);
     return makeIsoDate(Number(d), Number(mo), year);
+  }
+
+  const resolved = resolveRelativeDayRange(s, nowForStayParsing(today));
+  if (resolved) {
+    if (resolved.needsConfirm) return null;
+    return resolved.checkIn;
   }
 
   // "8 juni 2026" / "8 jun" / "8 sepember" (typo ditoleransi resolveIdDate)
@@ -539,7 +541,7 @@ export const checkRoomAvailability: ToolHandler = async (
       ? "insufficient_capacity"
       : "available";
 
-  const periode = `${fmtDateID(checkIn)} – ${fmtDateID(checkOut)}`;
+  const periode = formatStayEcho(checkIn, checkOut);
   const terminalAvailabilityResult = availabilityStatus !== "available";
 
   let replyToGuest: string | undefined;

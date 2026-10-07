@@ -1,4 +1,9 @@
 import { sanitizeGuestFacingRoleDisclosure } from "@/services/wa-autoreply/guest-role-disclosure";
+import {
+  GUEST_BROCHURE_WORD_RE,
+  GUEST_PHOTO_WORD_RE,
+  isGuestMediaExcluded,
+} from "@/lib/guest-media-request";
 
 /**
  * Reply post-processing utilities — shared between the WhatsApp autoreply
@@ -81,6 +86,8 @@ function llmPromisedBrochure(reply: string): boolean {
 }
 
 export function isBrochureRequest(text: string): boolean {
+  if (isGuestMediaExcluded(text)) return false;
+  if (GUEST_PHOTO_WORD_RE.test(text) || GUEST_BROCHURE_WORD_RE.test(text)) return true;
   return BROCHURE_REQUEST_PATTERNS.some((p) => p.test(text));
 }
 

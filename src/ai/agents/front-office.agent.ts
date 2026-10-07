@@ -15,7 +15,13 @@ import {
   omitUnavailableHotWaterAmenities,
   redactUnavailableHotWaterText,
 } from "@/ai/state-machine/booking-inline-answers";
-import { fmtDateID, greetingWIB, clockWIB } from "@/lib/date";
+import { fmtDateID } from "@/lib/date";
+import {
+  formatTodayLine,
+  isRelativeDayResolution,
+  nowForStayParsing,
+  resolveRelativeDayRange,
+} from "@/lib/id-date";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext, IntentCategory } from "./types";
 import type { ToolDefinition } from "@/ai/types";
@@ -154,9 +160,12 @@ function selectGuestTools(ctx: AgentContext): ToolDefinition[] {
 
   if (intent === "media_request") {
     names.push(...FRONT_OFFICE_MEDIA_TOOL_NAMES);
+  } else if (intent === "general") {
+    // Lite/general tetap bisa mengirim foto. Sapaan dan komplain tidak.
+    names.push("send_room_photos");
   }
 
-  if (isRoomFlow(ctx, intent)) {
+  if (isRoomFlow(ctx, intent) || dayNameInLastMessage(ctx)) {
     names.push(...FRONT_OFFICE_AVAILABILITY_TOOL_NAMES);
   }
 
@@ -240,7 +249,7 @@ function buildScaffold(ctx: AgentContext): Scaffold {
   return {
     persona,
     propName,
-    todayLine: `Hari ini tanggal ${fmtDateID(today)} (format YYYY-MM-DD: ${today}).`,
+    todayLine: formatTodayLine(today),
     todayRaw: today,
     roomSummary: roomSummary ? `Daftar tipe kamar yang tersedia di properti:\n${roomSummary}` : "",
   };
@@ -250,7 +259,7 @@ function buildScaffold(ctx: AgentContext): Scaffold {
 function applyCustomInstructions(custom: string, s: Scaffold, ctx: AgentContext): string {
   return custom
     .replace(/\{\{PROPERTY_NAME\}\}/g, s.propName)
-    .replace(/\{\{TODAY\}\}/g, s.todayLine.replace(/^Hari ini tanggal /, "").split(" (")[0])
+    .replace(/\{\{TODAY\}\}/g, fmtDateID(s.todayRaw))
     .replace(/\{\{TODAY_RAW\}\}/g, s.todayRaw)
     .replace(/\{\{ROOM_DATA\}\}/g, s.roomSummary)
     .replace(/\{\{SOP_DATA\}\}/g, ctx.sopText ?? "");
@@ -312,10 +321,33 @@ const BOOKING_FLOW_INTENTS: ReadonlySet<IntentCategory> = new Set<IntentCategory
   "guest_count_input",
 ]);
 
+/** Nama hari / weekend di pesan terakhir — availability harus ikut meski intent-nya general. */
+function dayNameInLastMessage(ctx: AgentContext): boolean {
+  const msg = ctx.lastMessage?.trim();
+  if (!msg) return false;
+  const stay = resolveRelativeDayRange(msg, nowForStayParsing(ctx.today));
+  return Boolean(stay && isRelativeDayResolution(stay.reason));
+}
+
 function guestPromptGates(ctx: AgentContext): GuestPromptGates {
   const intent = ctx.intent;
   if (!intent) {
     return { faq: true, roomFacts: true, availability: true, booking: true, media: true };
+  }
+
+  const dayNamed = dayNameInLastMessage(ctx);
+
+  // General tanpa slot booking: prompt ringan, kecuali nama hari sudah
+  // ter-resolve — lalu aturan tanggal ikut menyala supaya bot tidak memaksa
+  // tamu menulis tanggal angka.
+  if (intent === "general" && !hasBookingContext(ctx)) {
+    return {
+      faq: true,
+      roomFacts: dayNamed,
+      availability: dayNamed,
+      booking: false,
+      media: false,
+    };
   }
 
   // General / sapaan tanpa slot booking: jangan kirim blok availability,
@@ -467,6 +499,12 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
 
     s.todayLine,
 
+    when(ctx.intent === "general" && !g.media,
+      "FOTO KAMAR: bila tamu minta foto, gambar, poto, pap, difoto, atau brosur kamar, " +
+      "jangan arahkan ke website atau Instagram untuk foto; panggil send_room_photos " +
+      "(isi room_type bila tipe kamar sudah disebut). Pertanyaan tentang isi brosur " +
+      "dan izin memotret sendiri di taman bukan permintaan kirim foto."),
+
     "FORMAT TANGGAL: tampilkan format Indonesia ke tamu ('19 Mei 2026'). JANGAN tampilkan " +
       "YYYY-MM-DD ke tamu. Pakai YYYY-MM-DD hanya untuk argumen tool.",
 
@@ -542,14 +580,16 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
     when(g.availability, "KETERSEDIAAN KAMAR — ATURAN TANGGAL (BACA DULU SEBELUM TOOL CALL): " +
       "(1) JANGAN PERNAH mengisi argumen `check_in` dengan tanggal hari ini (" + today + ") " +
       "sebagai default. " +
-      "(2) Tamu wajib menyebut tanggal SECARA EKSPLISIT (mis. 'besok', 'lusa', '15 Juli', " +
-      "'akhir minggu ini') sebelum tool dipanggil. Frasa umum seperti 'mau tanya kamar', " +
-      "'cek kamar', 'ada kamar?', 'mau booking' BUKAN tanggal — itu sinyal supaya kamu TANYAKAN " +
-      "tanggal dulu, bukan asumsi hari ini. " +
-      "(3) Bila tamu BELUM menyebut tanggal sama sekali, JAWAB DULU dengan teks (tanpa tool call): " +
+      "(2) Nama hari (senin–minggu, 'hari jumat', termasuk typo seperti 'ceck in') dan tanggal " +
+      "angka SUDAH cukup untuk memanggil tool. Jangan memaksa tamu menulis tanggal eksplisit " +
+      "bila nama hari atau weekend sudah bisa dihitung dari kalender di atas. Frasa umum seperti " +
+      "'mau tanya kamar', 'cek kamar', 'ada kamar?', 'mau booking' TANPA tanggal atau nama hari " +
+      "BUKAN tanggal — itu sinyal supaya kamu TANYAKAN tanggal dulu, bukan asumsi hari ini. " +
+      "(3) Bila tamu BELUM menyebut tanggal atau nama hari sama sekali, JAWAB DULU dengan teks (tanpa tool call): " +
       "'Boleh tahu untuk tanggal berapa Kak rencana menginap, dan sampai tanggal berapa? 📅'. " +
       "(4) Bila tanggal sudah disepakati sebelumnya di riwayat, PAKAI tanggal itu — JANGAN reset " +
-      "ke hari ini. Tanggal hanya berubah bila tamu eksplisit menyebut tanggal baru."),
+      "ke hari ini. Tanggal hanya berubah bila tamu eksplisit menyebut tanggal baru. " +
+      "(5) Tanggal angka SELALU menang atas kata relatif. 'besok tgl 5 6' berarti tanggal 5–6, bukan besok."),
 
     when(g.availability, "TANGGAL ACARA vs CHECK-IN (WAJIB): Bila tamu menyebut tanggal yang terkait sebuah ACARA " +
       "(mis. 'buat wisuda tanggal 8', 'ada acara tanggal 8 Agustus', 'nikahan tanggal 8'), JANGAN " +
@@ -561,17 +601,20 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
     when(g.availability, "KETERSEDIAAN KAMAR — KAPAN PANGGIL TOOL: " +
       "Setelah aturan tanggal di atas terpenuhi, WAJIB panggil `check_room_availability` " +
       "saat tamu tanya kamar kosong / ingin booking — jangan menebak. " +
-      "Begitu tamu menyebut tanggal APAPUN, LANGSUNG panggil `check_room_availability` " +
-      "SEBELUM balas teks. JANGAN tanya jumlah orang dulu. " +
-      "KONVERSI tanggal relatif dari hari ini (" +
-      today +
-      "): 'hari ini' → " +
-      today +
-      "; " +
-      "'besok' → +1; 'lusa' → +2; 'minggu depan' → +7; 'akhir minggu ini' → Sab/Min terdekat. " +
-      "Bila hanya satu tanggal disebut (mis. 'hari ini', 'besok') tanpa jumlah malam, " +
-      "asumsikan 1 malam TAPI sisipkan konfirmasi halus di balasan: '(saya asumsikan 1 malam ya, " +
-      "Kak — kabari kalau lebih)'. Jangan tampilkan pertanyaan panjang, cukup 1 kalimat. " +
+      "Begitu tamu menyebut tanggal atau nama hari yang bisa dihitung, LANGSUNG panggil " +
+      "`check_room_availability` SEBELUM balas teks. JANGAN tanya jumlah orang dulu. " +
+      "KONVERSI dari kalender WIB di atas (hari ini " + today + "): " +
+      "'hari ini' / 'malam ini' → " + today + "; 'besok' → +1; 'lusa' → +2. " +
+      "Satu nama hari = check-in hari terdekat itu, 1 malam. Bila nama hari sama dengan hari ini " +
+      "dan pesan sebelum pukul 21:00 WIB, itu malam ini; pada atau setelah 21:00 WIB, hari yang sama minggu depan. " +
+      "'X malam Y' (sabtu malam minggu, jumat malam sabtu) = check-in X, check-out Y. " +
+      "'malam minggu' / 'malming' = Sabtu→Minggu. 'malam sabtu' = Jumat→Sabtu (malam sebelum hari yang disebut). " +
+      "'check in Sabtu ... Minggu checkout' atau 'Sabtu sore Minggu pagi' = Sabtu→Minggu. " +
+      "'weekend' / 'weekend ini' / 'akhir pekan' / 'akhir minggu' = Sabtu→Minggu terdekat. " +
+      "'Sabtu depan' dan 'minggu depan' tanpa nama hari lain AMBIGU: JANGAN menebak dan JANGAN panggil tool; konfirmasi ke tamu. " +
+      "'besok' yang diketik pukul 00:00–04:59 WIB juga dikonfirmasi dulu, kecuali pesan memuat tanggal angka. " +
+      "Tanpa jumlah malam, asumsikan 1 malam dan sisipkan '(saya asumsikan 1 malam ya, Kak — kabari kalau lebih)'. " +
+      "Saat membalas tanggal hasil konversi, echo ke tamu, contoh: 'Sabtu–Minggu, 10–11 Oktober 2026'. " +
       "Bila tool return `need_dates: true`, JANGAN ulangi pemanggilan dan JANGAN bilang " +
       "'sistem gangguan'. Kirim isi field `reply_to_guest` VERBATIM ke tamu."),
 

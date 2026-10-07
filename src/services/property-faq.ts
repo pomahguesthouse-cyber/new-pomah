@@ -27,6 +27,7 @@ import {
   parseStayNightsFromMessage,
   type FacilityRoom,
 } from "@/ai/state-machine/booking-inline-answers";
+import { mentionsExplicitDateSignal } from "@/lib/id-date";
 
 export interface PropertyFaqReply {
   reply: string;
@@ -57,7 +58,12 @@ export const COMPLAINT_SIGNAL_RE =
 
 /** Sinyal tanggal/durasi menginap — pesan begini adalah jawaban tanggal. */
 const DATE_SIGNAL_RE =
-  /\b(tgl\.?|tanggal|\d{1,2}\s*[-–/]\s*\d{1,2}|\d{1,2}\s*(?:jan(?:uari)?|feb(?:ruari)?|mar(?:et)?|apr(?:il)?|mei|jun(?:i)?|jul(?:i)?|agu(?:stus)?|ags|sep(?:tember)?|okt(?:ober)?|nov(?:ember)?|des(?:ember)?)|besok|lusa|minggu\s+depan|bulan\s+depan|malam\s+ini|nanti\s+malam|menginap(?:nya)?)\b/i;
+  /\b(tgl\.?|tanggal|\d{1,2}\s*[-–/]\s*\d{1,2}|\d{1,2}\s*(?:jan(?:uari)?|feb(?:ruari)?|mar(?:et)?|apr(?:il)?|mei|jun(?:i)?|jul(?:i)?|agu(?:stus)?|ags|sep(?:tember)?|okt(?:ober)?|nov(?:ember)?|des(?:ember)?)|besok|lusa|minggu\s+depan|bulan\s+depan|malam\s+ini|nanti\s+malam|menginap(?:nya)?|senin|selasa|rabu|kamis|juma?t|sabtu|malming|weekend|akhir\s+pekan|hari\s+(?:senin|selasa|rabu|kamis|jumat|jum'?at|sabtu|minggu|ahad))\b/i;
+
+/** Tanggal angka, kata relatif, atau nama hari — termasuk yang hanya resolver yang kenali (malam minggu). */
+function hasStayDateSignal(raw: string): boolean {
+  return DATE_SIGNAL_RE.test(raw) || mentionsExplicitDateSignal(raw);
+}
 
 /** Pertanyaan kamar mandi harus dijawab deterministik karena ini fakta bisnis tetap. */
 const BATHROOM_TOPIC_RE =
@@ -200,7 +206,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   // ("tidak bisa") dan sebelum FAQ_BLOCK yang memuat kata dp/bayar/malam.
   if (
     isGuestPaymentQuestion(raw) &&
-    !DATE_SIGNAL_RE.test(raw) &&
+    !hasStayDateSignal(raw) &&
     findMentionedRooms(raw, input.rooms ?? []).length === 0
   ) {
     return {
@@ -251,7 +257,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   if (
     HOT_WATER_RE.test(raw) &&
     (raw.match(/\?/g) ?? []).length < 2 &&
-    !DATE_SIGNAL_RE.test(raw) &&
+    !hasStayDateSignal(raw) &&
     !AVAILABILITY_OR_PRICE_RE.test(raw) &&
     !/\b(booking|pesan|reservasi)\b/i.test(raw)
   ) {
@@ -359,7 +365,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   //   langsung lengkap dengan hitungannya. Prompt Front Office menyuruh hal
   //   yang sama; menjawabnya di sini menghemat satu giliran AI penuh DAN
   //   menghilangkan peluang model mengarang angka.
-  if (!DATE_SIGNAL_RE.test(raw)) {
+  if (!hasStayDateSignal(raw)) {
     const wantsEarly = EARLY_CHECKIN_RE.test(raw);
     const wantsLate = LATE_CHECKOUT_RE.test(raw);
     if (wantsEarly !== wantsLate) {
@@ -394,7 +400,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   //   adalah jawaban tanggal, bukan pertanyaan kebijakan)
   if (
     /\b(check\s*[- ]?in|checkin|jam\s*masuk|waktu\s*masuk|check\s*[- ]?out|checkout|jam\s*keluar|waktu\s*keluar)\b/i.test(raw) &&
-    !DATE_SIGNAL_RE.test(raw)
+    !hasStayDateSignal(raw)
   ) {
     return {
       reply:
@@ -448,7 +454,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   // — Cara / metode booking — (bukan permintaan booking itu sendiri) —
   if (
     BOOKING_METHOD_RE.test(raw) &&
-    !DATE_SIGNAL_RE.test(raw) &&
+    !hasStayDateSignal(raw) &&
     !AVAILABILITY_OR_PRICE_RE.test(raw) &&
     findMentionedRooms(raw, rooms).length === 0
   ) {

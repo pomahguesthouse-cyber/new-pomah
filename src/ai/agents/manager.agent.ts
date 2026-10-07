@@ -12,6 +12,7 @@
  */
 
 import { fmtDateID, nextDay } from "@/lib/date";
+import { formatTodayLine } from "@/lib/id-date";
 import type { AgentDefinition, AgentContext, AgentKey } from "./types";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
@@ -120,7 +121,7 @@ export const managerAgent: AgentDefinition = {
         "Awali jawaban dengan INTI / data, bukan basa-basi pembuka. Tidak perlu permohonan " +
         "maaf panjang. Anda boleh memberikan opini & rekomendasi strategis berbasis data.",
 
-      `Hari ini tanggal ${fmtDateID(today)} (ISO: ${today}). Besok: ${fmtDateID(nextDay(today))} (ISO: ${nextDay(today)}).`,
+      formatTodayLine(today),
 
       // Kalender absolut wajib — LLM sering menebak tanggal dari ingatan dan
       // menghasilkan tanggal lampau (mis. menulis 12 Agustus untuk "hari ini").

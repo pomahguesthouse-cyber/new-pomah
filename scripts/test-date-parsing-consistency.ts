@@ -11,10 +11,13 @@
 import assert from "node:assert/strict";
 
 import {
+  formatStayEcho,
+  formatTodayLine,
   makeIsoDate,
   mentionsExplicitDateSignal,
   resolveIdDate,
   resolveMonthName,
+  resolveRelativeDayRange,
   resolveYear,
 } from "../src/lib/id-date";
 import { parseAvailabilityDateRange } from "../src/services/wa-autoreply/message-parsers";
@@ -100,5 +103,76 @@ for (const noise of ["mau 3 kamar", "untuk 2 orang", "nginap 2 malam", "kami 4 d
   assert.equal(extractAllSlots(text, rooms, "6281234567890", today).check_in, "2026-08-08");
   assert.equal(mentionsExplicitDateSignal(text), true);
 }
+
+// ── Nama hari relatif (Asia/Jakarta) ─────────────────────────────────────────
+const THU_AM = "2026-10-08T10:00:00+07:00";
+const THU_LATE = "2026-10-08T21:30:00+07:00";
+const WED_EVE = "2026-10-07T20:40:00+07:00";
+const SAT_EARLY = "2026-09-05T00:34:00+07:00";
+
+function expectStay(
+  text: string,
+  now: string,
+  checkIn: string,
+  checkOut: string,
+) {
+  const resolved = resolveRelativeDayRange(text, now);
+  assert.ok(resolved && !resolved.needsConfirm, `resolver gagal/ambigu: ${text}`);
+  assert.equal(resolved!.checkIn, checkIn, `check-in ${text}`);
+  assert.equal(resolved!.checkOut, checkOut, `check-out ${text}`);
+  const today = now.slice(0, 10);
+  const wa = parseAvailabilityDateRange(text, today, now);
+  assert.deepEqual(wa, { checkIn, checkOut }, `message-parsers ${text}`);
+  const slots = extractAllSlots(text, rooms, "6281234567890", today);
+  // Slot extractor memakai jam siang untuk tanggal historis; kasus sebelum
+  // cutoff 21:00 harus sama dengan resolver.
+  if (now.slice(11, 16) < "21:00") {
+    assert.equal(slots.check_in, checkIn, `slot check-in ${text}`);
+    assert.equal(slots.check_out, checkOut, `slot check-out ${text}`);
+  }
+}
+
+expectStay("Sabtu malam Minggu ada kamar?", THU_AM, "2026-10-10", "2026-10-11");
+expectStay("malam minggu", THU_AM, "2026-10-10", "2026-10-11");
+expectStay("malming kosong?", THU_AM, "2026-10-10", "2026-10-11");
+expectStay("jumat malam sabtu", THU_AM, "2026-10-09", "2026-10-10");
+expectStay("hari jumat ceck in masih ada kamar", THU_AM, "2026-10-09", "2026-10-10");
+expectStay("Check in Sabtu sore Minggu pagi checkout", THU_AM, "2026-10-10", "2026-10-11");
+expectStay("senin", THU_AM, "2026-10-12", "2026-10-13");
+expectStay("weekend ini", THU_AM, "2026-10-10", "2026-10-11");
+expectStay("kamis", THU_AM, "2026-10-08", "2026-10-09");
+expectStay("kamis", THU_LATE, "2026-10-15", "2026-10-16");
+expectStay("jumat besok tgl 9 sd 10", WED_EVE, "2026-10-09", "2026-10-10");
+expectStay("besok tgl 5 6", SAT_EARLY, "2026-09-05", "2026-09-06");
+expectStay("tanggal 5 dan 6 september", SAT_EARLY, "2026-09-05", "2026-09-06");
+expectStay("tgl 9 sd 10", THU_AM, "2026-10-09", "2026-10-10");
+expectStay("5 6", "2026-10-01T12:00:00+07:00", "2026-10-05", "2026-10-06");
+expectStay("5 6", THU_AM, "2026-11-05", "2026-11-06");
+
+assert.equal(
+  resolveRelativeDayRange("Sabtu malam Minggu ada kamar?", THU_AM)?.echo,
+  "Sabtu–Minggu, 10–11 Oktober 2026",
+);
+assert.equal(formatStayEcho("2026-10-10", "2026-10-11"), "Sabtu–Minggu, 10–11 Oktober 2026");
+
+const ambiguous = resolveRelativeDayRange("minggu depan", THU_AM);
+assert.equal(ambiguous?.needsConfirm, true);
+assert.equal(ambiguous?.reason, "minggu-depan");
+assert.equal(parseAvailabilityDateRange("minggu depan", "2026-10-08", THU_AM), null);
+assert.equal(extractAllSlots("minggu depan", rooms, "6281234567890", "2026-10-08").check_in, undefined);
+assert.equal(resolveRelativeDayRange("Sabtu depan", THU_AM)?.needsConfirm, true);
+
+const earlyBesok = resolveRelativeDayRange("ada kamar besok?", SAT_EARLY);
+assert.equal(earlyBesok?.needsConfirm, true);
+assert.equal(earlyBesok?.reason, "besok-early");
+assert.equal(parseAvailabilityDateRange("ada kamar besok?", "2026-09-05", SAT_EARLY), null);
+
+assert.equal(mentionsExplicitDateSignal("hari jumat ceck in"), true);
+assert.equal(mentionsExplicitDateSignal("nginap 2 minggu"), false, "durasi 2 minggu bukan nama hari");
+
+const calendar = formatTodayLine("2026-10-08");
+assert.ok(calendar.includes("Hari ini Kamis, 8 Oktober 2026 (WIB)"));
+assert.ok(calendar.includes("Jumat 9 Okt"));
+assert.ok(calendar.includes("Sabtu 10 Okt"));
 
 console.log("✓ Date parsing consistency regressions (B6) passed");

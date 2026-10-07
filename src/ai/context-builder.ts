@@ -5,7 +5,8 @@
  * Pure function — no I/O, easy to unit-test.
  */
 
-import { fmtDateID, todayWIB } from "@/lib/date";
+import { todayWIB } from "@/lib/date";
+import { formatTodayLine } from "@/lib/id-date";
 import { omitUnavailableHotWaterAmenities, redactUnavailableHotWaterText } from "@/ai/state-machine/booking-inline-answers";
 import type { AiLabConfig } from "./types";
 
@@ -83,7 +84,7 @@ export function buildSystemPrompt(params: SystemPromptParams): string {
 
     "Jawab ramah, singkat dan jelas dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'.",
 
-    `Hari ini tanggal ${fmtDateID(today)}.`,
+    formatTodayLine(today),
 
     "FORMAT TANGGAL: selalu tampilkan tanggal ke tamu dalam format Indonesia, " +
       "contoh '19 Mei 2026'. JANGAN tampilkan format YYYY-MM-DD.",

@@ -1,4 +1,5 @@
-import { fmtDateID, todayWIB } from "@/lib/date";
+import { todayWIB } from "@/lib/date";
+import { formatStayEcho } from "@/lib/id-date";
 import {
   isAvailabilityNeedDatesQuestion,
   isAvailabilitySourceContext,
@@ -103,7 +104,7 @@ export function formatTonightAvailabilityReply(
     return {
       intent: "deterministic_tonight_availability_full",
       reply:
-        `Mohon maaf Kak, untuk malam ini (${fmtDateID(checkIn)} - ${fmtDateID(checkOut)}) ` +
+        `Mohon maaf Kak, untuk malam ini (${formatStayEcho(checkIn, checkOut)}) ` +
         "seluruh kamar kami sudah penuh.\n\n" +
         "Kalau Kakak berkenan menginap di tanggal lain, kirim tanggalnya ya — nanti saya cek ketersediaannya.",
     };
@@ -118,7 +119,7 @@ export function formatTonightAvailabilityReply(
   return {
     intent: "deterministic_tonight_price",
     reply:
-      `Untuk malam ini (${fmtDateID(checkIn)} - ${fmtDateID(checkOut)}), pilihan yang tersedia:\n` +
+      `Untuk malam ini (${formatStayEcho(checkIn, checkOut)}), pilihan yang tersedia:\n` +
       `${lines.join("\n")}\n\n` +
       "Mau saya bantu pilihkan kamar yang paling sesuai, Kak?",
   };

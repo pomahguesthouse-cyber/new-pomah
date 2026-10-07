@@ -20,7 +20,7 @@ import {
   normalizeRoomName,
 } from "./booking-machine";
 import { todayWIB, fmtDateID } from "@/lib/date";
-import { resolveIdDate } from "@/lib/id-date";
+import { nowForStayParsing, resolveIdDate, resolveRelativeDayRange } from "@/lib/id-date";
 import { extractRequestedExtraBeds } from "./extra-bed-parser";
 import { readGuestCount } from "@/lib/guest-party";
 import { formatGuestNameForSummary } from "./booking-summary-text";
@@ -388,7 +388,17 @@ export function extractAllSlots(
   }
 
   // ── 5. Tanggal ────────────────────────────────────────────────────────────
+  // Resolver bersama menangani nama hari, weekend, dan tanggal angka.
+  // Bila ia sudah memutuskan, jalur lama tidak boleh menimpa
+  // ("besok tgl 5 6" tetap 5–6). needsConfirm = jangan simpan slot.
+  const resolvedStay = resolveRelativeDayRange(text, nowForStayParsing(today));
+  if (resolvedStay && !resolvedStay.needsConfirm) {
+    result.check_in = resolvedStay.checkIn;
+    result.check_out = resolvedStay.checkOut;
+  }
   const dates: string[] = [];
+
+  if (!resolvedStay) {
 
   // Pattern: "tgl 7-9", "tanggal 7 sampai 9", "7-9 kak 2 malam".
   // Ini umum muncul sebagai reply singkat ke pertanyaan tanggal. Tanpa guard,
@@ -478,6 +488,7 @@ export function extractAllSlots(
         result.check_out = addDays(uniqueDates[0]!, nights);
       }
     }
+  }
   }
 
   // Tolak tanggal lampau (kemungkinan tamu salah ketik tahun / merujuk tahun lalu).

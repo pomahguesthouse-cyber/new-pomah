@@ -9,7 +9,7 @@
  *    dashboard admin untuk daftar tiket aktif.
  */
 
-import { fmtDateID } from "@/lib/date";
+import { formatTodayLine } from "@/lib/id-date";
 import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
@@ -112,7 +112,7 @@ function buildScaffold(ctx: AgentContext): Scaffold {
     // managerial tetap pakai nama manajer asli.
     persona:   mode === "managerial" ? normalizeAssistantName(managerName) : "Rani",
     propName:  property.name ?? "Pomah Guesthouse",
-    todayLine: `Hari ini tanggal ${fmtDateID(today)}.`,
+    todayLine: formatTodayLine(today),
   };
 }
 

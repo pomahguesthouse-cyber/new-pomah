@@ -10,6 +10,7 @@
  * jawaban harga tidak tertelan — insiden 9 Agu 2026.
  */
 
+import { isGuestMediaExcluded, mentionsGuestPhotoWord } from "@/lib/guest-media-request";
 import { isMediaRequest, isViewRoomRequest } from "@/services/wa-autoreply/message-parsers";
 
 export interface GalleryRoom {
@@ -51,8 +52,7 @@ export type MediaFastPathPlan =
       photoFallback: RoomPhotosPlan | null;
     };
 
-const PHOTO_RE =
-  /\b(foto(?:2|nya|-foto)?|photos?|gambar(?:2|nya|-gambar)?|pict?ures?|pics?|images?|penampakan|nampakan)\b/i;
+const PHOTO_RE = mentionsGuestPhotoWord;
 const BROCHURE_RE =
   /\b(?:(?:brosur|brochure|katalog|catalog|catalogue)(?:nya)?|pricelist|price list|daftar harga bergambar)\b/i;
 const TOUR_OR_VIDEO_RE = /\b(virtual tour|tour 360|tur 360|walkthrough|video|videonya|reels?)\b/i;
@@ -137,6 +137,13 @@ function pendingInbound(messages: Array<{ direction: string; body?: string }>): 
   return bodies.reverse();
 }
 
+export interface MediaFastPathContext {
+  /** Tipe kamar dari last_entity / slots percakapan. */
+  roomType?: string | null;
+  /** Brosur PDF sudah terkirim dalam jendela dedup. */
+  brochureAlreadySent?: boolean;
+}
+
 /**
  * `null` = jangan short-circuit; biarkan Front Office (harga, tour, atau
  * galeri belum diketahui).
@@ -144,13 +151,15 @@ function pendingInbound(messages: Array<{ direction: string; body?: string }>): 
 export function planMediaFastPath(
   messages: Array<{ direction: string; body?: string }>,
   rooms: GalleryRoom[],
+  context?: MediaFastPathContext,
 ): MediaFastPathPlan | null {
   const burst = pendingInbound(messages);
   if (burst.length === 0) return null;
   const text = burst.join("\n").trim();
   if (!text || text.length > 280) return null;
+  if (isGuestMediaExcluded(text)) return null;
 
-  const wantsPhoto = PHOTO_RE.test(text);
+  const wantsPhoto = PHOTO_RE(text);
   const wantsBrochure = BROCHURE_RE.test(text);
   const wantsView = isViewRoomRequest(text);
   if (!wantsPhoto && !wantsBrochure && !wantsView && !isMediaRequest(text)) return null;
@@ -159,7 +168,7 @@ export function planMediaFastPath(
   const mixedBurst = burst.some((body) => {
     const line = body.trim();
     if (!line) return false;
-    if (PHOTO_RE.test(line) || BROCHURE_RE.test(line) || isMediaRequest(line)) return false;
+    if (PHOTO_RE(line) || BROCHURE_RE.test(line) || isMediaRequest(line)) return false;
     if (isViewRoomRequest(line)) return false;
     if (fillerOnly.test(line)) return false;
     return true;
@@ -171,15 +180,30 @@ export function planMediaFastPath(
 
   if (!wantsPhoto && !wantsBrochure && !wantsView) return null;
 
+  // Brosur sudah pernah dikirim dan percakapan sudah menyebut tipe kamar:
+  // kirim foto tipe itu, jangan mengulang "brosur sudah dikirim".
+  if (
+    context?.brochureAlreadySent &&
+    context.roomType &&
+    (wantsPhoto || wantsView) &&
+    !wantsBrochure
+  ) {
+    const photos = planRoomPhotos(context.roomType, rooms);
+    if (photos) return photos;
+  }
+
   if (wantsBrochure && !wantsPhoto) {
     return { kind: "brochure", reply: MEDIA_FAST_PATH_BROCHURE_REPLY, photoFallback: null };
   }
+
+  const photoSource =
+    context?.roomType && !matchGalleryRoom(text, rooms) ? context.roomType : text;
 
   // Permintaan foto atau "lihat kamar" → brosur PDF.
   return {
     kind: "brochure",
     reply: wantsBrochure ? MEDIA_FAST_PATH_BROCHURE_REPLY : MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY,
-    photoFallback: wantsPhoto ? planRoomPhotos(text, rooms) : null,
+    photoFallback: wantsPhoto ? planRoomPhotos(photoSource, rooms) : null,
   };
 }
 

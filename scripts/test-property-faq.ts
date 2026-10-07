@@ -185,6 +185,60 @@ assert.equal(ask("wifinya kenceng?")?.intent, "faq_wifi");
 assert.equal(ask("sarapannya ada?")?.intent, "faq_breakfast");
 assert.equal(ask("kamar mandinya di dalam?")?.intent, "faq_private_bathroom");
 
+// Nama hari adalah tanggal menginap, bukan pertanyaan jam check-in.
+fallsThrough(
+  "Check in Sabtu sore Minggu pagi checkout",
+  "nama hari menandai tanggal menginap",
+);
+assert.equal(ask("jam berapa check in nya kak?")?.intent, "policy_question");
+
+const oct8 = frontOfficeAgent.buildSystemPrompt({
+  property: PROPERTY,
+  rooms: ROOMS,
+  sopText: "",
+  today: "2026-10-08",
+  intent: "availability_check",
+} as unknown as AgentContext);
+assert.ok(oct8.includes("Hari ini Kamis, 8 Oktober 2026 (WIB)"), "baris hari ini menyertakan nama hari");
+assert.ok(oct8.includes("Jumat 9 Okt"), "kalender 7 hari mulai besok");
+assert.ok(oct8.includes("Sabtu 10 Okt"));
+assert.ok(/Sabtu depan/.test(oct8) && /jangan menebak|JANGAN menebak/i.test(oct8));
+assert.ok(oct8.includes("Sabtu–Minggu, 10–11 Oktober 2026"));
+
+const generalDay = frontOfficeAgent.buildSystemPrompt({
+  property: PROPERTY,
+  rooms: ROOMS,
+  sopText: "",
+  today: "2026-10-08",
+  intent: "general",
+  lastMessage: "Sabtu malam Minggu ada kamar?",
+} as unknown as AgentContext);
+assert.ok(
+  generalDay.includes("KETERSEDIAAN KAMAR — ATURAN TANGGAL"),
+  "intent general + nama hari tetap membawa konteks ketersediaan",
+);
+const generalTools = (frontOfficeAgent.getTools?.({
+  property: PROPERTY,
+  rooms: ROOMS,
+  sopText: "",
+  today: "2026-10-08",
+  intent: "general",
+  lastMessage: "Sabtu malam Minggu ada kamar?",
+} as unknown as AgentContext) ?? []).map((t) => t.function.name);
+assert.ok(generalTools.includes("check_room_availability"));
+assert.ok(generalTools.includes("send_room_photos"));
+assert.ok(generalTools.includes("offer_alternative_rooms"));
+
+const lite = frontOfficeAgent.buildSystemPrompt({
+  property: PROPERTY,
+  rooms: ROOMS,
+  sopText: "",
+  today: "2026-10-08",
+  intent: "general",
+} as unknown as AgentContext);
+assert.ok(/jangan arahkan ke website atau Instagram untuk foto/i.test(lite));
+assert.ok(/panggil send_room_photos/i.test(lite));
+
 console.log(
   `✓ property FAQ fast-path regressions passed — ` +
     `6 topik baru dijawab tanpa token, ${KNOWN_LANDMARKS.length} landmark tersinkron dengan prompt`,
