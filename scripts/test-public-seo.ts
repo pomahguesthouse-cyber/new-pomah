@@ -548,13 +548,13 @@ assert.equal(
   "8 km",
 );
 
-assert.equal(POMAH_POSTAL_CODE, "50232");
-assert.equal(POMAH_NAP_ADDRESS, "Jl. Dewi Sartika IV No. 71, Sampangan, Semarang 50232");
+assert.equal(POMAH_POSTAL_CODE, "50221");
+assert.equal(POMAH_NAP_ADDRESS, "Jl. Dewi Sartika IV No. 71, Sampangan, Semarang 50221");
 assert.equal(
   POMAH_NAP_LINE,
-  "Pomah Guesthouse, Jl. Dewi Sartika IV No. 71, Sampangan, Semarang 50232",
+  "Pomah Guesthouse, Jl. Dewi Sartika IV No. 71, Sampangan, Semarang 50221",
 );
-assert.equal(postalAddress().postalCode, "50232");
+assert.equal(postalAddress().postalCode, "50221");
 
 assert.equal(resolveBookH1("", "Pesan kamar dengan mudah"), "Pesan kamar dengan mudah");
 assert.equal(resolveBookH1("   ", null), "Pesan kamar dengan mudah");
@@ -571,7 +571,7 @@ assert.match(lpSchema, /LodgingBusiness/);
 assert.match(lpSchema, /BreadcrumbList/);
 assert.match(lpSchema, /FAQPage/);
 assert.match(lpSchema, /penginapan-dekat-unnes/);
-assert.match(lpSchema, /"postalCode":"50232"/);
+assert.match(lpSchema, /"postalCode":"50221"/);
 assert.match(lpSchema, /"price":175000/);
 
 const logoUrl = buildLogoImageUrl(

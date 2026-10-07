@@ -792,7 +792,7 @@ export const generateAndSaveLocalBusinessSchema = createServerFn({ method: "POST
         "streetAddress": address,
         "addressLocality": city,
         "addressRegion": "Jawa Tengah",
-        "postalCode": "50229",
+        "postalCode": "50221",
         "addressCountry": "ID"
       },
       "geo": {

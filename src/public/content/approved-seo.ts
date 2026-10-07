@@ -250,7 +250,7 @@ export const APPROVED_LP = {
   faq: [
     {
       question: "Di mana alamat Pomah Guesthouse?",
-      answer: "Jl. Dewi Sartika IV No. 71, Sampangan, Semarang, Jawa Tengah 50232.",
+      answer: "Jl. Dewi Sartika IV No. 71, Sampangan, Semarang, Jawa Tengah 50221.",
     },
     {
       question: "Berapa jauh Pomah dari UNNES Sekaran?",

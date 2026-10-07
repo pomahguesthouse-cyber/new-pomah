@@ -9,7 +9,7 @@
 export const POMAH_NAME = "Pomah Guesthouse";
 export const POMAH_STREET = "Jl. Dewi Sartika IV No. 71";
 export const POMAH_LOCALITY = "Sampangan, Semarang";
-export const POMAH_POSTAL_CODE = "50232";
+export const POMAH_POSTAL_CODE = "50221";
 export const POMAH_REGION = "Jawa Tengah";
 /** Street line used in the footer, including the postal code. */
 export const POMAH_NAP_ADDRESS = `${POMAH_STREET}, ${POMAH_LOCALITY} ${POMAH_POSTAL_CODE}`;
