@@ -70,17 +70,31 @@ export function listNights(checkIn: string, checkOut: string): string[] {
   return out;
 }
 
+export type GetDailyRatesOptions = {
+  /**
+   * When true, a failed query throws instead of returning an empty map.
+   * Callers that must not treat a lookup failure as "no stop_sell"
+   * (MCP `check_availability`) pass this. The WhatsApp path keeps the
+   * historical empty-map fallback.
+   */
+  strict?: boolean;
+};
+
 /**
  * Fetch every daily-rate override for the given room types within
  * [checkIn, checkOut). CheckOut is exclusive (mirror booking semantics).
  *
  * Returns Map<room_type_id, Map<date, row>> so callers can do O(1) lookups.
+ * A query error is logged and, unless `options.strict`, returned as an empty
+ * map (no overrides). Strict callers receive a thrown Error with the
+ * database message.
  */
 export async function getDailyRatesForRange(
   supabase:     AnyClient,
   roomTypeIds:  string[],
   checkIn:      string,
   checkOut:     string,
+  options?:     GetDailyRatesOptions,
 ): Promise<Map<string, Map<string, DailyRateRow>>> {
   const out = new Map<string, Map<string, DailyRateRow>>();
   if (roomTypeIds.length === 0 || checkOut <= checkIn) return out;
@@ -94,6 +108,10 @@ export async function getDailyRatesForRange(
 
   if (error) {
     console.error("[daily-rate.service] getDailyRatesForRange error:", error);
+    if (options?.strict) {
+      const message = error.message?.trim() || "room_daily_rates query failed";
+      throw new Error(message);
+    }
     return out;
   }
 
