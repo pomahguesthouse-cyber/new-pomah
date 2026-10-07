@@ -5,6 +5,12 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateAndSendInvoiceNotification } from "@/services/invoice-notification.service";
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
+import {
+  isMissingRoomLayoutColumnError,
+  omitRoomLayoutFields,
+  queryWithOptionalRoomLayout,
+  selectColumns,
+} from "@/lib/room-layout";
 
 /** Untyped client view — for columns absent from the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -809,15 +815,37 @@ export const resendInvoice = createServerFn({ method: "POST" })
 export const listRoomTypes = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await db(context.supabase)
-      .from("room_types")
-      .select(
-        "id, name, slug, description, bed_type, bed_size, floor_info, size_sqm, capacity, extrabed_capacity, extrabed_rate, base_rate, amenities, hero_image_url, images, seo_h1, seo_title, meta_description",
-      )
-      .order("name");
+    const columns =
+      "id, name, slug, description, bed_type, bed_size, floor_info, size_sqm, capacity, bedrooms, bathrooms, extrabed_capacity, extrabed_rate, base_rate, amenities, hero_image_url, images, seo_h1, seo_title, meta_description";
+    const { data, error } = await queryWithOptionalRoomLayout(columns, (cols) =>
+      selectColumns(db(context.supabase).from("room_types"), cols).order("name"),
+    );
     if (error) throw error;
-    return { roomTypes: data ?? [] };
+    return { roomTypes: (data ?? []) as ListedRoomType[] };
   });
+
+type ListedRoomType = {
+  id: string;
+  name: string;
+  slug?: string | null;
+  description?: string | null;
+  bed_type?: string | null;
+  bed_size?: string | null;
+  floor_info?: string | null;
+  size_sqm?: number | null;
+  capacity?: number | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  extrabed_capacity?: number | null;
+  extrabed_rate?: number | null;
+  base_rate?: number | null;
+  amenities?: string[] | null;
+  hero_image_url?: string | null;
+  images?: string[] | null;
+  seo_h1?: string | null;
+  seo_title?: string | null;
+  meta_description?: string | null;
+};
 
 const ROOM_STATUS = z.enum(["clean", "dirty", "maintenance", "out_of_order"]);
 
@@ -888,6 +916,8 @@ const roomTypeFieldsSchema = z.object({
   bed_size: z.string().max(60).nullable().optional(),
   floor_info: z.string().max(120).nullable().optional(),
   size_sqm: z.number().int().min(0).max(10000).nullable().optional(),
+  bedrooms: z.number().int().min(1).max(20).default(1),
+  bathrooms: z.number().int().min(1).max(20).default(1),
   capacity: z.number().int().min(1).max(20),
   extrabed_capacity: z.number().int().min(0).max(10).default(0),
   extrabed_rate: z.number().min(0).max(100_000_000).default(0),
@@ -900,6 +930,27 @@ const roomTypeFieldsSchema = z.object({
   meta_description: z.string().max(220).nullable().optional(),
 });
 
+type RoomTypeWriteRow = ReturnType<typeof roomTypeRow>;
+
+/**
+ * Tulis tipe kamar. Bila kolom bedrooms/bathrooms belum ada, ulangi
+ * tanpa kedua field itu supaya edit lain tetap tersimpan.
+ */
+async function writeRoomType(
+  run: (row: RoomTypeWriteRow | Omit<RoomTypeWriteRow, "bedrooms" | "bathrooms">) => PromiseLike<{
+    data: { id?: string } | null;
+    error: { message?: string; code?: string; details?: string; hint?: string } | null;
+  }>,
+  row: RoomTypeWriteRow,
+): Promise<{ id?: string; layoutSaved: boolean }> {
+  const first = await run(row);
+  if (!first.error) return { id: first.data?.id, layoutSaved: true };
+  if (!isMissingRoomLayoutColumnError(first.error)) throw first.error;
+  const second = await run(omitRoomLayoutFields(row));
+  if (second.error) throw second.error;
+  return { id: second.data?.id, layoutSaved: false };
+}
+
 /** Map a validated room-type payload to a DB row patch. */
 function roomTypeRow(d: z.infer<typeof roomTypeFieldsSchema>) {
   return {
@@ -910,6 +961,8 @@ function roomTypeRow(d: z.infer<typeof roomTypeFieldsSchema>) {
     bed_size: d.bed_size ?? null,
     floor_info: d.floor_info ?? null,
     size_sqm: d.size_sqm ?? null,
+    bedrooms: d.bedrooms,
+    bathrooms: d.bathrooms,
     capacity: d.capacity,
     extrabed_capacity: d.extrabed_capacity,
     extrabed_rate: d.extrabed_rate,
@@ -935,18 +988,22 @@ export const createRoomType = createServerFn({ method: "POST" })
       .single();
     if (propErr || !property) throw new Error("Property belum dikonfigurasi");
 
-    const { data: row, error } = await db(context.supabase)
-      .from("room_types")
-      .insert({ property_id: property.id, ...roomTypeRow(data) })
-      .select("id")
-      .single();
-    if (error) {
+    try {
+      return await writeRoomType(
+        (row) =>
+          db(context.supabase)
+            .from("room_types")
+            .insert({ property_id: property.id, ...row })
+            .select("id")
+            .single(),
+        roomTypeRow(data),
+      );
+    } catch (error) {
       if ((error as { code?: string }).code === "23505") {
         throw new Error(`Slug "${data.slug}" sudah dipakai tipe kamar lain.`);
       }
       throw error;
     }
-    return { id: row?.id };
   });
 
 export const updateRoomType = createServerFn({ method: "POST" })
@@ -954,17 +1011,18 @@ export const updateRoomType = createServerFn({ method: "POST" })
   .inputValidator((d) => roomTypeFieldsSchema.extend({ id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) }).parse(d))
   .handler(async ({ data, context }) => {
     const { id, ...fields } = data;
-    const { error } = await db(context.supabase)
-      .from("room_types")
-      .update(roomTypeRow(fields))
-      .eq("id", id);
-    if (error) {
+    try {
+      const saved = await writeRoomType(
+        (row) => db(context.supabase).from("room_types").update(row).eq("id", id),
+        roomTypeRow(fields),
+      );
+      return { ok: true, layoutSaved: saved.layoutSaved };
+    } catch (error) {
       if ((error as { code?: string }).code === "23505") {
         throw new Error(`Slug "${data.slug}" sudah dipakai tipe kamar lain.`);
       }
       throw error;
     }
-    return { ok: true };
   });
 
 /** List the room numbers belonging to a room type. */

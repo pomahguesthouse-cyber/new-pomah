@@ -7,6 +7,7 @@ import { getPublicSiteData, submitCartBooking, checkRoomTypeAvailability } from 
 import { PomahNav, PomahFooter, HeroSlider, type Pb } from "@/public/components/public-shell";
 import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { canonicalHeadTags, resolveBookH1 } from "@/public/lib/public-seo";
+import { kamarMandiLabel, kamarTidurLabel } from "@/lib/room-layout";
 import { buildStorageImageUrl, heroPreloadLinks } from "@/lib/storage-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -391,11 +392,11 @@ function BookPage() {
                               </div>
                               <div className="flex flex-col items-center gap-2 flex-1 border-r border-stone-100 last:border-r-0 px-1">
                                 <Bath className="w-5 h-5 text-stone-700" strokeWidth={1.5} />
-                                <span className="text-[10px] text-stone-500 text-center">1 K. Mandi</span>
+                                <span className="text-[10px] text-stone-500 text-center">{kamarMandiLabel(room.bathrooms)}</span>
                               </div>
                               <div className="flex flex-col items-center gap-2 flex-1 border-r border-stone-100 last:border-r-0 px-1">
                                 <BedDouble className="w-5 h-5 text-stone-700" strokeWidth={1.5} />
-                                <span className="text-[10px] text-stone-500 text-center">1 K. Tidur</span>
+                                <span className="text-[10px] text-stone-500 text-center">{kamarTidurLabel(room.bedrooms)}</span>
                               </div>
                               <div className="flex flex-col items-center gap-2 flex-1 px-1">
                                 <Users className="w-5 h-5 text-stone-700" strokeWidth={1.5} />
