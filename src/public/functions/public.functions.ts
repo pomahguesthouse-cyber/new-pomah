@@ -20,6 +20,7 @@ import {
 } from "@/public/content/approved-seo";
 import { PUBLIC_PROPERTY_FIELDS, toPublicSettings } from "@/public/lib/public-settings";
 import { loadPublicPropertyRow } from "@/public/lib/public-property.server";
+import { PUBLIC_LISTED_ROOM_TYPE_COLUMNS, queryWithOptionalRoomLayout, selectColumns } from "@/lib/room-layout";
 
 /**
  * Resolve dynamic per-night rate AND extrabed rate for ONE room type
@@ -219,14 +220,12 @@ async function loadPublicSiteData(): Promise<PublicSiteData> {
   siteDataPending = (async () => {
     const [propertyData, roomTypesResult] = await Promise.all([
       loadPublicPropertyRow(),
-      supabasePublic
-        .from("room_types")
-        .select(
-          "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, images, rooms(id)",
-        )
-        .eq("is_published", true)
-        .eq("is_active", true)
-        .order("base_rate"),
+      queryWithOptionalRoomLayout(PUBLIC_LISTED_ROOM_TYPE_COLUMNS, (columns) =>
+        selectColumns(db(supabasePublic).from("room_types"), columns)
+          .eq("is_published", true)
+          .eq("is_active", true)
+          .order("base_rate"),
+      ),
     ]);
     const value = shapePublicSiteData(propertyData, roomTypesResult.data);
     if (value.property || value.roomTypes.length > 0) {
@@ -968,17 +967,23 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ slug: z.string().min(1).max(200) }).parse(d))
   .handler(async ({ data }) => {
     const fields =
-      "id, name, slug, description, base_rate, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, images, seo_h1, seo_title, meta_description";
+      "id, name, slug, description, base_rate, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, images, bedrooms, bathrooms, seo_h1, seo_title, meta_description";
     const sb = db(supabasePublic);
-    const [{ data: propertyRow }, { data: room }, { data: others }] = await Promise.all([
+    const [{ data: propertyRow }, roomResult, othersResult] = await Promise.all([
       db(supabaseAdmin)
         .from("properties")
         .select(PUBLIC_PROPERTY_FIELDS.join(", "))
         .limit(1)
         .maybeSingle(),
-      sb.from("room_types").select(fields).eq("slug", data.slug).maybeSingle(),
-      sb.from("room_types").select(fields).neq("slug", data.slug).order("base_rate"),
+      queryWithOptionalRoomLayout(fields, (columns) =>
+        selectColumns(sb.from("room_types"), columns).eq("slug", data.slug).maybeSingle(),
+      ),
+      queryWithOptionalRoomLayout(fields, (columns) =>
+        selectColumns(sb.from("room_types"), columns).neq("slug", data.slug).order("base_rate"),
+      ),
     ]);
+    const room = roomResult.data;
+    const others = othersResult.data;
 
     let roomCount = 0;
     if (room) {
@@ -1014,7 +1019,7 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
           }
         : property,
       room: withPublicBlurb(room),
-      others: (others ?? []).map((row) => withPublicBlurb(row)),
+      others: ((others ?? []) as any[]).map((row: any) => withPublicBlurb(row)),
       roomCount,
     };
   });

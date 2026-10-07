@@ -1785,8 +1785,10 @@ export type Database = {
         Row: {
           amenities: string[] | null
           base_rate: number
+          bathrooms: number
           bed_size: string | null
           bed_type: string | null
+          bedrooms: number
           capacity: number
           created_at: string
           description: string | null
@@ -1813,8 +1815,10 @@ export type Database = {
         Insert: {
           amenities?: string[] | null
           base_rate?: number
+          bathrooms?: number
           bed_size?: string | null
           bed_type?: string | null
+          bedrooms?: number
           capacity?: number
           created_at?: string
           description?: string | null
@@ -1841,8 +1845,10 @@ export type Database = {
         Update: {
           amenities?: string[] | null
           base_rate?: number
+          bathrooms?: number
           bed_size?: string | null
           bed_type?: string | null
+          bedrooms?: number
           capacity?: number
           created_at?: string
           description?: string | null

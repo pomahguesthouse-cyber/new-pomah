@@ -1,17 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic } from "@/integrations/supabase/client.server";
+import { PUBLIC_LISTED_ROOM_TYPE_COLUMNS, queryWithOptionalRoomLayout, selectColumns } from "@/lib/room-layout";
 import { toPublicSettings } from "@/public/lib/public-settings";
 
 async function handle(): Promise<Response> {
   try {
     const [{ data: propertyData }, { data: roomTypesRaw }] = await Promise.all([
       supabasePublic.rpc("get_public_property" as never),
-      supabasePublic
-        .from("room_types")
-        .select(
-          "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, images, rooms(id)",
-        )
-        .order("base_rate"),
+      queryWithOptionalRoomLayout(PUBLIC_LISTED_ROOM_TYPE_COLUMNS, (columns) =>
+        selectColumns(supabasePublic.from("room_types"), columns).order("base_rate"),
+      ),
     ]);
 
     const property = toPublicSettings(propertyData);

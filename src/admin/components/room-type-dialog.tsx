@@ -64,6 +64,8 @@ export type ManagedRoomType = {
   bed_size?: string | null;
   floor_info?: string | null;
   size_sqm?: number | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
   capacity?: number | null;
   extrabed_capacity?: number | null;
   extrabed_rate?: number | null;
@@ -107,6 +109,8 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   const [bedSize, setBedSize] = React.useState("");
   const [floorInfo, setFloorInfo] = React.useState("");
   const [capacity, setCapacity] = React.useState(2);
+  const [bedrooms, setBedrooms] = React.useState(1);
+  const [bathrooms, setBathrooms] = React.useState(1);
   const [extrabedCapacity, setExtrabedCapacity] = React.useState(0);
   const [extrabedRate, setExtrabedRate] = React.useState(0);
   const [baseRate, setBaseRate] = React.useState(0);
@@ -184,6 +188,8 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setBedSize(roomType.bed_size ?? "");
       setFloorInfo(roomType.floor_info ?? "");
       setCapacity(roomType.capacity ?? 2);
+      setBedrooms(roomType.bedrooms ?? 1);
+      setBathrooms(roomType.bathrooms ?? 1);
       setExtrabedCapacity(roomType.extrabed_capacity ?? 0);
       setExtrabedRate(Number(roomType.extrabed_rate ?? 0));
       setBaseRate(Number(roomType.base_rate ?? 0));
@@ -210,6 +216,8 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setBedSize("");
       setFloorInfo("");
       setCapacity(2);
+      setBedrooms(1);
+      setBathrooms(1);
       setExtrabedCapacity(0);
       setExtrabedRate(0);
       setBaseRate(0);
@@ -235,6 +243,8 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
         bed_size: bedSize.trim() || null,
         floor_info: floorInfo.trim() || null,
         size_sqm: sizeSqm === "" ? null : Number(sizeSqm),
+        bedrooms: Number(bedrooms) || 1,
+        bathrooms: Number(bathrooms) || 1,
         capacity: Number(capacity) || 1,
         extrabed_capacity: Number(extrabedCapacity) || 0,
         extrabed_rate: Number(extrabedRate) || 0,
@@ -249,11 +259,17 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
         meta_description: seoMeta.trim() || null,
       };
       let typeId: string | undefined = roomType?.id;
+      let layoutSaved = true;
       if (mode === "edit" && roomType) {
-        await fnUpdate({ data: { id: roomType.id, ...payload } });
+        const res = await fnUpdate({ data: { id: roomType.id, ...payload } });
+        layoutSaved = res?.layoutSaved !== false;
       } else {
         const res = await fnCreate({ data: payload });
         typeId = res?.id;
+        layoutSaved = res?.layoutSaved !== false;
+      }
+      if (!layoutSaved) {
+        toast.warning("Jumlah kamar tidur dan kamar mandi belum tersimpan. Jalankan migration database terlebih dahulu.");
       }
       if (typeId) {
         await fnSetNumbers({ data: { room_type_id: typeId, numbers: roomNumbers } });
@@ -351,6 +367,14 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                     value={capacity}
                     onValueChange={setCapacity}
                   />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Kamar tidur</Label>
+                  <NumericInput min={1} max={20} emptyValue={1} value={bedrooms} onValueChange={setBedrooms} />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Kamar mandi</Label>
+                  <NumericInput min={1} max={20} emptyValue={1} value={bathrooms} onValueChange={setBathrooms} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Extrabed</Label>

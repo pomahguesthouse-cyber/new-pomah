@@ -27,6 +27,7 @@
     "test:child-age-guest-count": "tsx scripts/test-child-age-guest-count.ts",
     "test:guest-thread-oct3": "tsx scripts/test-guest-thread-oct3.ts",
     "test:numeric-input": "tsx scripts/test-numeric-input.ts",
+    "test:room-layout": "tsx scripts/test-room-layout.ts",
     "test:chatbot-consistency": "tsx scripts/test-chatbot-consistency-regressions.ts",
     "test:booking-form-followup": "tsx scripts/test-booking-form-followup.ts",
     "test:manager-pricing-command": "tsx scripts/test-manager-pricing-command.ts",
