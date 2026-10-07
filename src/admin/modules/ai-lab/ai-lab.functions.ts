@@ -152,13 +152,16 @@ export const AGENT_DEFAULTS: Record<string, string> = {
     "Hari ini tanggal {{TODAY}} (format YYYY-MM-DD: {{TODAY_RAW}}).\n\n" +
     "{{ROOM_DATA}}\n\n" +
     "TARIF LIVE: Gunakan tool `check_room_availability` untuk menampilkan ketersediaan sekaligus harga per malam secara real-time. SELALU panggil tool ini saat tamu menanyakan harga untuk tanggal tertentu — jangan pernah menebak tarif dari data statis.\n\n" +
-    "KONVERSI KATA TANGGAL RELATIF ke YYYY-MM-DD dengan berhitung dari tanggal hari ini ({{TODAY_RAW}}):\n" +
+    "KONVERSI KATA TANGGAL RELATIF ke YYYY-MM-DD dengan berhitung dari tanggal hari ini ({{TODAY_RAW}}) dan kalender WIB:\n" +
     "• 'hari ini' → {{TODAY_RAW}}\n" +
     "• 'besok' → hitung tanggal hari ini + 1 hari\n" +
     "• 'lusa' → hitung tanggal hari ini + 2 hari\n" +
-    "• 'minggu depan' → hitung tanggal hari ini + 7 hari\n" +
-    "• 'akhir minggu ini' → tanggal Sabtu/Minggu terdekat dari hari ini\n" +
-    "Lakukan perhitungan kalender secara akurat. Jika hanya satu tanggal disebut, anggap menginap 1 malam.\n\n" +
+    "• satu nama hari (senin–minggu) → check-in hari terdekat itu, 1 malam. Hari ini sebelum pukul 21:00 WIB = malam ini; pada/setelah 21:00 = hari yang sama minggu depan\n" +
+    "• 'X malam Y' → check-in X, check-out Y. 'malam minggu'/'malming' = Sabtu→Minggu. 'malam sabtu' = Jumat→Sabtu\n" +
+    "• 'weekend' / 'akhir pekan' / 'akhir minggu' → Sabtu/Minggu terdekat\n" +
+    "• 'Sabtu depan' dan 'minggu depan' ambigu — konfirmasi ke tamu, jangan menebak +7 hari\n" +
+    "• tanggal angka selalu menang atas kata relatif\n" +
+    "Echo tanggal yang dipakai, contoh 'Sabtu–Minggu, 10–11 Oktober 2026'. Jika hanya satu tanggal disebut, anggap menginap 1 malam.\n\n" +
     "CARA MENYAJIKAN TARIF: Tampilkan nama kamar, harga per malam, jumlah tersedia (✅ ada / ❌ penuh). Hitung total untuk jumlah malam bila tamu menyebut durasi.\n\n" +
     "DISKON & PAKET: Jika ada promo, sampaikan dengan antusias. Jika tidak ada info promo di SOP, jangan mengarang — katakan bahwa tarif yang ditampilkan adalah tarif terbaik saat ini.\n\n" +
     "AJAKAN BOOKING: Setelah memberi info harga, selalu tawarkan: 'Mau Kakak langsung pesan kamar ini? Saya bisa bantu proses bookingnya.'\n\n" +

@@ -13,6 +13,7 @@
  */
 
 import { fmtDateID } from "@/lib/date";
+import { formatTodayLine } from "@/lib/id-date";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
@@ -131,7 +132,7 @@ function buildScaffold(ctx: AgentContext): Scaffold {
   return {
     persona,
     propName,
-    todayLine:   `Hari ini tanggal ${fmtDateID(today)} (format YYYY-MM-DD: ${today}).`,
+    todayLine:   formatTodayLine(today),
     todayRaw:    today,
     roomSummary: roomLines.length ? `Daftar tipe kamar dan tarif dasar:\n${roomLines.join("\n")}` : "",
   };
@@ -141,7 +142,7 @@ function buildScaffold(ctx: AgentContext): Scaffold {
 function applyCustomInstructions(custom: string, s: Scaffold): string {
   return custom
     .replace(/\{\{PROPERTY_NAME\}\}/g, s.propName)
-    .replace(/\{\{TODAY\}\}/g, s.todayLine.replace(/^Hari ini tanggal /, "").split(" (")[0])
+    .replace(/\{\{TODAY\}\}/g, fmtDateID(s.todayRaw))
     .replace(/\{\{TODAY_RAW\}\}/g, s.todayRaw)
     .replace(/\{\{ROOM_DATA\}\}/g, s.roomSummary);
 }
@@ -181,9 +182,14 @@ function buildGuestPrompt(s: Scaffold): string {
       "ke Front Office/admin, bukan menebak nominal.",
 
 
-    "KONVERSI KATA TANGGAL RELATIF ke YYYY-MM-DD dari hari ini (" + s.todayRaw + "): " +
-      "'hari ini' → " + s.todayRaw + "; 'besok' → +1 hari; 'lusa' → +2 hari; " +
-      "'minggu depan' → +7 hari; 'akhir minggu ini' → Sabtu/Minggu terdekat. " +
+    "KONVERSI KATA TANGGAL RELATIF ke YYYY-MM-DD dari kalender WIB di atas (hari ini " + s.todayRaw + "): " +
+      "'hari ini' → " + s.todayRaw + "; 'besok' → +1 hari; 'lusa' → +2 hari. " +
+      "Satu nama hari = check-in hari terdekat, 1 malam (hari ini sebelum pukul 21:00 WIB = malam ini; " +
+      "pada/setelah 21:00 = hari yang sama minggu depan). " +
+      "'X malam Y' = check-in X, check-out Y. 'malam minggu'/'malming' = Sabtu→Minggu. " +
+      "'malam sabtu' = Jumat→Sabtu. 'weekend'/'akhir pekan'/'akhir minggu' = Sabtu→Minggu terdekat. " +
+      "'Sabtu depan' dan 'minggu depan' ambigu: konfirmasi ke tamu, jangan menebak. " +
+      "Tanggal angka selalu menang atas kata relatif. Echo tanggal yang dipakai, contoh 'Sabtu–Minggu, 10–11 Oktober 2026'. " +
       "Perhatikan batas akhir bulan. Bila hanya satu tanggal disebut, anggap menginap 1 malam.",
 
     "CARA MENYAJIKAN TARIF: Nama kamar + harga per malam + jumlah tersedia (✅ ada / ❌ penuh). " +

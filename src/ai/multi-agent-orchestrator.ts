@@ -23,7 +23,12 @@ import type {
   AgentKey,
   IntentCategory,
 } from "./agents/types";
-import { mentionsExplicitDateSignal } from "@/lib/id-date";
+import {
+  isRelativeDayResolution,
+  mentionsExplicitDateSignal,
+  nowForStayParsing,
+  resolveRelativeDayRange,
+} from "@/lib/id-date";
 import { classifyIntent } from "./router/intent-classifier";
 import { routeToAgent } from "./router/agent-router";
 import { getAgent } from "./agents/registry";
@@ -1264,6 +1269,19 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
     lastTopic: resolved.topic ?? stateRecord.last_topic ?? null,
     roomTypeNames: input.toolCtx.rooms.map((r) => r.name),
   });
+  const stayForIntent = resolveRelativeDayRange(
+    lastUserMsg,
+    nowForStayParsing(typeof input.toolCtx.today === "string" ? input.toolCtx.today : undefined),
+  );
+  if (
+    classified.category === "general" &&
+    stayForIntent &&
+    isRelativeDayResolution(stayForIntent.reason)
+  ) {
+    classified.category = "availability_check";
+    classified.confidence = Math.max(classified.confidence, 0.85);
+    classified.matchedTerms = [...classified.matchedTerms, stayForIntent.reason ?? "day-name"];
+  }
   console.info(
     `[MultiAgent] Intent: ${classified.category} (confidence: ${classified.confidence.toFixed(2)}) ` +
       `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,

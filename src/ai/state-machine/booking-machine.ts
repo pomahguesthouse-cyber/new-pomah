@@ -29,6 +29,7 @@ import {
   type RoomStock,
 } from "./capacity-alternatives";
 import { todayWIB } from "@/lib/date";
+import { nowForStayParsing, resolveRelativeDayRange } from "@/lib/id-date";
 import { extractRequestedExtraBeds } from "./extra-bed-parser";
 
 export type BookingState =
@@ -306,6 +307,16 @@ function formatDateId(iso: string): string {
 }
 
 function parseDateUpdate(input: string, todayWIB: string): { checkIn: string; checkOut: string; nights: number } | null {
+  const resolvedStay = resolveRelativeDayRange(input, nowForStayParsing(todayWIB));
+  if (resolvedStay) {
+    if (resolvedStay.needsConfirm) return null;
+    return {
+      checkIn: resolvedStay.checkIn,
+      checkOut: resolvedStay.checkOut,
+      nights: countNights(resolvedStay.checkIn, resolvedStay.checkOut),
+    };
+  }
+
   const text = input.toLowerCase();
   let checkInDate = new Date(todayWIB);
   let nights = 1;

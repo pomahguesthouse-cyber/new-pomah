@@ -25,6 +25,7 @@ import {
   type GalleryRoom,
 } from "../src/services/wa-autoreply/media-fast-path";
 import { isMediaRequest, isViewRoomRequest } from "../src/services/wa-autoreply/message-parsers";
+import { classifyIntent } from "../src/ai/router/intent-classifier";
 import { isBrochureRequest } from "../src/services/reply-postprocess";
 import { evolutionInboxPollDecision } from "../src/services/evolution-inbox-gate";
 import {
@@ -371,6 +372,56 @@ assert.equal(evolutionInboxPollDecision({ EVOLUTION_INBOX_POLL_ENABLED: "false" 
 const pollSource = fs.readFileSync("src/services/evolution-inbox-poll.service.ts", "utf8");
 assert.ok(pollSource.includes("evolutionInboxPollDecision"));
 assert.ok(!pollSource.includes("delete from"), "kode Evolution tidak dihapus");
+
+const brochurePhrases = [
+  "boleh difotokan kak?",
+  "difotoin dong",
+  "fotoin kamarnya kak",
+  "kirim foto",
+  "lihat kamarnya",
+  "boleh liat kamarnya",
+  "ada brosur?",
+  "minta poto",
+  "bisa difoto kamarnya",
+  "pap kamarnya kak",
+  "ada gambar kamar?",
+  "foto2 kamar",
+];
+for (const phrase of brochurePhrases) {
+  const plan = planMediaFastPath(inbound(phrase), rooms);
+  assert.equal(plan?.kind, "brochure", `"${phrase}" harus mengirim brosur`);
+  assert.equal(isMediaRequest(phrase), true, `"${phrase}" adalah permintaan media`);
+  assert.equal(isBrochureRequest(phrase), true, `"${phrase}" menempelkan brosur`);
+}
+
+for (const phrase of ["kenapa single gak ada di brosur?", "boleh foto-foto di area taman?"]) {
+  assert.equal(planMediaFastPath(inbound(phrase), rooms), null, `"${phrase}" bukan fast-path brosur`);
+  assert.equal(isMediaRequest(phrase), false, `"${phrase}" tidak boleh jadi media_request`);
+  assert.equal(isBrochureRequest(phrase), false, `"${phrase}" tidak menempelkan brosur`);
+}
+
+const deluxePhotos = planMediaFastPath(inbound("ada fotonya ga"), rooms, {
+  roomType: "Deluxe",
+  brochureAlreadySent: true,
+});
+assert.equal(deluxePhotos?.kind, "room_photos");
+if (deluxePhotos?.kind === "room_photos") {
+  assert.equal(deluxePhotos.roomType, "Deluxe");
+}
+
+assert.equal(
+  planMediaFastPath(inbound("minta fotonya, sama harganya berapa"), rooms),
+  null,
+  "foto + harga ditangani AI, bukan fast-path brosur saja",
+);
+assert.equal(isMediaRequest("minta fotonya, sama harganya berapa"), true);
+
+const affixed = await classifyIntent("boleh difotokan kak?");
+assert.equal(affixed.category, "media_request");
+const brochureWhy = await classifyIntent("kenapa single gak ada di brosur?");
+assert.notEqual(brochureWhy.category, "media_request");
+const ownPhoto = await classifyIntent("boleh foto-foto di area taman?");
+assert.notEqual(ownPhoto.category, "media_request");
 
 console.log(
   "✓ meta guest fast-path: ack waits 3s, photo gate, webp remap, evolution poll gated",

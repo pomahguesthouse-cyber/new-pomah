@@ -1198,7 +1198,10 @@ export async function executeAutoreplyForPhone(
   // supaya fast-path availability tidak menelan permintaan fotonya.
   if (!reply && !isManager && lastMessage) {
     try {
-      const mediaPlan = planMediaFastPath(rollingMessages, (rooms ?? []) as any[]);
+      const contextRoom = roomTypeFromConversation(bookingState);
+      const mediaPlan = planMediaFastPath(rollingMessages, (rooms ?? []) as any[], {
+        roomType: contextRoom,
+      });
       const mediaOrchResult = (toolsUsed: string[]) => ({
         agentKey: "front-office",
         intent: "media_request",
@@ -1253,8 +1256,18 @@ export async function executeAutoreplyForPhone(
           orchResult = mediaOrchResult(["brochure-fast-path"]);
           console.info(`[Autoreply] Media fast-path brochure PDF for ${phone.slice(-6)}`);
         } else if (outcome.status === "already_sent") {
-          adoptReply(MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY);
-          orchResult = mediaOrchResult(["brochure-fast-path"]);
+          const roomPlan = contextRoom
+            ? planMediaFastPath(rollingMessages, (rooms ?? []) as any[], {
+                roomType: contextRoom,
+                brochureAlreadySent: true,
+              })
+            : null;
+          if (roomPlan?.kind === "room_photos" && (await runRoomPhotoPlan(roomPlan))) {
+            // Foto tipe yang sedang dibahas, bukan ulang "brosur sudah dikirim".
+          } else {
+            adoptReply(MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY);
+            orchResult = mediaOrchResult(["brochure-fast-path"]);
+          }
         } else if (outcome.status === "failed") {
           // Dokumen ditolak (mis. Meta 131053 / URL tak terjangkau): kirim teks
           // dengan tautan brosur supaya tamu tetap bisa membukanya.
@@ -3083,6 +3096,45 @@ export async function sendFailureFallbackToGuests(): Promise<{
 
 
   return { notified };
+}
+
+function roomTypeFromConversation(state: {
+  last_entity?: Record<string, unknown> | null;
+  slots?: Record<string, unknown> | null;
+  context?: unknown;
+} | null | undefined): string | undefined {
+  if (!state) return undefined;
+  const asText = (value: unknown): string | undefined =>
+    typeof value === "string" && value.trim() ? value.trim() : undefined;
+
+  const slots = state.slots ?? {};
+  const fromSlots =
+    asText(slots.partialRoomType) ??
+    asText(slots.roomType) ??
+    asText(slots.room_type) ??
+    asText(slots.roomName);
+  if (fromSlots) return fromSlots;
+
+  const entity = state.last_entity;
+  if (entity && typeof entity === "object") {
+    const fromEntity =
+      asText(entity.label) ??
+      asText(entity.name) ??
+      asText(entity.roomType) ??
+      asText(entity.room_type);
+    if (fromEntity) return fromEntity;
+  }
+
+  if (state.context && typeof state.context === "object") {
+    const bag = state.context as Record<string, unknown>;
+    return (
+      asText(bag.selectedRoomType) ??
+      asText(bag.requestedRoomType) ??
+      asText(bag.roomName) ??
+      asText(bag.roomType)
+    );
+  }
+  return undefined;
 }
 
 function countConsecutiveInbound(messages: Array<{ direction: string; body: string }>): number {

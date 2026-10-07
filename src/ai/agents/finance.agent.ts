@@ -17,7 +17,7 @@
  * keep guest from invoking manager-only tools.
  */
 
-import { fmtDateID } from "@/lib/date";
+import { formatTodayLine } from "@/lib/id-date";
 import type { AgentDefinition, AgentContext } from "./types";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
@@ -159,7 +159,7 @@ function buildScaffold(ctx: AgentContext): Scaffold {
     persona,
     propName,
     bankInfo,
-    todayLine: `Hari ini tanggal ${fmtDateID(today)}.`,
+    todayLine: formatTodayLine(today),
   };
 }
 

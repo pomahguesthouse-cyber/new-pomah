@@ -24,6 +24,7 @@ import {
   isTrivialSocialMessage,
   isVeryShortMessage,
 } from "./message-gates";
+import { GUEST_PHOTO_WORD_RE, isGuestMediaExcluded } from "@/lib/guest-media-request";
 
 // ─── Rule definitions ─────────────────────────────────────────────────────────
 
@@ -142,7 +143,7 @@ export const RULES: IntentRule[] = [
     category: "media_request",
     weight:   8,
     patterns: [
-      /\b(foto|photo|fotonya|gambar|gambarnya|pict?ure|pic|image)\b/i,
+      GUEST_PHOTO_WORD_RE,
       /\b(brosur|brochure|katalog|catalog|pricelist|price list|daftar harga bergambar)\b/i,
       /\b(video|videonya|reels?|penampakan|nampakan|visual)\b/i,
       /\b(virtual tour|tour 360|tur 360|360|walkthrough|walk through|lihat kamar(?:nya)? langsung)\b/i,
@@ -596,6 +597,12 @@ export async function classifyIntent(
         matched.set(rule.category, terms);
       }
     }
+  }
+
+  // Pertanyaan isi brosur / izin memotret sendiri bukan permintaan kirim media.
+  if (isGuestMediaExcluded(text)) {
+    scores.delete("media_request");
+    matched.delete("media_request");
   }
 
   // Pick highest score + runner-up

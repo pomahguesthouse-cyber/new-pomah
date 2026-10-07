@@ -1,13 +1,13 @@
-import { nextDay } from "@/lib/date";
 // Primitif tanggal Indonesia hidup di @/lib/id-date — satu sumber kebenaran
 // yang juga dipakai availability.tool, orchestrator, dan slot extractor
 // (audit 7 Agu 2026 — B6). Di-re-export supaya pemanggil lama tidak berubah.
 import {
-  makeIsoDate,
   mentionsExplicitDateSignal,
+  nowForStayParsing,
   resolveMonthName,
-  resolveYear,
+  resolveRelativeDayRange,
 } from "@/lib/id-date";
+import { GUEST_MEDIA_WORD_RE, isGuestMediaExcluded } from "@/lib/guest-media-request";
 import { readGuestCount } from "@/lib/guest-party";
 
 export { mentionsExplicitDateSignal, resolveMonthName };
@@ -21,76 +21,13 @@ export type ParsedGuestCount = {
 export function parseAvailabilityDateRange(
   message: string,
   today: string,
+  now?: Date | string,
 ): { checkIn: string; checkOut: string } | null {
-  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
-  if (!text) return null;
-
-  const todayMatch = /\b(malam ini|nanti malam|hari ini|today)\b/i.test(text);
-  if (todayMatch) return { checkIn: today, checkOut: nextDay(today) };
-  if (/\b(besok|tomorrow)\b/i.test(text)) {
-    const checkIn = nextDay(today);
-    return { checkIn, checkOut: nextDay(checkIn) };
-  }
-  if (/\blusa\b/i.test(text)) {
-    const checkIn = nextDay(nextDay(today));
-    return { checkIn, checkOut: nextDay(checkIn) };
-  }
-
-  // CATATAN: semua pola di bawah memakai `matchAll` (global) dan `continue`,
-  // BUKAN `match` + bail-out. Insiden 7 Agu 2026: "masih ada 1 kamar untuk
-  // tanggal 8 Agustus 2026" gagal di-parse karena kandidat pertama "1 kamar"
-  // bukan bulan lalu parser langsung menyerah — bot akhirnya memakai tanggal
-  // sesi lama (18–19 September) dan menjawab tanggal yang salah.
-
-  // Hari(-hari) diikuti nama bulan, mis. "18-19 September" atau "5 Oktober".
-  for (const m of text.matchAll(
-    /\b(\d{1,2})\s*(?:-|–|—|sampai|sd|s\/d|to)\s*(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/gi,
-  )) {
-    const [, d1Raw, d2Raw, monthName, yearRaw] = m;
-    const month = resolveMonthName(monthName);
-    if (!month) continue;
-    const year = resolveYear(month, yearRaw, today);
-    const checkIn = makeIsoDate(Number(d1Raw), month, year);
-    const checkOut = makeIsoDate(Number(d2Raw), month, year);
-    if (checkIn && checkOut && checkOut > checkIn) return { checkIn, checkOut };
-  }
-
-  // Nama bulan diikuti hari(-hari), mis. "september tanggal 18-19" atau
-  // "bulan september tangga 18-19" (termasuk typo "tangga" tanpa 'l').
-  for (const m of text.matchAll(
-    /\b([a-z]+)\s+(?:tanggal|tangga|tgl\.?)?\s*(\d{1,2})\s*(?:(?:-|–|—|sampai|sd|s\/d|to)\s*(\d{1,2}))?\b/gi,
-  )) {
-    const [, monthName, d1Raw, d2Raw] = m;
-    const month = resolveMonthName(monthName);
-    if (!month) continue;
-    const year = resolveYear(month, undefined, today);
-    const checkIn = makeIsoDate(Number(d1Raw), month, year);
-    if (!checkIn) continue;
-    if (d2Raw) {
-      const checkOut = makeIsoDate(Number(d2Raw), month, year);
-      if (checkOut && checkOut > checkIn) return { checkIn, checkOut };
-      continue;
-    }
-    return { checkIn, checkOut: nextDay(checkIn) };
-  }
-
-  // Hari diikuti nama bulan, mis. "8 Agustus 2026".
-  for (const m of text.matchAll(/\b(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/gi)) {
-    const [, dayRaw, monthName, yearRaw] = m;
-    const month = resolveMonthName(monthName);
-    if (!month) continue;
-    const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
-    if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
-  }
-
-  for (const m of text.matchAll(/\b(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2,4}))?\b/gi)) {
-    const [, dayRaw, monthRaw, yearRaw] = m;
-    const month = Number(monthRaw);
-    const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
-    if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
-  }
-
-  return null;
+  const resolved = resolveRelativeDayRange(message, nowForStayParsing(today, now));
+  // Tanggal ambigu ("minggu depan", "besok" dini hari) tidak boleh dipakai
+  // diam-diam oleh fast-path. Biarkan agent mengonfirmasi.
+  if (!resolved || resolved.needsConfirm) return null;
+  return { checkIn: resolved.checkIn, checkOut: resolved.checkOut };
 }
 
 /**
@@ -174,7 +111,12 @@ export function isPerRoomRentalClarification(message: string): boolean {
 }
 
 export function isAvailabilityNeedDatesQuestion(message: string, today: string): boolean {
-  return looksLikeAvailabilityQuestion(message) && !parseAvailabilityDateRange(message, today);
+  if (!looksLikeAvailabilityQuestion(message)) return false;
+  const resolved = resolveRelativeDayRange(message, nowForStayParsing(today));
+  // Sudah ada tanggal, atau tanggalnya ambigu dan harus dikonfirmasi agent
+  // (bukan template "tanggal berapa?" yang menelan konfirmasinya).
+  if (resolved) return false;
+  return true;
 }
 
 export function isAvailabilitySourceContext(message: string): boolean {
@@ -361,9 +303,6 @@ export function looksLikeBookingInquiry(message: string): boolean {
  * di service dan tidak dikenal router, sehingga permintaan foto bisa mendarat
  * di Pricing Agent dan dijawab "kami belum bisa menampilkan gambar kamar".
  */
-const MEDIA_REQUEST_RE =
-  /\b(foto|photo|fotonya|gambar|gambarnya|pic|pics|picture|image|brosur|brochure|katalog|catalog|video|videonya|reels?|penampakan|nampakan|virtual tour|tour 360|tur 360|walkthrough)\b/i;
-
 /**
  * "Lihat kamar" tanpa kata foto: "mau lihat kamar", "boleh melihat kamarnya",
  * "pengen liat kamar2nya", "show me the room", "contoh kamarnya".
@@ -391,7 +330,9 @@ export function isViewRoomRequest(message: string): boolean {
 }
 
 export function isMediaRequest(message: string): boolean {
-  return MEDIA_REQUEST_RE.test(message ?? "") || isViewRoomRequest(message ?? "");
+  const text = message ?? "";
+  if (isGuestMediaExcluded(text)) return false;
+  return GUEST_MEDIA_WORD_RE.test(text) || isViewRoomRequest(text);
 }
 
 /**
