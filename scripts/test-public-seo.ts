@@ -463,7 +463,8 @@ assert.match(lodgingJson, /"price":230000/);
 assert.match(lodgingJson, /family-suite-100/);
 assert.doesNotMatch(lodgingJson, /UNDIP|Simpang Lima|200000|300000/);
 assert.match(lodgingJson, /FAQPage/);
-assert.match(lodgingJson, /"latitude":-6.9936/);
+assert.match(lodgingJson, /"latitude":-7.0209/);
+assert.match(lodgingJson, /"longitude":110.3881/);
 
 const roomSchema = JSON.stringify(
   roomPageGraph({ name: "Kamar Single", slug: "kamar-single", base_rate: 175000, capacity: 1 }),

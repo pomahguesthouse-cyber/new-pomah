@@ -76,7 +76,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       rating: "4.8",
       reviewCount: "128",
       google_place_id: "ChIJL7O5z-VSdy4R90j2V95Rksw",
-      nearby_distance: "3.2 km (8 menit)",
+      nearby_distance: "5.9 km (16 menit)",
     },
     {
       name: "Kota Lama Semarang",
@@ -85,7 +85,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       rating: "4.9",
       reviewCount: "96",
       google_place_id: "ChIJO8C9WjBTdy4RI_1QJz1_Cbs",
-      nearby_distance: "4.5 km (12 menit)",
+      nearby_distance: "9.4 km (25 menit)",
     },
     {
       name: "Sam Poo Kong",
@@ -94,7 +94,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       rating: "4.7",
       reviewCount: "74",
       google_place_id: "ChIJW_Z73Z9Sdy4Rsx8B5Vp_1Wk",
-      nearby_distance: "2.8 km (7 menit)",
+      nearby_distance: "4.3 km (11 menit)",
     },
     {
       name: "Masjid Agung Jawa Tengah",
@@ -103,7 +103,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       rating: "4.8",
       reviewCount: "63",
       google_place_id: "ChIJa8wH40FSdy4RvA60D42eS5g",
-      nearby_distance: "5.1 km (15 menit)",
+      nearby_distance: "11.0 km (26 menit)",
     },
     {
       name: "Pantai Marina",
@@ -112,7 +112,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       rating: "4.6",
       reviewCount: "42",
       google_place_id: "ChIJt7P4kXVSdy4Re9r_Vf98_aQ",
-      nearby_distance: "7.4 km (18 menit)",
+      nearby_distance: "10.6 km (26 menit)",
     },
   ],
   culinary: [

@@ -206,7 +206,7 @@ export const getConversationalSeoData = createServerFn({ method: "GET" })
           { sender: "tamu", text: "lokasi guesthouse dekat dengan unnes sekaran kah?" },
           { sender: "tamu", text: "jarak ke unnes berapa menit naik motor ya?" },
         ],
-        suggested_answer: "Pomah Guesthouse berjarak sekitar 1,5 km dari kampus utama UNNES Sekaran, hanya membutuhkan waktu kurang lebih 5 menit berkendara.",
+        suggested_answer: "Pomah Guesthouse berjarak ±4,5 km dari kampus utama UNNES Sekaran, sekitar 10–15 menit berkendara.",
         status: "pending",
       },
       {
@@ -306,7 +306,7 @@ export const getProgrammaticPages = createServerFn({ method: "GET" })
     const { data } = await client.from("seo_generated_pages").select("*").order("slug");
 
     const fallback = [
-      { id: "p1", slug: "/guesthouse-dekat-unnes", title: "Guesthouse Semarang Dekat Kampus UNNES", meta_title: "Guesthouse Semarang Dekat UNNES - Booking Langsung Termurah", meta_description: "Cari penginapan atau guesthouse dekat UNNES Semarang? Pomah Guesthouse berjarak hanya 5 menit dari kampus utama UNNES Sekaran. Murah, bersih, dan berfasilitas lengkap.", published: true, created_at: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString() },
+      { id: "p1", slug: "/guesthouse-dekat-unnes", title: "Guesthouse Semarang Dekat Kampus UNNES", meta_title: "Guesthouse Semarang Dekat UNNES - Booking Langsung Termurah", meta_description: "Cari penginapan atau guesthouse dekat UNNES Semarang? Pomah Guesthouse berjarak ±4,5 km dari kampus utama UNNES Sekaran, sekitar 10–15 menit. Murah, bersih, dan berfasilitas lengkap.", published: true, created_at: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString() },
       { id: "p2", slug: "/hotel-rombongan-semarang", title: "Penginapan & Hotel Rombongan di Gunungpati Semarang", meta_title: "Penginapan Rombongan Gunungpati Semarang - Muat Parkir Bus", meta_description: "Akomodasi guesthouse terbaik untuk rombongan keluarga atau wisuda di Gunungpati Semarang. Menyediakan parkir bus luas, dapur bersama, dan suasana tenang.", published: false, created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString() },
     ];
 
@@ -338,7 +338,7 @@ export const generateProgrammaticPage = createServerFn({ method: "POST" })
     const payload = {
       slug,
       title,
-      content: `<section class="py-12 bg-white"><div class="max-w-4xl mx-auto px-4"><h1 class="text-4xl font-extrabold text-stone-900 tracking-tight text-center">${title}</h1><p class="mt-6 text-lg text-stone-600 leading-relaxed">${desc}</p><div class="mt-8 border-t border-stone-200 pt-8"><h2 class="text-2xl font-bold text-stone-900">Keunggulan Pomah Guesthouse</h2><ul class="mt-4 space-y-2 list-disc list-inside text-stone-600"><li>Hanya 5 Menit ke Universitas Negeri Semarang (UNNES)</li><li>Area Parkir Sangat Luas (Muat Bus Rombongan)</li><li>Dapur Bersama & Akses Wifi Cepat</li><li>Suasana Sunyi dan Asri</li></ul></div></div></section>`,
+      content: `<section class="py-12 bg-white"><div class="max-w-4xl mx-auto px-4"><h1 class="text-4xl font-extrabold text-stone-900 tracking-tight text-center">${title}</h1><p class="mt-6 text-lg text-stone-600 leading-relaxed">${desc}</p><div class="mt-8 border-t border-stone-200 pt-8"><h2 class="text-2xl font-bold text-stone-900">Keunggulan Pomah Guesthouse</h2><ul class="mt-4 space-y-2 list-disc list-inside text-stone-600"><li>Sekitar 4,5 km (10–15 menit) ke Universitas Negeri Semarang (UNNES) Sekaran</li><li>Area Parkir Sangat Luas (Muat Bus Rombongan)</li><li>Dapur Bersama & Akses Wifi Cepat</li><li>Suasana Sunyi dan Asri</li></ul></div></div></section>`,
       meta_title: `${title} - Booking Direct & Safe`,
       meta_description: desc.slice(0, 158),
       schema_markup: {
@@ -797,8 +797,8 @@ export const generateAndSaveLocalBusinessSchema = createServerFn({ method: "POST
       },
       "geo": {
         "@type": "GeoCoordinates",
-        "latitude": -7.0494,
-        "longitude": 110.3927
+        "latitude": -7.0209,
+        "longitude": 110.3881
       },
       "openingHoursSpecification": {
         "@type": "OpeningHoursSpecification",
