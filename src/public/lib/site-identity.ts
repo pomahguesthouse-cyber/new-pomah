@@ -3,13 +3,13 @@
  *
  * GOOGLE_BUSINESS_PROFILE_CID was not in the 27 Sep 2026 audit. Leave it
  * empty until the owner pastes the decimal CID from the Business Profile.
- * POMAH_GEO is an approximate Sampangan pin for schema.org and should be
- * confirmed against that same profile.
+ * POMAH_GEO is the OSM building "Pomah Guesthouse Dewi Sartika" No. 71
+ * (way 505563973), not an approximate Sampangan pin.
  */
 export const POMAH_NAME = "Pomah Guesthouse";
 export const POMAH_STREET = "Jl. Dewi Sartika IV No. 71";
 export const POMAH_LOCALITY = "Sampangan, Semarang";
-export const POMAH_POSTAL_CODE = "50232";
+export const POMAH_POSTAL_CODE = "50221";
 export const POMAH_REGION = "Jawa Tengah";
 /** Street line used in the footer, including the postal code. */
 export const POMAH_NAP_ADDRESS = `${POMAH_STREET}, ${POMAH_LOCALITY} ${POMAH_POSTAL_CODE}`;
@@ -19,8 +19,8 @@ export const POMAH_NAP_LINE = `${POMAH_NAME}, ${POMAH_NAP_ADDRESS}`;
 export const GOOGLE_BUSINESS_PROFILE_CID = "";
 
 export const POMAH_GEO = {
-  latitude: -6.9936,
-  longitude: 110.3987,
+  latitude: -7.0209,
+  longitude: 110.3881,
 };
 
 const FALLBACK_PHONE_DIGITS = "6285190986169";

@@ -73,8 +73,15 @@ assert.ok(hits("ada sarapan ga kak?", "faq_breakfast").toLowerCase().includes("b
 // Jarak ke landmark yang datanya pasti
 const akpelni = hits("dekat akpelni ya kak?", "faq_distance");
 assert.ok(akpelni.includes("AKPELNI") && akpelni.includes("5 menit"));
-assert.ok(hits("jauh ga dari unnes?", "faq_distance").includes("8 km"));
+const unnes = hits("jauh ga dari unnes?", "faq_distance");
+assert.ok(unnes.includes("4,5 km"));
+assert.ok(!unnes.includes("8 km"));
 assert.ok(hits("berapa menit ke simpang lima?", "faq_distance").length > 0);
+assert.ok(hits("jauh dari bandara ahmad yani?", "faq_distance").includes("9 km"));
+assert.ok(hits("berapa menit ke stasiun poncol?", "faq_distance").includes("7 km"));
+assert.ok(hits("dekat stasiun tawang ga?", "faq_distance").includes("20–25 menit"));
+assert.ok(hits("jarak ke lawang sewu?", "faq_distance").includes("6 km"));
+assert.ok(hits("jauh ga dari undip tembalang?", "faq_distance").includes("9,5 km"));
 
 // OTA
 assert.ok(hits("di agoda lebih murah ya?", "faq_ota").toLowerCase().includes("ota"));

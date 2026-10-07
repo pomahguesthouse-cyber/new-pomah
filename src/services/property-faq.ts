@@ -124,9 +124,14 @@ export const PROPERTY_AREA = "Sampangan, Semarang";
  */
 export const KNOWN_LANDMARKS: ReadonlyArray<{ re: RegExp; label: string; distance: string }> = [
   { re: /\bakpelni\b|\bpawiyatan\s+luhur\b/i, label: "AKPELNI", distance: "sekitar 5 menit berkendara — dekat sekali" },
-  { re: /\bunnes\b|\bsekaran\b|\buniversitas\s+negeri\s+semarang\b/i, label: "UNNES Sekaran", distance: "sekitar 8 km, kurang lebih 10–15 menit berkendara" },
+  { re: /\bunnes\b|\bsekaran\b|\buniversitas\s+negeri\s+semarang\b/i, label: "UNNES Sekaran", distance: "sekitar 4,5 km, kurang lebih 10–15 menit berkendara" },
   { re: /\bsimpang\s*lima\b|\bpusat\s+kota\b/i, label: "Simpang Lima / pusat kota", distance: "sekitar 15–20 menit berkendara" },
   { re: /\buntag\b|\btujuh\s+belas\s+agustus\b|\bfakultas\s+hukum\b/i, label: "Fakultas Hukum UNTAG", distance: "sekitar 1,9 km, kurang lebih 5 menit berkendara" },
+  { re: /\bahmad\s*yani\b|\bbandara\b/i, label: "Bandara Ahmad Yani", distance: "sekitar 9 km, kurang lebih 25–35 menit berkendara" },
+  { re: /\bponcol\b/i, label: "Stasiun Poncol", distance: "sekitar 7 km, kurang lebih 15–20 menit berkendara" },
+  { re: /\btawang\b/i, label: "Stasiun Tawang", distance: "sekitar 9 km, kurang lebih 20–25 menit berkendara" },
+  { re: /\blawang\s*sewu\b/i, label: "Lawang Sewu", distance: "sekitar 6 km, kurang lebih 12–17 menit berkendara" },
+  { re: /\bundip\b|\btembalang\b|\buniversitas\s+diponegoro\b/i, label: "UNDIP Tembalang", distance: "sekitar 9,5 km, kurang lebih 25–30 menit berkendara" },
 ];
 
 const idr = (n: number) => `Rp ${n.toLocaleString("id-ID")}`;
