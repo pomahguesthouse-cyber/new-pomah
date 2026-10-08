@@ -59,6 +59,7 @@
     "test:guest-resolver": "tsx scripts/test-guest-resolver.ts",
     "test:returning-guest-memory": "tsx scripts/test-returning-guest-memory.ts",
     "test:native-oauth": "tsx scripts/test-native-oauth.ts",
+    "test:booking-list-pdf": "tsx scripts/test-booking-list-pdf.ts",
     "test:wa-push-sql": "tsx scripts/test-wa-push-sql.ts",
     "test:wa-memory-sql": "tsx scripts/test-wa-memory-sql.ts",
     "android:icons": "python3 scripts/generate-android-icons.py",

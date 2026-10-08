@@ -27,10 +27,10 @@ import {
 } from "@/admin/functions/calendar.functions";
 import {
   downloadCsv,
-  openPrintView,
-  openBlankPrintWindow,
   type ExportRow,
 } from "@/admin/lib/booking-export";
+import { downloadBookingListPdf } from "@/admin/lib/booking-list-pdf-client";
+import { bookingListPdfMessage, formatDateId } from "@/admin/lib/booking-list-pdf-model";
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
 import { BlockRoomDialog } from "@/admin/components/block-room-dialog";
 import { Button } from "@/components/ui/button";
@@ -110,11 +110,14 @@ function calendarRowsToExport(bookings: any[], rooms: any[], roomTypes: any[]): 
   const typeById = new Map(roomTypes.map((t) => [t.id, t]));
   const byId = new Map<string, any>();
   for (const b of bookings) {
-    const entry = byId.get(b.id) ?? { ...b, _labels: [] as string[], _rates: [] as number[] };
+    const entry = byId.get(b.id) ?? { ...b, _labels: [] as string[], _types: [] as string[], _numbers: [] as string[], _rates: [] as number[] };
     const room = roomById.get(b.room_id);
     const type = typeById.get(b.room_type_id ?? room?.room_type_id);
     const name = type?.name ?? "?";
-    entry._labels.push(room?.number ? `${name} (${room.number})` : name);
+    const number = room?.number ? String(room.number) : "—";
+    entry._labels.push(number !== "—" ? `${name} (${number})` : name);
+    entry._types.push(name);
+    entry._numbers.push(number);
     entry._rates.push(Number(b.nightly_rate ?? 0));
     byId.set(b.id, entry);
   }
@@ -130,6 +133,8 @@ function calendarRowsToExport(bookings: any[], rooms: any[], roomTypes: any[]): 
       check_out: b.check_out ?? "",
       nights: nightsBetween(b.check_in, b.check_out),
       rooms: b._labels.join("; "),
+      room_types: b._types.join(", "),
+      room_numbers: b._numbers.join(", "),
       room_count: b._labels.length,
       adults: Number(b.adults ?? 0),
       children: Number(b.children ?? 0),
@@ -173,14 +178,6 @@ function CalendarPage() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-calendar"] });
 
   async function runExport(kind: "csv" | "pdf") {
-    let printWindow: Window | null = null;
-    if (kind === "pdf") {
-      printWindow = openBlankPrintWindow();
-      if (!printWindow) {
-        toast.error("Tidak bisa membuka tab cetak. Izinkan popup lalu coba lagi.");
-        return;
-      }
-    }
     setExporting(kind);
     try {
       const rows = calendarRowsToExport(
@@ -190,7 +187,6 @@ function CalendarPage() {
       );
       if (rows.length === 0) {
         toast.info("Tidak ada booking pada rentang tanggal ini.");
-        printWindow?.close();
         return;
       }
       const stamp = new Date().toISOString().slice(0, 10);
@@ -198,11 +194,17 @@ function CalendarPage() {
         downloadCsv(rows, `calendar_${from}_${to}_${stamp}`);
         toast.success(`CSV diunduh — ${rows.length} booking.`);
       } else {
-        openPrintView(rows, { filterSummary: `Kalender ${from} → ${to}`, targetWindow: printWindow });
-        toast.success("Dialog cetak terbuka — pilih Save as PDF.");
+        const generatedAt = new Date();
+        const result = await downloadBookingListPdf({
+          rows,
+          propertyName: "Pomah Guesthouse",
+          filterSummary: `Kalender ${formatDateId(from)} s/d ${formatDateId(to)}`,
+          generatedAt,
+        });
+        const message = bookingListPdfMessage(result, rows.length);
+        if (message) toast.success(message);
       }
     } catch (e) {
-      printWindow?.close();
       toast.error((e as Error).message ?? "Export gagal.");
     } finally {
       setExporting(null);

@@ -4,7 +4,9 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tansta
 import { toast } from "sonner";
 import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2, Receipt, FileDown, Printer, Loader2, ArrowUpDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { downloadCsv, openPrintView, openBlankPrintWindow, type ExportRow } from "@/admin/lib/booking-export";
+import { collectPages, downloadCsv, type ExportRow } from "@/admin/lib/booking-export";
+import { downloadBookingListPdf } from "@/admin/lib/booking-list-pdf-client";
+import { bookingListPdfMessage, describeBookingListFilters } from "@/admin/lib/booking-list-pdf-model";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -177,10 +179,11 @@ async function fetchBookings(args: { page: number; pageSize: number; status?: st
 function flattenExportRows(rows: any[]): ExportRow[] {
   return rows.map((b: any) => {
     const brs: any[] = Array.isArray(b.booking_rooms) ? b.booking_rooms : [];
-    const roomLabels = brs.map((br) => {
-      const name = br?.room_types?.name ?? "?";
-      const num = br?.rooms?.number;
-      return num ? `${name} (${num})` : name;
+    const typeLabels = brs.map((br) => br?.room_types?.name ?? "—");
+    const numberLabels = brs.map((br) => (br?.rooms?.number ? String(br.rooms.number) : "—"));
+    const roomLabels = typeLabels.map((name, index) => {
+      const num = numberLabels[index];
+      return num && num !== "—" ? `${name} (${num})` : name;
     });
     const checkIn = b.check_in as string;
     const checkOut = b.check_out as string;
@@ -190,7 +193,7 @@ function flattenExportRows(rows: any[]): ExportRow[] {
     const nightlyRates = brs.map((br) => Number(br?.nightly_rate ?? 0));
     return {
       reference_code: b.reference_code ?? "", guest_name: b.guests?.full_name ?? "", guest_email: b.guests?.email ?? "", guest_phone: b.guests?.phone ?? "",
-      check_in: checkIn ?? "", check_out: checkOut ?? "", nights, rooms: roomLabels.join("; "), room_count: brs.length,
+      check_in: checkIn ?? "", check_out: checkOut ?? "", nights, rooms: roomLabels.join("; "), room_types: typeLabels.join(", "), room_numbers: numberLabels.join(", "), room_count: brs.length,
       adults: Number(b.adults ?? 0), children: Number(b.children ?? 0), status: b.status, source: b.source ?? "", payment_status: b.payment_status ?? "",
       total_amount: total, paid_amount: paid, outstanding: Math.max(0, total - paid), nightly_rate_min: nightlyRates.length ? Math.min(...nightlyRates) : 0,
       nightly_rate_max: nightlyRates.length ? Math.max(...nightlyRates) : 0, created_at: b.created_at ?? "",
@@ -200,12 +203,24 @@ function flattenExportRows(rows: any[]): ExportRow[] {
 async function fetchExportRows(args: { status?: string; source?: string; search?: string; sortBy: SortKey; sortDir: SortDir }) {
   const search = sanitizeSearch(args.search);
   const guestIds = await getGuestIds(search);
-  let q = supabase.from("bookings").select(FULL_SELECT);
-  q = applyFilters(q, args.status, args.source, search, guestIds, true);
-  const res = await applySort(q, args.sortBy, args.sortDir).limit(5000);
-  if (res.error) throw res.error;
-  const rows = flattenExportRows(res.data ?? []);
-  return { rows, capped: rows.length >= 5000 };
+  let select = FULL_SELECT;
+  let includeRef = true;
+  const collected = await collectPages(async (from, to) => {
+    const run = async () => {
+      let q = supabase.from("bookings").select(select);
+      q = applyFilters(q, args.status, args.source, search, guestIds, includeRef);
+      return applySort(q, args.sortBy, args.sortDir).range(from, to);
+    };
+    let res = await run();
+    if (res.error && (res.error as { code?: string }).code === "42703" && select !== BASE_SELECT) {
+      select = BASE_SELECT;
+      includeRef = false;
+      res = await run();
+    }
+    if (res.error) throw res.error;
+    return (res.data ?? []) as any[];
+  });
+  return { rows: flattenExportRows(collected.rows), capped: collected.capped };
 }
 
 function BookingsPage() {
@@ -287,28 +302,30 @@ function BookingsPage() {
   });
 
   async function runExport(kind: "csv" | "pdf") {
-    let printWindow: Window | null = null;
-    if (kind === "pdf") {
-      printWindow = openBlankPrintWindow();
-      if (!printWindow) return toast.error("Tidak bisa membuka tab cetak. Izinkan popup untuk halaman ini lalu coba lagi.");
-    }
     setExporting(kind);
     try {
       const res = await fetchExportRows({ status: statusFilter, source: sourceFilter, search, sortBy, sortDir });
       const rows = res.rows;
-      if (rows.length === 0) { toast.info("Tidak ada booking yang cocok dengan filter saat ini."); printWindow?.close(); return; }
+      if (rows.length === 0) { toast.info("Tidak ada booking yang cocok dengan filter saat ini."); return; }
       const stamp = new Date().toISOString().slice(0, 10);
       const stem = `bookings_${stamp}`;
       if (kind === "csv") {
         downloadCsv(rows, stem);
         toast.success(`CSV diunduh — ${rows.length} baris.`);
       } else {
-        openPrintView(rows, { filterSummary: "Daftar booking", targetWindow: printWindow });
-        toast.success("Dialog cetak terbuka — pilih Save as PDF untuk simpan ke file.");
+        const generatedAt = new Date();
+        const result = await downloadBookingListPdf({
+          rows,
+          propertyName: "Pomah Guesthouse",
+          filterSummary: describeBookingListFilters({ status: statusFilter, source: sourceFilter, search }),
+          generatedAt,
+          capped: res.capped,
+        });
+        const message = bookingListPdfMessage(result, rows.length);
+        if (message) toast.success(message);
       }
       if (res.capped) toast.warning("Hasil dipotong di 5000 baris. Persempit filter untuk export lebih spesifik.");
     } catch (e) {
-      printWindow?.close();
       toast.error((e as Error).message ?? "Export gagal.");
     } finally {
       setExporting(null);
