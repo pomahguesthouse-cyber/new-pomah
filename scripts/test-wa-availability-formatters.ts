@@ -90,7 +90,7 @@ assert.ok(suitable);
 assert.equal(suitable.intent, "deterministic_availability_guest_count");
 assert.match(suitable.reply, /2 dewasa dan 1 anak/);
 assert.match(suitable.reply, /Family: 2 kamar tersedia/);
-assert.match(suitable.reply, /butuh 1 extra bed @ Rp75\.000\/malam/);
+assert.match(suitable.reply, /bisa tambah extra bed Rp75\.000\/malam, opsional/);
 assert.doesNotMatch(suitable.reply, /Single: 1 kamar tersedia/);
 
 const overCapacityRaw = JSON.stringify({

@@ -1,10 +1,24 @@
-const EXTRA_BED_TERM = "(?:extra\\s*bed|extrabed|kasur\\s+tambahan|bed\\s+tambahan)";
-const REMOVE_EXTRA_BED_RE = new RegExp(
-  "\\b(?:tanpa|hapus|hilangkan|batalkan|tidak\\s+(?:jadi|perlu|pakai)|nggak\\s+(?:jadi|perlu|pakai)|ga\\s+(?:jadi|perlu|pakai))\\s+" +
-    EXTRA_BED_TERM +
-    "\\b",
+const EXTRA_BED_TERM =
+  "(?:extra\\s*bed(?:\\s*nya)?|extrabed(?:nya)?|kasur\\s+tambahan|bed\\s+tambahan|\\beb\\b)";
+
+/**
+ * Penolakan bisa di depan atau di belakang istilah extra bed.
+ * "ga usah pakai extra bed" harus kalah dari pola permintaan "pakai extra bed".
+ */
+const DECLINE =
+  "(?:tanpa|hapus(?:kan)?|hilangkan|batalkan|" +
+  "gausah|nggausah|ngausah|gakusah|" +
+  "(?:tidak|tak|nggak|ngga|enggak|engga|ndak|gak|ga|gk)\\s+(?:usah|jadi|perlu|pakai|pake))";
+
+const DECLINE_BEFORE_RE = new RegExp(
+  "\\b(?:" + DECLINE + ")\\b(?:\\s+\\w+){0,4}?\\s+" + EXTRA_BED_TERM + "\\b",
   "i",
 );
+const DECLINE_AFTER_RE = new RegExp(
+  "\\b" + EXTRA_BED_TERM + "\\b(?:\\s+\\w+){0,4}?\\s+\\b(?:" + DECLINE + ")\\b",
+  "i",
+);
+const EXTRA_BED_MENTION_RE = new RegExp("\\b" + EXTRA_BED_TERM + "\\b", "i");
 const EXTRA_BED_QUESTION_RE =
   /\?|\b(?:berapa|harga|tarif|biaya|apakah|ada|tersedia|bisa)\b/i;
 
@@ -28,17 +42,36 @@ function parseCount(raw: string): number | undefined {
   return value !== undefined && value >= 0 && value <= 10 ? value : undefined;
 }
 
+export function messageMentionsExtraBed(message: string): boolean {
+  return EXTRA_BED_MENTION_RE.test(message);
+}
+
+/** Kalimat tawaran extra bed yang opsional, untuk tool availability dan balasan tamu. */
+export function formatOptionalExtraBedOffer(count: number, ratePerNight: number): string {
+  const n = Math.max(0, Math.floor(count));
+  const label = n > 1 ? `${n} extra bed` : "extra bed";
+  if (ratePerNight > 0) {
+    const rp = `Rp${Math.round(ratePerNight).toLocaleString("id-ID")}`;
+    return `bisa tambah ${label} ${rp}/malam, opsional`;
+  }
+  return `bisa tambah ${label}, opsional`;
+}
+
 /**
  * Extract an explicitly requested extra-bed quantity.
  *
- * Returns undefined for informational questions so "harga extra bed berapa?"
- * never mutates booking data. An affirmative request without a count defaults
- * to one unit.
+ * Returns 0 when the guest declines (hapus / gausah / tanpa / tidak usah, di
+ * depan atau di belakang "extra bed"). Returns undefined for informational
+ * questions so "harga extra bed berapa?" never mutates booking data. An
+ * affirmative request without a count defaults to one unit.
+ *
+ * Decline is checked before request patterns so "ga usah pakai extra bed"
+ * is 0, not 1.
  */
 export function extractRequestedExtraBeds(message: string): number | undefined {
-  const text = message.trim();
-  if (!new RegExp(EXTRA_BED_TERM, "i").test(text)) return undefined;
-  if (REMOVE_EXTRA_BED_RE.test(text)) return 0;
+  const text = message.trim().replace(/\s+/g, " ");
+  if (!EXTRA_BED_MENTION_RE.test(text)) return undefined;
+  if (DECLINE_BEFORE_RE.test(text) || DECLINE_AFTER_RE.test(text)) return 0;
 
   const countToken = "(\\d{1,2}|satu|sebuah|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh)";
   const before = text.match(new RegExp(countToken + "\\s*(?:x|unit)?\\s*" + EXTRA_BED_TERM, "i"));

@@ -2,6 +2,7 @@ import {
   messageOpensWithGreeting,
   type ParsedGuestCount,
 } from "@/services/wa-autoreply/message-parsers";
+import { formatOptionalExtraBedOffer } from "@/ai/state-machine/extra-bed-parser";
 
 type FastFaqResult = {
   reply: string;
@@ -411,12 +412,16 @@ export function formatAvailabilityForGuestCount(
       const extraBedRate = Number(room.tarif_extra_bed_per_malam ?? 0);
       const priceText = price > 0 ? `, Rp${price.toLocaleString("id-ID")}/malam` : "";
       const capacityText = maxGuests > 0 ? `, maks ${maxGuests} tamu/kamar` : "";
-      const extraBedText =
-        extraBeds > 0
-          ? extraBedRate > 0
-            ? `, butuh ${extraBeds} extra bed @ Rp${extraBedRate.toLocaleString("id-ID")}/malam`
-            : `, butuh ${extraBeds} extra bed`
-          : "";
+      const catatanExtraBed = typeof room.catatan_extra_bed === "string" ? room.catatan_extra_bed.trim() : "";
+      const extraBedText = catatanExtraBed
+        ? `, ${catatanExtraBed}`
+        : extraBeds > 0 && room.melewati_kapasitas !== true
+          ? `, ${formatOptionalExtraBedOffer(extraBeds, extraBedRate)}`
+          : extraBeds > 0
+            ? extraBedRate > 0
+              ? `, butuh ${extraBeds} extra bed @ Rp${extraBedRate.toLocaleString("id-ID")}/malam`
+              : `, butuh ${extraBeds} extra bed`
+            : "";
       return `- ${String(room.nama ?? "Kamar")}: ${count} kamar tersedia${priceText}${capacityText}${extraBedText}`;
     });
 

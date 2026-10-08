@@ -31,6 +31,7 @@ import {
   resolveRoomNightlyRates,
 } from "@/services/pricing/daily-rate.service";
 import type { ToolContext, ToolHandler } from "./types";
+import { formatOptionalExtraBedOffer } from "@/ai/state-machine/extra-bed-parser";
 
 interface AvailabilityRow {
   room_type_id: string;
@@ -364,10 +365,18 @@ export const checkRoomAvailability: ToolHandler = async (
     const kapasitasDefault = Math.max(1, Number(r.capacity ?? 1) || 1);
     const kapasitasExtraBed = Math.max(0, Number(r.extrabed_capacity ?? 0) || 0);
     const kapasitasMaksimal = kapasitasDefault + kapasitasExtraBed;
-    const extraBedDibutuhkan = guestCount > kapasitasDefault
+    const kebutuhanExtraBed = guestCount > kapasitasDefault
       ? Math.max(0, guestCount - kapasitasDefault)
       : 0;
     const melewatiKapasitas = guestCount > 0 && guestCount > kapasitasMaksimal;
+    const extraBedDibutuhkan = melewatiKapasitas
+      ? kebutuhanExtraBed
+      : Math.min(kebutuhanExtraBed, kapasitasExtraBed);
+    const extraBedRate = Number(r.extrabed_rate ?? 0) || 0;
+    const catatanExtraBed =
+      guestCount > 0 && extraBedDibutuhkan > 0 && !melewatiKapasitas
+        ? formatOptionalExtraBedOffer(extraBedDibutuhkan, extraBedRate)
+        : undefined;
     const memenuhiKapasitasJumlahTamu = guestCount > 0
       ? !melewatiKapasitas && (availableEffective ?? 0) > 0
       : undefined;
@@ -399,7 +408,8 @@ export const checkRoomAvailability: ToolHandler = async (
       total_kamar:     d ? d.total : null,
       kapasitas_tamu:  kapasitasDefault,
       kapasitas_extra_bed: kapasitasExtraBed,
-      tarif_extra_bed_per_malam: Number(r.extrabed_rate ?? 0) || 0,
+      tarif_extra_bed_per_malam: extraBedRate,
+      catatan_extra_bed: catatanExtraBed,
       kapasitas_maksimal_dengan_extra_bed: kapasitasMaksimal,
       memenuhi_kapasitas_jumlah_tamu: memenuhiKapasitasJumlahTamu,
       // Field lama tetap dipakai oleh formatter/agent. Setelah ada jumlah tamu,
@@ -473,6 +483,7 @@ export const checkRoomAvailability: ToolHandler = async (
           harga_per_malam: r.harga_per_malam,
           kapasitas_maksimal_dengan_extra_bed: r.kapasitas_maksimal_dengan_extra_bed,
           extra_bed_dibutuhkan: r.extra_bed_dibutuhkan,
+          catatan_extra_bed: r.catatan_extra_bed,
         }))
     : undefined;
 

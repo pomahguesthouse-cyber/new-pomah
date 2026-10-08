@@ -30,7 +30,7 @@ import {
 } from "./capacity-alternatives";
 import { todayWIB } from "@/lib/date";
 import { nowForStayParsing, resolveRelativeDayRange } from "@/lib/id-date";
-import { extractRequestedExtraBeds } from "./extra-bed-parser";
+import { extractRequestedExtraBeds, messageMentionsExtraBed } from "./extra-bed-parser";
 
 export type BookingState =
   | "IDLE"
@@ -88,8 +88,13 @@ export interface BookingContext {
   selectedRoomType?: string;
   /** Daftar alternatif yang ditawarkan saat requested room penuh. */
   availableAlternatives?: AlternativeRoomOption[];
-  /** Jumlah extra bed yang sudah disepakati (Deluxe: max 1/kamar). */
+  /** Jumlah extra bed pada pesanan. 0 bila tamu menolak. */
   extraBeds?: number;
+  /**
+   * Tamu menolak extra bed. Selama flag ini true, extra bed tidak dipasang
+   * lagi otomatis (disimpan di context JSON, tanpa kolom baru).
+   */
+  extraBedsDeclined?: boolean;
   /** Catatan khusus tamu dari chat/form. */
   specialRequests?: string;
   /** Token form booking temporer yang sedang ditunggu. */
@@ -399,8 +404,24 @@ function countNights(checkIn: string, checkOut: string): number {
   return diff;
 }
 
-function getTotalGuests(context: Pick<BookingContext, "adults" | "children">): number {
+/**
+ * Anak di bawah 3 tahun tidak dihitung kapasitas bila usianya diketahui.
+ * Tanpa `childAges`, jumlah `children` tetap dihitung seperti sebelumnya.
+ */
+function countedChildren(context: Pick<BookingContext, "children" | "childAges">): number {
   const children = Math.max(0, Number(context.children ?? 0) || 0);
+  if (children <= 0) return 0;
+  const ages = (context.childAges ?? [])
+    .map((age) => Number(age))
+    .filter((age) => Number.isFinite(age));
+  if (ages.length === 0) return children;
+  const counted = ages.filter((age) => age >= 3).length;
+  const unnamed = Math.max(0, children - ages.length);
+  return counted + unnamed;
+}
+
+function getTotalGuests(context: Pick<BookingContext, "adults" | "children" | "childAges">): number {
+  const children = countedChildren(context);
   const adults =
     context.adults != null
       ? Math.max(0, Number(context.adults) || 0)
@@ -523,8 +544,9 @@ function buildBookingSummary(
   const resolvedExtraBedRate = policy.extrabedRate;
 
   const totalRooms = summaryRooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
-  const eb = computeExtraBeds(policy, totalRooms, totalGuests);
-  const extraBeds = context.extraBeds ?? eb.extraBeds;
+  const eb = resolveExtraBedPolicy(policy, totalRooms, totalGuests, context);
+  const extraBeds = eb.extraBeds;
+  context.extraBeds = extraBeds;
   const hasRate = resolvedExtraBedRate > 0;
   const extraBedTotal = nights && extraBeds > 0 && hasRate ? computeExtraBedTotal(extraBeds, resolvedExtraBedRate, nights) : 0;
 
@@ -555,8 +577,8 @@ function buildBookingSummary(
   const extraBedLine =
     extraBeds > 0
       ? hasRate
-        ? `• Extra bed: ${extraBeds}x @ ${fmtRp(resolvedExtraBedRate)}/malam = ${fmtRp(extraBedTotal)}\n`
-        : `• Extra bed: ${extraBeds}x (tarif perlu dikonfirmasi admin)\n`
+        ? `• Extra bed: ${extraBeds}x @ ${fmtRp(resolvedExtraBedRate)}/malam = ${fmtRp(extraBedTotal)} (opsional)\n`
+        : `• Extra bed: ${extraBeds}x (opsional, tarif perlu dikonfirmasi admin)\n`
       : "";
 
   const roomLabel = policy.roomTypeName ?? context.roomName ?? "kamar";
@@ -793,8 +815,16 @@ function bookingFormSubmissionToContext(
 
   const policy = resolveRoomExtraBedPolicy(context, roomsCatalog);
   const required = computeExtraBeds(policy, quantity, getTotalGuests(context));
+  // Form web /book sudah opsional: hormati angka yang tamu pilih, jangan paksa
+  // extra bed hanya karena jumlah tamu melebihi kapasitas standar.
   const requestedExtraBeds = Math.max(0, Math.min(20, Number(submission.extrabed) || 0));
-  context.extraBeds = Math.max(requestedExtraBeds, required.extraBeds);
+  if (requestedExtraBeds <= 0) {
+    context.extraBeds = 0;
+    if (required.extraBeds > 0) context.extraBedsDeclined = true;
+  } else {
+    context.extraBeds = requestedExtraBeds;
+    context.extraBedsDeclined = false;
+  }
   if (policy.extrabedRate > 0) context.extraBedRate = policy.extrabedRate;
   if (context.checkIn && context.checkOut && context.pricePerNight) {
     context.totalPrice = countNights(context.checkIn, context.checkOut) * context.pricePerNight * quantity;
@@ -1127,6 +1157,7 @@ export function parseSlotCorrection(
   const requestedExtraBeds = extractRequestedExtraBeds(input);
   if (requestedExtraBeds !== undefined) {
     patch.extraBeds = requestedExtraBeds;
+    patch.extraBedsDeclined = requestedExtraBeds <= 0;
     changed = true;
   }
 
@@ -1159,6 +1190,62 @@ function computeExtraBeds(
   const extraBeds = Math.min(need, totalExtra);
   const overCapacity = guests > totalMax;
   return { extraBeds, overCapacity, ratePerNight };
+}
+
+/** Catatan yang ditulis ke special_requests bila tamu menolak extra bed. */
+export const EXTRA_BED_DECLINED_NOTE = "Tanpa extra bed (tamu minta)";
+
+/**
+ * Satu kebijakan extra bed.
+ * - Tamu menolak → 0, selama tamu masih muat di kapasitas + extra bed.
+ *   Penolakan tidak dipasang ulang.
+ * - Tidak menolak → boleh ikut saran (jumlah yang dibutuhkan) atau permintaan
+ *   eksplisit, sama seperti sebelumnya. Extra bed tetap opsional.
+ * - Di atas kapasitas + extra bed → overCapacity (kamar lebih besar / lebih banyak).
+ */
+export function resolveExtraBedPolicy(
+  policy: RoomExtraBedPolicy,
+  roomCount: number,
+  guests: number,
+  choice: { extraBeds?: number; extraBedsDeclined?: boolean },
+): { extraBeds: number; overCapacity: boolean; ratePerNight: number } {
+  const computed = computeExtraBeds(policy, roomCount, guests);
+  if (choice.extraBedsDeclined) {
+    return { extraBeds: 0, overCapacity: computed.overCapacity, ratePerNight: computed.ratePerNight };
+  }
+  const requested = choice.extraBeds;
+  const extraBeds =
+    requested === undefined ? computed.extraBeds : Math.max(0, requested, computed.extraBeds);
+  return { extraBeds, overCapacity: computed.overCapacity, ratePerNight: computed.ratePerNight };
+}
+
+function applyExtraBedPolicy(
+  context: BookingContext,
+  policy: RoomExtraBedPolicy,
+  roomCount: number,
+  guests: number,
+): { extraBeds: number; overCapacity: boolean; ratePerNight: number } {
+  const decision = resolveExtraBedPolicy(policy, roomCount, guests, context);
+  context.extraBeds = decision.extraBeds;
+  if (decision.extraBeds > 0 && policy.extrabedRate > 0) context.extraBedRate = policy.extrabedRate;
+  return decision;
+}
+
+function rememberExtraBedChoice(context: BookingContext, requested: number): void {
+  if (requested <= 0) {
+    context.extraBeds = 0;
+    context.extraBedsDeclined = true;
+    return;
+  }
+  context.extraBeds = requested;
+  context.extraBedsDeclined = false;
+}
+
+function noteDeclinedExtraBed(context: BookingContext): void {
+  if (!context.extraBedsDeclined) return;
+  const existing = context.specialRequests?.trim() ?? "";
+  if (/tanpa extra bed/i.test(existing)) return;
+  context.specialRequests = existing ? `${existing}\n${EXTRA_BED_DECLINED_NOTE}` : EXTRA_BED_DECLINED_NOTE;
 }
 
 /**
@@ -1521,7 +1608,7 @@ async function respondToOverCapacity(
           `Tim kami bisa membantu mengunci kamarnya ya Kak.`,
       };
     }
-    const extraBeds = extraBedsFor(selected, qty, guests);
+    const extraBeds = context.extraBedsDeclined ? 0 : extraBedsFor(selected, qty, guests);
     context.rooms = [
       {
         roomTypeId: selected.roomTypeId,
@@ -1914,10 +2001,14 @@ export async function processBookingState(
       }),
     };
   }
+  // Keputusan extra bed (minta atau tolak) bukan interupsi. "bayar kamarnya
+  // saja" + tanda tanya tetap koreksi, bukan pertanyaan pembayaran ke LLM.
+  const holdsExtraBedChoice = extractRequestedExtraBeds(message) !== undefined;
   if (
     isDataEntryState(state) &&
     !awaitingOverrideConfirm &&
     !paymentQuestion &&
+    !holdsExtraBedChoice &&
     !isExpectedAnswer(state, message)
   ) {
     const interruptByQuestion = QUESTION_PATTERN.test(message);
@@ -2186,7 +2277,7 @@ export async function processBookingState(
       context.children = guest.children;
       context.childAges = guest.childAges;
     }
-    if (extracted.extra_beds !== undefined) context.extraBeds = extracted.extra_beds;
+    if (extracted.extra_beds !== undefined) rememberExtraBedChoice(context, extracted.extra_beds);
 
     // Nomor lain yang disebut tamu: tanyakan dulu apakah aktif WhatsApp sebelum dipakai.
     if (context.pendingPhone) {
@@ -2290,10 +2381,9 @@ export async function processBookingState(
       const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
       const recomputePolicy = resolveRoomExtraBedPolicy(context, roomsList);
       if (recomputePolicy.extrabedRate > 0) context.extraBedRate = recomputePolicy.extrabedRate;
-      const eb = computeExtraBeds(recomputePolicy, totalRoomsCount, getTotalGuests(context));
+      const eb = applyExtraBedPolicy(context, recomputePolicy, totalRoomsCount, getTotalGuests(context));
       const maxExtraBeds = recomputePolicy.extrabedCapacity * totalRoomsCount;
-      const requestedExtraBeds = Math.max(context.extraBeds ?? 0, eb.extraBeds);
-      context.extraBeds = requestedExtraBeds;
+      const requestedExtraBeds = context.extraBeds ?? 0;
 
       if (requestedExtraBeds > maxExtraBeds) {
         const roomLabel = recomputePolicy.roomTypeName ?? context.roomName ?? "kamar";
@@ -2467,7 +2557,7 @@ export async function processBookingState(
           context.children = guest.children;
           context.childAges = guest.childAges;
         }
-        if (patch.extraBeds !== undefined) context.extraBeds = patch.extraBeds;
+        if (patch.extraBeds !== undefined) rememberExtraBedChoice(context, patch.extraBeds);
         if (patch.roomName) {
           context.roomName = patch.roomName;
           if (patch.roomId) {
@@ -2483,10 +2573,13 @@ export async function processBookingState(
         const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
         const recomputePolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
         if (recomputePolicy.extrabedRate > 0) context.extraBedRate = recomputePolicy.extrabedRate;
-        const eb = computeExtraBeds(recomputePolicy, totalRoomsCount, getTotalGuests(context));
+        const eb = applyExtraBedPolicy(context, recomputePolicy, totalRoomsCount, getTotalGuests(context));
         const maxExtraBeds = recomputePolicy.extrabedCapacity * totalRoomsCount;
-        context.extraBeds = Math.max(context.extraBeds ?? 0, eb.extraBeds);
-        if (context.extraBeds > maxExtraBeds) {
+        if (eb.overCapacity) {
+          const capacityReply = await respondToOverCapacity(ctx, phone, context, message);
+          if (capacityReply) return capacityReply;
+        }
+        if ((context.extraBeds ?? 0) > maxExtraBeds) {
           await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
           return {
             handled: true,
@@ -2580,17 +2673,16 @@ export async function processBookingState(
       if (!((context.totalPrice ?? 0) > 0)) missing.push("total harga");
       const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
       const confirmPolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
-      const eb = computeExtraBeds(confirmPolicy, totalRoomsCount, getTotalGuests(context));
+      const eb = applyExtraBedPolicy(context, confirmPolicy, totalRoomsCount, getTotalGuests(context));
       if (eb.overCapacity) {
         const capacityReply = await respondToOverCapacity(ctx, phone, context, message);
         if (capacityReply) return capacityReply;
       }
       const maxExtraBeds = confirmPolicy.extrabedCapacity * totalRoomsCount;
-      const requestedExtraBeds = Math.max(context.extraBeds ?? 0, eb.extraBeds);
+      const requestedExtraBeds = context.extraBeds ?? 0;
       if (requestedExtraBeds > maxExtraBeds) {
         missing.push(`extra bed (maksimal ${maxExtraBeds} unit)`);
       }
-      context.extraBeds = requestedExtraBeds;
       if (requestedExtraBeds > 0 && confirmPolicy.extrabedRate > 0) {
         context.extraBedRate = confirmPolicy.extrabedRate;
       }
@@ -2612,6 +2704,7 @@ export async function processBookingState(
         context.paymentType = undefined;
         context.dpAmount = undefined;
       }
+      noteDeclinedExtraBed(context);
       const writeBooking = opts?.createBookingImpl ?? createBooking;
       // Catatan sementara di Supabase SEBELUM write final: data tidak hilang bila
       // write gagal / koneksi putus, dan staf bisa melanjutkan dari draft.
@@ -2766,6 +2859,21 @@ export async function processBookingState(
       return await buildBookingSummaryAsync(ctx, context);
     } else if (QUESTION_PATTERN.test(message)) {
       return { handled: false };
+    } else if (messageMentionsExtraBed(message)) {
+      const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
+      const policy = resolveRoomExtraBedPolicy(context, ctx.rooms);
+      const eb = applyExtraBedPolicy(context, policy, totalRoomsCount, getTotalGuests(context));
+      if (eb.overCapacity) {
+        const capacityReply = await respondToOverCapacity(ctx, phone, context, message);
+        if (capacityReply) return capacityReply;
+      }
+      if (context.checkIn && context.checkOut && context.pricePerNight) {
+        const nights = countNights(context.checkIn, context.checkOut);
+        context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
+      }
+      const resolvedRates = await applyResolvedRatesToContext(ctx, context);
+      await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+      return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
     } else {
       return {
         handled: true,

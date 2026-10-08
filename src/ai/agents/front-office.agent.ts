@@ -645,7 +645,11 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "TIDAK mengurangi kapasitas kamar, dan TIDAK dikenai biaya tambahan/extra bed (berbagi tempat tidur dengan " +
       "orang tua). Anak berusia 3 tahun ke atas (termasuk TK, SD, SMP, SMA, mahasiswa) dihitung sebagai tamu " +
       "dewasa untuk kapasitas kamar: masukkan ke `adults` saat memanggil `check_room_availability` / " +
-      "`start_booking_details`, BUKAN ke `children`. Isi field `children` hanya untuk anak di bawah 3 tahun."),
+      "`start_booking_details`, BUKAN ke `children`. Isi field `children` hanya untuk anak di bawah 3 tahun. " +
+      "EXTRA BED OPSIONAL: extra bed tidak wajib. Bila tamu melebihi kapasitas standar tetapi masih dalam " +
+      "kapasitas + extra bed, tawarkan extra bed beserta harganya, tetapi bila tamu menolak (mis. 'gausah extra bed', " +
+      "'tanpa extra bed', 'bayar kamarnya saja'), TERIMA tanpa ceramah kapasitas, jangan ulangi penjelasan kapasitas, " +
+      "dan jangan memasang extra bed lagi."),
 
     when(g.availability, "ANTI-REPETISI PERTANYAAN SLOT (WAJIB — MENGALAHKAN ATURAN SLOT-FILL): Satu slot " +
       "(jumlah tamu, tanggal, tipe kamar) hanya boleh ditanyakan SEKALI. Bila di riwayat " +
@@ -705,8 +709,9 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
     when(g.roomFacts, "EXTRA BED: Bila jumlah tamu > kapasitas default kamar yang dipilih, panggil " +
       "`get_room_specifications` dulu dan gunakan `extrabed_capacity` serta `extrabed_rate` " +
       "dari hasil tool / data `room_types`. JANGAN hardcode tarif extra bed di prompt. " +
-      "Bila extra bed tersedia, tawarkan dan hitung total akurat: " +
+      "Bila extra bed tersedia, tawarkan sebagai OPSIONAL (tamu boleh menolak) dan hitung total akurat: " +
       "(tarif kamar × jumlah kamar + extrabed_rate × jumlah extra bed) × malam. " +
+      "Bila tamu menolak extra bed, terima tanpa mengulang penjelasan kapasitas dan jangan memasangnya lagi. " +
       "Jika tamu bertanya extra bed untuk jumlah tamu yang sudah melebihi kapasitas maksimal kamar " +
       "(kapasitas default + kapasitas extra bed), jangan hanya menjawab aturan extra bed kamar itu; " +
       "simpulkan juga bahwa kamar tersebut tidak cukup untuk jumlah tamu tersebut dan tawarkan hanya " +
@@ -766,9 +771,10 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
 
     when(g.roomFacts, "EXTRA BED MULTI-KAMAR: Untuk pesanan lebih dari satu kamar, hitung kapasitas standar " +
       "sebagai kapasitas kamar × jumlah kamar. Jika jumlah tamu melebihi kapasitas standar tetapi " +
-      "masih dalam batas extra bed (`extrabed_capacity` × jumlah kamar), tawarkan jumlah extra bed " +
-      "yang diperlukan dan gunakan `extrabed_rate` dari data kamar. Jika data extra bed tidak ada " +
-      "atau tidak cukup, jangan menebak — tawarkan tipe kamar lain atau eskalasi ke admin."),
+      "masih dalam batas extra bed (`extrabed_capacity` × jumlah kamar), extra bed OPSIONAL: tawarkan jumlah " +
+      "dan harga dari `extrabed_rate`, tetapi bila tamu menolak, terima tanpa ceramah, jangan ulangi penjelasan " +
+      "kapasitas, hapus extra bed dari total, dan jangan memasangnya lagi. Jika tamu melebihi kapasitas + extra bed, " +
+      "atau data extra bed tidak ada / tidak cukup, jangan menebak — tawarkan tipe kamar lain atau jumlah kamar lebih banyak."),
 
     when(g.faq, "VERIFIKASI / KEPERCAYAAN: Bila tamu bertanya 'ini benar?', 'penipuan?', 'apakah ini AI?', " +
       "'amankah?', jawab dengan verifikasi resmi: website resmi pomahguesthouse.com, invoice " +
