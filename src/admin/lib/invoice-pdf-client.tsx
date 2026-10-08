@@ -142,12 +142,24 @@ export async function createInvoicePdfBlob(request: InvoicePdfRequest): Promise<
   return blob;
 }
 
-async function sharePdfNatively(blob: Blob, fileName: string): Promise<PdfDeliveryResult> {
+export type PdfSaveOptions = {
+  /** Cache subdirectory. Invoice files stay in `invoices`. */
+  folder?: string;
+  dialogTitle?: string;
+  /** `download` saves or shares a file. `print` may open the desktop print dialog first. */
+  intent?: "download" | "print";
+};
+
+const ANDROID_PDF_ERROR =
+  "Aplikasi Android ini belum memuat penyimpan PDF. Pasang APK Pomah Admin yang baru, lalu coba lagi.";
+
+async function sharePdfNatively(blob: Blob, fileName: string, options?: PdfSaveOptions): Promise<PdfDeliveryResult> {
   const { Directory, Filesystem } = await import("@capacitor/filesystem");
   const { Share } = await import("@capacitor/share");
   const name = safeFileName(fileName);
+  const folder = options?.folder?.replace(/^\/+|\/+$/g, "") || "invoices";
   const written = await Filesystem.writeFile({
-    path: `invoices/${name}`,
+    path: `${folder}/${name}`,
     data: await blobToBase64(blob),
     directory: Directory.Cache,
     recursive: true,
@@ -156,7 +168,7 @@ async function sharePdfNatively(blob: Blob, fileName: string): Promise<PdfDelive
     await Share.share({
       title: name,
       files: [written.uri],
-      dialogTitle: "Simpan atau buka invoice PDF",
+      dialogTitle: options?.dialogTitle ?? "Simpan atau buka invoice PDF",
     });
     return { method: "native-share" };
   } catch (error) {
@@ -237,15 +249,32 @@ function printPdfInHiddenFrame(blob: Blob): Promise<boolean> {
   });
 }
 
-export async function downloadInvoicePdfBlob(blob: Blob, fileName: string): Promise<PdfDeliveryResult> {
+/**
+ * Hand a generated PDF to the user.
+ * Native Android (Capacitor) opens the share sheet. Mobile browsers use
+ * Web Share or a download. Desktop downloads the file, unless `intent` is
+ * `print`, which tries the browser print dialog first.
+ */
+export async function deliverPdfBlob(blob: Blob, fileName: string, options?: PdfSaveOptions): Promise<PdfDeliveryResult> {
+  const intent = options?.intent ?? "download";
   if (await canSharePdfNatively()) {
-    return sharePdfNatively(blob, fileName);
+    return sharePdfNatively(blob, fileName, options);
   }
   if (isAndroidWebView()) {
-    throw new Error("Aplikasi Android ini belum memuat penyimpan PDF. Pasang APK Pomah Admin yang baru, lalu coba lagi.");
+    throw new Error(ANDROID_PDF_ERROR);
   }
-  if (isMobileBrowser() && (await sharePdfOnWeb(blob, fileName))) {
+  if (intent === "print" && !isMobileBrowser()) {
+    const printed = await printPdfInHiddenFrame(blob);
+    if (printed) return { method: "print" };
+  }
+  const tryWebShare = intent === "print" || isMobileBrowser();
+  if (tryWebShare && (await sharePdfOnWeb(blob, fileName))) {
     return { method: "web-share" };
+  }
+  if (intent === "print") {
+    if (openPdfInNewTab(blob)) return { method: "open" };
+    triggerAnchorDownload(blob, fileName);
+    return { method: "download" };
   }
   triggerAnchorDownload(blob, fileName);
   if (isMobileBrowser()) {
@@ -255,21 +284,20 @@ export async function downloadInvoicePdfBlob(blob: Blob, fileName: string): Prom
   return { method: "download" };
 }
 
+export async function downloadInvoicePdfBlob(blob: Blob, fileName: string): Promise<PdfDeliveryResult> {
+  return deliverPdfBlob(blob, fileName, {
+    folder: "invoices",
+    dialogTitle: "Simpan atau buka invoice PDF",
+    intent: "download",
+  });
+}
+
 export async function printInvoicePdfBlob(blob: Blob, fileName: string): Promise<PdfDeliveryResult> {
-  if (await canSharePdfNatively()) {
-    return sharePdfNatively(blob, fileName);
-  }
-  if (isAndroidWebView()) {
-    throw new Error("Aplikasi Android ini belum memuat penyimpan PDF. Pasang APK Pomah Admin yang baru, lalu coba lagi.");
-  }
-  if (!isMobileBrowser()) {
-    const printed = await printPdfInHiddenFrame(blob);
-    if (printed) return { method: "print" };
-  }
-  if (await sharePdfOnWeb(blob, fileName)) return { method: "web-share" };
-  if (openPdfInNewTab(blob)) return { method: "open" };
-  triggerAnchorDownload(blob, fileName);
-  return { method: "download" };
+  return deliverPdfBlob(blob, fileName, {
+    folder: "invoices",
+    dialogTitle: "Simpan atau buka invoice PDF",
+    intent: "print",
+  });
 }
 
 export async function downloadInvoicePdf(request: InvoicePdfRequest): Promise<PdfDeliveryResult> {

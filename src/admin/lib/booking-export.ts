@@ -1,10 +1,7 @@
 /**
- * Client helpers to turn an exportBookings() result into a downloadable
- * CSV file or a print-friendly HTML window (manager picks "Save as PDF").
- *
- * No external libs — keeps the bundle small. PDFs go through the
- * browser's print dialog which already supports Save as PDF on every
- * modern OS / browser.
+ * Flat booking rows for CSV and the daftar-booking PDF.
+ * The PDF itself is built in booking-list-pdf.tsx and saved as a real file
+ * (download or the Android share sheet).
  */
 
 export interface ExportRow {
@@ -16,6 +13,10 @@ export interface ExportRow {
   check_out:      string;
   nights:         number;
   rooms:          string;
+  /** Room type names, separate from room numbers. Optional for older callers. */
+  room_types?:    string;
+  /** Room numbers, separate from room types. Optional for older callers. */
+  room_numbers?:  string;
   room_count:     number;
   adults:         number;
   children:       number;
@@ -83,178 +84,23 @@ export function downloadCsv(rows: ExportRow[], filenameStem: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function fmtIDR(n: number): string {
-  if (!Number.isFinite(n)) return "Rp 0";
-  return "Rp " + n.toLocaleString("id-ID");
-}
-function fmtDateID(iso: string): string {
-  if (!iso) return "—";
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return iso;
-  const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
-  return `${Number(m[3])} ${months[Number(m[2]) - 1]} ${m[1]}`;
-}
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 /**
- * Open a new window synchronously, returns the handle. MUST be called
- * from inside the user-gesture event handler (no awaits before).
- *
- * Returns null when the popup is blocked. Note we DO NOT pass `noopener`
- * — per spec that forces window.open to return null even when the
- * window opens successfully, so the caller would think it was blocked.
+ * Read every filtered row, not just one response page.
+ * PostgREST often caps a single response at 1000 rows even when `.limit(5000)` is set.
  */
-export function openBlankPrintWindow(): Window | null {
-  const w = window.open("", "_blank", "width=1100,height=800");
-  if (!w) return null;
-  try {
-    w.document.open();
-    w.document.write(
-      `<!doctype html><html lang="id"><head><meta charset="utf-8"/>` +
-      `<title>Memuat daftar booking…</title>` +
-      `<style>body{font:14px -apple-system,'Segoe UI',sans-serif;padding:24px;color:#475569}` +
-      `</style></head><body>Memuat data booking…</body></html>`,
-    );
-    w.document.close();
-  } catch { /* cross-origin? unlikely for about:blank */ }
-  return w;
-}
-
-/**
- * Render the print view into a window that the caller already opened
- * via openBlankPrintWindow() inside the click handler. Auto-triggers
- * print dialog. Browser handles "Save as PDF" from there.
- */
-export function openPrintView(
-  rows: ExportRow[],
-  meta: {
-    propertyName?:    string;
-    filterSummary?:   string;
-    generatedAtIso?:  string;
-    /** Window handle previously obtained from openBlankPrintWindow(). */
-    targetWindow?:    Window | null;
-  } = {},
-) {
-  const w = meta.targetWindow ?? window.open("", "_blank", "width=1100,height=800");
-  if (!w) {
-    throw new Error("Tidak bisa membuka window cetak. Pastikan popup tidak diblokir browser.");
+export async function collectPages<T>(
+  fetchPage: (from: number, to: number) => Promise<readonly T[]>,
+  pageSize = 1000,
+  maxRows = 5000,
+): Promise<{ rows: T[]; capped: boolean }> {
+  if (pageSize < 1 || maxRows < 1) throw new Error("Ukuran halaman export tidak valid.");
+  const rows: T[] = [];
+  for (let from = 0; from < maxRows; from += pageSize) {
+    const to = Math.min(from + pageSize, maxRows) - 1;
+    const room = to - from + 1;
+    const batch = (await fetchPage(from, to)).slice(0, room);
+    rows.push(...batch);
+    if (batch.length < room) return { rows, capped: false };
   }
-
-  const totalRevenue   = rows.reduce((s, r) => s + (Number(r.total_amount) || 0), 0);
-  const totalPaid      = rows.reduce((s, r) => s + (Number(r.paid_amount)  || 0), 0);
-  const totalOutstand  = rows.reduce((s, r) => s + (Number(r.outstanding) || 0), 0);
-
-  const html = `<!doctype html>
-<html lang="id">
-<head>
-<meta charset="utf-8" />
-<title>Daftar Booking — ${escapeHtml(meta.propertyName ?? "")}</title>
-<style>
-  * { box-sizing: border-box; }
-  body { font: 12px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; color: #1f2937; margin: 24px; }
-  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #334155; padding-bottom: 12px; margin-bottom: 16px; }
-  header h1 { font-size: 18px; margin: 0; color: #0f172a; }
-  header .meta { text-align: right; font-size: 11px; color: #64748b; }
-  .summary { display: flex; gap: 16px; margin-bottom: 16px; }
-  .summary .card { flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; }
-  .summary .card .label { font-size: 10px; text-transform: uppercase; color: #64748b; letter-spacing: 0.04em; }
-  .summary .card .value { font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 2px; }
-  table { width: 100%; border-collapse: collapse; }
-  thead th { background: #f1f5f9; text-align: left; padding: 6px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; border-bottom: 1px solid #cbd5e1; }
-  tbody td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
-  tbody tr:nth-child(2n) td { background: #fafbfc; }
-  .num { text-align: right; font-variant-numeric: tabular-nums; }
-  .small { font-size: 10px; color: #64748b; }
-  .status { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
-  .status-pending   { background: #fef3c7; color: #92400e; }
-  .status-confirmed { background: #dcfce7; color: #166534; }
-  .status-checked_in  { background: #dbeafe; color: #1e40af; }
-  .status-checked_out { background: #e0e7ff; color: #3730a3; }
-  .status-cancelled { background: #fee2e2; color: #991b1b; }
-  footer { margin-top: 24px; font-size: 10px; color: #94a3b8; text-align: center; }
-  @media print {
-    body { margin: 12mm; }
-    thead { display: table-header-group; }
-    tr { page-break-inside: avoid; }
-    .no-print { display: none !important; }
-  }
-</style>
-</head>
-<body>
-<header>
-  <div>
-    <h1>Daftar Booking${meta.propertyName ? ` — ${escapeHtml(meta.propertyName)}` : ""}</h1>
-    ${meta.filterSummary ? `<div class="small">${escapeHtml(meta.filterSummary)}</div>` : ""}
-  </div>
-  <div class="meta">
-    Dicetak ${escapeHtml(new Date(meta.generatedAtIso ?? new Date().toISOString()).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" }))}<br/>
-    ${rows.length} baris
-  </div>
-</header>
-
-<div class="summary">
-  <div class="card"><div class="label">Total Booking</div><div class="value">${rows.length}</div></div>
-  <div class="card"><div class="label">Pendapatan</div><div class="value">${fmtIDR(totalRevenue)}</div></div>
-  <div class="card"><div class="label">Sudah Dibayar</div><div class="value">${fmtIDR(totalPaid)}</div></div>
-  <div class="card"><div class="label">Outstanding</div><div class="value">${fmtIDR(totalOutstand)}</div></div>
-</div>
-
-<table>
-  <thead>
-    <tr>
-      <th>Kode</th>
-      <th>Tamu</th>
-      <th>Kamar</th>
-      <th>Check-in</th>
-      <th>Check-out</th>
-      <th class="num">Malam</th>
-      <th>Status</th>
-      <th>Pembayaran</th>
-      <th class="num">Total</th>
-      <th class="num">Sisa</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${rows.map((r) => `
-      <tr>
-        <td><strong>${escapeHtml(r.reference_code)}</strong></td>
-        <td>
-          ${escapeHtml(r.guest_name)}<br/>
-          <span class="small">${escapeHtml(r.guest_phone)}</span>
-        </td>
-        <td>${escapeHtml(r.rooms || "—")}</td>
-        <td>${escapeHtml(fmtDateID(r.check_in))}</td>
-        <td>${escapeHtml(fmtDateID(r.check_out))}</td>
-        <td class="num">${r.nights}</td>
-        <td><span class="status status-${escapeHtml(r.status)}">${escapeHtml(r.status)}</span></td>
-        <td>${escapeHtml(r.payment_status || "—")}</td>
-        <td class="num">${fmtIDR(r.total_amount)}</td>
-        <td class="num">${fmtIDR(r.outstanding)}</td>
-      </tr>
-    `).join("")}
-  </tbody>
-</table>
-
-<footer>
-  Total ${rows.length} booking · Pendapatan ${fmtIDR(totalRevenue)} · Sudah dibayar ${fmtIDR(totalPaid)} · Outstanding ${fmtIDR(totalOutstand)}
-</footer>
-
-<script>
-  // Auto-open the print dialog. User can pick "Save as PDF" from there.
-  window.addEventListener("load", function () {
-    setTimeout(function () { window.print(); }, 100);
-  });
-</script>
-</body>
-</html>`;
-
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  return { rows, capped: true };
 }
