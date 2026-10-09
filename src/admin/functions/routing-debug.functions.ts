@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { intentHistoryDirections } from "@/admin/functions/message-direction";
 
 /**
  * Statistik pemanggilan agent + intent berdasarkan metadata pesan WhatsApp
@@ -72,10 +73,11 @@ export const getIntentCallHistory = createServerFn({ method: "GET" })
     };
     type ThreadRow = { id: string; phone: string | null; display_name: string | null };
 
+    const directions = intentHistoryDirections();
     const { data: outboundRaw, error } = await supabaseAdmin
       .from("whatsapp_messages")
       .select("id, thread_id, body, sent_at, metadata")
-      .eq("direction", "outbound")
+      .eq("direction", directions.outbound)
       .eq("metadata->>intent", data.intent)
       .gte("sent_at", since)
       .order("sent_at", { ascending: false })
@@ -103,7 +105,7 @@ export const getIntentCallHistory = createServerFn({ method: "GET" })
           .from("whatsapp_messages")
           .select("body, sent_at")
           .eq("thread_id", msg.thread_id ?? "")
-          .eq("direction", "inbound")
+          .eq("direction", directions.inbound)
           .lt("sent_at", msg.sent_at ?? new Date().toISOString())
           .order("sent_at", { ascending: false })
           .limit(1)

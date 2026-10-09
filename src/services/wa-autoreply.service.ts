@@ -38,6 +38,7 @@ import { checkRoomAvailability } from "@/tools/availability.tool";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
 import { getBookingState } from "@/ai/state-machine/booking-machine";
 import { STAFF_REPLY_SILENCE_MS, staffSilenceUntil } from "@/services/wa-autoreply/staff-silence";
+import { planPaymentProofGuestReply } from "@/services/wa-inbound-media";
 import { buildPropertyFaqReply } from "@/services/property-faq";
 import {
   AI_TIMEOUT_MS,
@@ -1175,6 +1176,51 @@ export async function executeAutoreplyForPhone(
     [...rollingMessages].reverse().find((m: { direction: string }) => m.direction === "in")?.body ?? "";
 
   let orchResult: any = null;
+
+  // Bukti transfer (gambar / dokumen gambar-PDF) dijawab di sini, setelah
+  // jendela diam staf. Jangan sampai LLM bilang bukti belum terdeteksi.
+  if (!reply && !isManager && lastMessage) {
+    let mediaType: string | null = null;
+    let mimeType: string | null = null;
+    let paymentProofCandidate = false;
+    if (c.thread_id) {
+      try {
+        const { data: lastIn } = await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .select("metadata")
+          .eq("thread_id", c.thread_id)
+          .eq("direction", "in")
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const md = (lastIn?.metadata ?? {}) as Record<string, unknown>;
+        mediaType = typeof md.media_type === "string" ? md.media_type : null;
+        mimeType = typeof md.mime_type === "string" ? md.mime_type : null;
+        paymentProofCandidate = md.payment_proof_candidate === true;
+      } catch (e) {
+        console.warn("[Autoreply] payment-proof media hint failed (non-fatal):", e);
+      }
+    }
+    const proofReply = planPaymentProofGuestReply({
+      body: lastMessage,
+      mediaType,
+      mimeType,
+      paymentProofCandidate,
+      staffSilenceActive: false,
+    });
+    if (proofReply) {
+      adoptReply(proofReply);
+      orchResult = {
+        agentKey: "finance",
+        intent: "payment",
+        routingConfidence: 1,
+        escalated: false,
+        toolsUsed: ["payment-proof-ack"],
+        fastPath: true,
+      };
+      console.info(`[Autoreply] Payment-proof ack for ${phone.slice(-6)}`);
+    }
+  }
 
   const bookingActive = !!bookingState?.state && bookingState.state !== "IDLE";
   // A (4 Jul 2026): bila ada ≥2 pesan tamu beruntun yang belum terjawab,

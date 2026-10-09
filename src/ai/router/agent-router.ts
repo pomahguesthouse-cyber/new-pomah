@@ -59,6 +59,43 @@ export const AGENT_NAMES: Record<AgentKey, string> = {
   manager:        "Manager Agent",
 };
 
+/**
+ * Intent yang ditulis pipeline (bukan enum IntentCategory) beserta agentnya.
+ * Dipakai routing-debug supaya tidak muncul sebagai "tak terpetakan".
+ * `deterministic_*` ditangkap lewat awalan, daftar di bawah adalah yang dikenal.
+ */
+export const PIPELINE_INTENT_AGENTS: ReadonlyArray<{
+  intent: string;
+  label: string;
+  agent: AgentKey;
+}> = [
+  { intent: "deterministic_availability", label: "Deterministic availability", agent: "front-office" },
+  { intent: "deterministic_availability_full", label: "Deterministic availability (penuh)", agent: "front-office" },
+  { intent: "deterministic_availability_focus", label: "Deterministic availability (fokus kamar)", agent: "front-office" },
+  { intent: "deterministic_availability_focus_full", label: "Deterministic availability (fokus penuh)", agent: "front-office" },
+  { intent: "deterministic_availability_need_dates", label: "Deterministic availability (butuh tanggal)", agent: "front-office" },
+  { intent: "deterministic_availability_unknown", label: "Deterministic availability (belum jelas)", agent: "front-office" },
+  { intent: "deterministic_availability_over_capacity", label: "Deterministic availability (kelebihan kapasitas)", agent: "front-office" },
+  { intent: "deterministic_availability_guest_count", label: "Deterministic availability (jumlah tamu)", agent: "front-office" },
+  { intent: "deterministic_availability_multi_room_combination", label: "Deterministic availability (kombinasi kamar)", agent: "front-office" },
+  { intent: "deterministic_tonight_availability_full", label: "Deterministic malam ini (penuh)", agent: "front-office" },
+  { intent: "deterministic_tonight_availability_unknown", label: "Deterministic malam ini (belum jelas)", agent: "front-office" },
+  { intent: "deterministic_tonight_price", label: "Deterministic harga malam ini", agent: "front-office" },
+  { intent: "policy_question", label: "Policy question (jam check-in/out)", agent: "front-office" },
+  { intent: "invoice_send", label: "Invoice send (sistem)", agent: "finance" },
+];
+
+export function pipelineIntentAgent(
+  intent: string,
+): { intent: string; label: string; agent: AgentKey } | null {
+  const known = PIPELINE_INTENT_AGENTS.find((row) => row.intent === intent);
+  if (known) return known;
+  if (intent.startsWith("deterministic_")) {
+    return { intent, label: "Deterministic fast-path", agent: "front-office" };
+  }
+  return null;
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 /**

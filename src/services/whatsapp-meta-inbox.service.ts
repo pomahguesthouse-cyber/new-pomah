@@ -7,13 +7,19 @@
  *
  * Jalur kritis (simpan pesan + queueUpsert) tetap sinkron di request webhook.
  * Ack 200 sebelum antrian ada menghilangkan redelivery gateway — itu celah
- * yang membuat pesan tersimpan tanpa balasan. OCR bukti transfer saja yang
- * ditunda lewat waitUntil, dan hanya setelah baris antrian berhasil ditulis.
+ * yang membuat pesan tersimpan tanpa balasan. Unduh media dan OCR bukti
+ * transfer ditunda lewat waitUntil, setelah baris antrian berhasil ditulis.
  */
 import { saveInboundMessage, saveMessageMetadata } from "@/repositories/message.repository";
 import { classifyMessageIntent } from "@/webhook/intent-classifier";
 import { runDeferred } from "@/lib/cf-context";
 import { queueUpsert, resolveQueueTiming } from "@/services/queue.service";
+import {
+  isPaymentProofCandidate,
+  PAYMENT_PROOF_PLACEHOLDER,
+  runInboundMediaJob,
+  type InboundMediaRef,
+} from "@/services/wa-inbound-media";
 import {
   assessInboundCoverage,
   formatInboundSkipNote,
@@ -70,7 +76,14 @@ function messageText(m: MetaMessage): string {
   if (m.interactive?.list_reply?.title) return m.interactive.list_reply.title;
   const caption = m.image?.caption ?? m.document?.caption ?? m.video?.caption;
   if (caption) return caption;
-  if (m.type === "image") return "[Tamu mengirim lampiran bukti transfer pembayaran]";
+  if (
+    isPaymentProofCandidate({
+      mediaType: m.type,
+      mimeType: m.image?.mime_type ?? m.document?.mime_type ?? null,
+    })
+  ) {
+    return PAYMENT_PROOF_PLACEHOLDER;
+  }
   return m.type ? `[Lampiran ${m.type}]` : "";
 }
 
@@ -102,7 +115,8 @@ async function persistInboundMetadata(
   body: string,
   skipReason: InboundSkipReason | null,
 ) {
-  const mediaId = m.image?.id ?? m.document?.id ?? m.video?.id ?? m.audio?.id ?? m.sticker?.id ?? null;
+  const media = inboundMediaRef(m);
+  const mimeType = media?.mimeType ?? null;
   await saveMessageMetadata(admin as never, {
     messageId,
     metadata: {
@@ -110,9 +124,14 @@ async function persistInboundMetadata(
       provider: "meta",
       intent_label: classifyMessageIntent(body),
       media_type: m.type ?? null,
-      meta_media_id: mediaId,
-      mime_type: m.image?.mime_type ?? m.document?.mime_type ?? null,
-      file_name: m.document?.filename ?? null,
+      meta_media_id: media?.mediaId ?? null,
+      mime_type: mimeType,
+      file_name: media?.fileName ?? null,
+      payment_proof_candidate: isPaymentProofCandidate({
+        mediaType: m.type,
+        mimeType,
+        body,
+      }),
       ...(skipReason
         ? { inbound_skip_reason: skipReason, inbound_skip_at: new Date().toISOString() }
         : {}),
@@ -120,22 +139,40 @@ async function persistInboundMetadata(
   });
 }
 
-/** OCR vision lambat. Jalan setelah antrian tertulis, tanpa menahan ack webhook. */
-function schedulePaymentProofOcr(admin: Admin, phone: string, messageId: string, mediaId: string) {
-  void runDeferred("MetaInbox.ocr", async () => {
-    const { fetchMetaMediaDataUri } = await import("./whatsapp-meta.service");
-    const { analyzePaymentProof } = await import("./payment-proof.service");
-    const dataUri = await fetchMetaMediaDataUri(mediaId);
-    if (dataUri) await analyzePaymentProof(admin as never, dataUri, phone, messageId);
-  });
+function inboundMediaRef(m: MetaMessage): InboundMediaRef | null {
+  const mediaId = m.image?.id ?? m.document?.id ?? m.video?.id ?? m.audio?.id ?? m.sticker?.id ?? null;
+  if (!mediaId) return null;
+  return {
+    mediaId,
+    mediaType: m.type ?? null,
+    mimeType: m.image?.mime_type ?? m.document?.mime_type ?? null,
+    fileName: m.document?.filename ?? null,
+  };
 }
 
-function shouldOcr(m: MetaMessage, skipReason: InboundSkipReason | null, enqueued: boolean): boolean {
-  if (!(m.type === "image" && m.image?.id)) return false;
-  if (enqueued) return true;
-  // Redelivery setelah antrian tertulis, atau auto-reply mati: OCR sebelumnya
-  // bisa terputus. Jangan ulang bila balasan atau antrian aktif sudah ada.
-  return skipReason === "duplicate_already_queued" || skipReason === "auto_reply_disabled";
+/**
+ * Unduh + simpan + OCR di latar, setelah baris pesan/antrian tertulis.
+ * Webhook tidak menunggu byte. Kegagalan unduh tidak menjatuhkan permintaan.
+ */
+function scheduleInboundMedia(
+  admin: Admin,
+  phone: string,
+  messageId: string,
+  threadId: string | null,
+  guestName: string | null,
+  m: MetaMessage,
+) {
+  const media = inboundMediaRef(m);
+  if (!media) return;
+  void runDeferred("MetaInbox.media", async () => {
+    await runInboundMediaJob(admin as never, {
+      phone,
+      guestName,
+      messageId,
+      threadId,
+      media,
+    });
+  });
 }
 
 export async function handleMetaInboundMessage(
@@ -182,9 +219,7 @@ export async function handleMetaInboundMessage(
   const finishSkipped = async (reason: InboundSkipReason): Promise<MetaInboundHandleResult> => {
     logInboundSkip("MetaInbox", reason, { ...logged(), duplicate: !!duplicate });
     await persistInboundMetadata(admin, messageId, m, body, reason);
-    if (shouldOcr(m, reason, false) && m.image?.id) {
-      schedulePaymentProofOcr(admin, phone, messageId, m.image.id);
-    }
+    scheduleInboundMedia(admin, phone, messageId, c.thread_id, name, m);
     return { enqueued: false, recoveredDuplicate: false, skipReason: reason };
   };
 
@@ -219,9 +254,7 @@ export async function handleMetaInboundMessage(
   if (!entry) throw new Error("queueUpsert gagal: balasan belum dijadwalkan");
 
   await persistInboundMetadata(admin, messageId, m, body, null);
-  if (shouldOcr(m, null, true) && m.image?.id) {
-    schedulePaymentProofOcr(admin, phone, messageId, m.image.id);
-  }
+  scheduleInboundMedia(admin, phone, messageId, c.thread_id, name, m);
   return { enqueued: true, recoveredDuplicate, skipReason: null };
 }
 

@@ -24,6 +24,7 @@ import {
   selectOutboundMediaType,
   threadPreview,
 } from "@/services/wa-outbound-attachment";
+import { withSignedWhatsAppMedia } from "@/services/wa-signed-media";
 import { runDeferred } from "@/lib/cf-context";
 import { resolveHumanTakeoverMs } from "@/admin/modules/ai-lab/ai-lab.functions";
 
@@ -215,53 +216,9 @@ async function loadGuestContext(
   return { guest: g, booking: b };
 }
 
-function metadataRecord(metadata: unknown): Record<string, unknown> | null {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
-  return metadata as Record<string, unknown>;
-}
-
-/** Satu batch signed URL untuk baris yang menyimpan storage_path. */
+/** Signed URL singkat untuk storage_path (wa-inbound dan wa-outbound). Hanya lewat server function ber-auth admin. */
 async function withOutboundMediaUrls<T extends { metadata?: unknown }>(messages: T[]): Promise<T[]> {
-  const paths = [
-    ...new Set(
-      messages
-        .map((message) => metadataRecord(message.metadata)?.storage_path)
-        .filter((path): path is string => typeof path === "string" && path.length > 0 && !path.includes("..")),
-    ),
-  ];
-  if (paths.length === 0) return messages;
-
-  const signed = new Map<string, string>();
-  try {
-    for (let i = 0; i < paths.length; i += 100) {
-      const slice = paths.slice(i, i + 100);
-      const { data, error } = await supabaseAdmin.storage
-        .from(WA_OUTBOUND_BUCKET)
-        .createSignedUrls(slice, WA_SIGNED_URL_TTL_SECONDS);
-      if (error) {
-        console.error("[Admin WhatsApp] createSignedUrls:", error.message);
-        continue;
-      }
-      slice.forEach((requested, index) => {
-        const row = data?.[index];
-        const url = row?.signedUrl;
-        if (!url || row?.error) return;
-        signed.set(requested, url);
-        if (row.path) signed.set(row.path, url);
-      });
-    }
-  } catch (error) {
-    console.error("[Admin WhatsApp] createSignedUrls failed:", error);
-    return messages;
-  }
-
-  return messages.map((message) => {
-    const meta = metadataRecord(message.metadata);
-    const path = meta?.storage_path;
-    const url = typeof path === "string" ? signed.get(path) : undefined;
-    if (!url || !meta) return message;
-    return { ...message, metadata: { ...meta, media_url: url } };
-  });
+  return withSignedWhatsAppMedia(messages, supabaseAdmin.storage);
 }
 
 export const sendMessage = createServerFn({ method: "POST" })

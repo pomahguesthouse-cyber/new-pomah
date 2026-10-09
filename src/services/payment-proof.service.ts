@@ -300,6 +300,22 @@ async function findMatchingBooking(
   };
 }
 
+async function persistOcrMetadata(
+  db: Db,
+  messageId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const { error } = await (db as any).rpc("save_message_metadata", {
+      p_message_id: messageId,
+      p_metadata: patch,
+    });
+    if (error) console.warn("[PaymentProof] Gagal simpan OCR metadata:", error.message ?? error);
+  } catch (e) {
+    console.warn("[PaymentProof] Gagal simpan OCR metadata:", e);
+  }
+}
+
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
 /**
@@ -322,6 +338,10 @@ export async function analyzePaymentProof(
   const llmConfig = await resolveVisionConfig(db);
   if (!llmConfig) {
     console.warn(`${tag} Tidak ada konfigurasi LLM — skip OCR`);
+    await persistOcrMetadata(db, messageId, {
+      ocr_status: "failed",
+      ocr_reason: "llm_not_configured",
+    });
     return {
       ok: false,
       ocr: emptyOcr(),
@@ -343,32 +363,20 @@ export async function analyzePaymentProof(
   const match = await findMatchingBooking(db, phone, ocr);
   console.info(`${tag} Match: ${match.status} — booking: ${match.booking_code}`);
 
-  // 4. Save OCR result to message metadata
-  try {
-    // Read existing metadata, merge OCR data, then update
-    const { data: existing } = await (db as any)
-      .from("whatsapp_messages")
-      .select("metadata")
-      .eq("id", messageId)
-      .maybeSingle();
+  // callVisionLlm menelan error jaringan sebagai raw_text, bukan throw.
+  const visionFailed = /^(LLM error|OCR error)\b/i.test(ocr.raw_text ?? "");
+  // 4. Gabungkan hasil OCR ke metadata (jsonb ||), jangan menimpa storage_path.
+  await persistOcrMetadata(db, messageId, {
+    ocr_result: ocr,
+    ocr_match: match,
+    ocr_analyzed_at: new Date().toISOString(),
+    ocr_status: visionFailed ? "failed" : "ok",
+    ocr_reason: visionFailed ? ocr.raw_text.slice(0, 180) : null,
+  });
 
-    const existingMeta = (existing?.metadata as Record<string, unknown>) ?? {};
-    await (db as any)
-      .from("whatsapp_messages")
-      .update({
-        metadata: {
-          ...existingMeta,
-          ocr_result: ocr,
-          ocr_match: match,
-          ocr_analyzed_at: new Date().toISOString(),
-        },
-      })
-      .eq("id", messageId);
-  } catch (e) {
-    console.warn(`${tag} Gagal simpan OCR metadata:`, e);
-  }
-
-  return { ok: true, ocr, match };
+  return visionFailed
+    ? { ok: false, ocr, match, error: ocr.raw_text.slice(0, 180) }
+    : { ok: true, ocr, match };
 }
 
 /**

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Route as Route3, Activity, ArrowRight, X } from "lucide-react";
 
-import { ROUTING_MAP, AGENT_NAMES } from "@/ai/router/agent-router";
+import { ROUTING_MAP, AGENT_NAMES, PIPELINE_INTENT_AGENTS, pipelineIntentAgent } from "@/ai/router/agent-router";
 import { INTENT_CATEGORIES } from "@/ai/router/intent-categories";
 import {
   getAgentRoutingStats,
@@ -57,7 +57,7 @@ export function RoutingDebugPage() {
 
     const labelByKey = new Map(INTENT_CATEGORIES.map((c) => [c.key, c.label]));
 
-    return INTENT_CATEGORIES.map((meta) => {
+    const official = INTENT_CATEGORIES.map((meta) => {
       const stats = callsByIntent.get(meta.key);
       return {
         intent: meta.key,
@@ -66,16 +66,50 @@ export function RoutingDebugPage() {
         totalCalls: stats?.total ?? 0,
         byAgent: stats?.byAgent ?? {},
       };
-    }).sort((a, b) => b.totalCalls - a.totalCalls);
+    });
+
+    const listed = new Set<string>(official.map((row) => row.intent));
+    const pipeline = PIPELINE_INTENT_AGENTS.map((meta) => {
+      listed.add(meta.intent);
+      const stats = callsByIntent.get(meta.intent);
+      return {
+        intent: meta.intent,
+        label: meta.label,
+        expectedAgent: meta.agent,
+        totalCalls: stats?.total ?? 0,
+        byAgent: stats?.byAgent ?? {},
+      };
+    });
+
+    const observedPrefix = (data?.rows ?? [])
+      .map((row) => row.intent)
+      .filter((intent) => !listed.has(intent) && pipelineIntentAgent(intent))
+      .filter((intent, index, all) => all.indexOf(intent) === index)
+      .map((intent) => {
+        const mapped = pipelineIntentAgent(intent)!;
+        const stats = callsByIntent.get(intent);
+        return {
+          intent,
+          label: mapped.label,
+          expectedAgent: mapped.agent,
+          totalCalls: stats?.total ?? 0,
+          byAgent: stats?.byAgent ?? {},
+        };
+      });
+
+    return [...official, ...pipeline, ...observedPrefix].sort((a, b) => b.totalCalls - a.totalCalls);
   }, [data]);
 
   // Baris "tak terpetakan": intent yang muncul di log tapi bukan bagian dari
-  // enum IntentCategory (mis. intent bebas-teks dari orkestrator lama).
+  // enum IntentCategory maupun peta pipeline (deterministic_*, policy_question, invoice_send).
   const orphanRows = useMemo(() => {
-    const known = new Set<string>(INTENT_CATEGORIES.map((c) => c.key));
+    const known = new Set<string>([
+      ...INTENT_CATEGORIES.map((c) => c.key),
+      ...PIPELINE_INTENT_AGENTS.map((c) => c.intent),
+    ]);
     const map = new Map<string, { total: number; byAgent: Record<string, number> }>();
     for (const row of data?.rows ?? []) {
-      if (known.has(row.intent)) continue;
+      if (known.has(row.intent) || pipelineIntentAgent(row.intent)) continue;
       const bucket = map.get(row.intent) ?? { total: 0, byAgent: {} };
       bucket.total += row.count;
       bucket.byAgent[row.agent_key] = (bucket.byAgent[row.agent_key] ?? 0) + row.count;
@@ -120,7 +154,7 @@ export function RoutingDebugPage() {
         <div className="border-b p-4">
           <h2 className="text-base font-semibold">Mapping resmi</h2>
           <p className="text-xs text-muted-foreground">
-            {INTENT_CATEGORIES.length} kategori intent terdaftar.
+            {INTENT_CATEGORIES.length + PIPELINE_INTENT_AGENTS.length} kategori intent terdaftar.
           </p>
         </div>
         <Table>
@@ -258,6 +292,11 @@ export function RoutingDebugPage() {
           <div className="mt-4 space-y-3">
             {historyQuery.isLoading && (
               <div className="text-sm text-muted-foreground">Memuat riwayat…</div>
+            )}
+            {historyQuery.isError && (
+              <div className="text-sm text-destructive">
+                {historyQuery.error instanceof Error ? historyQuery.error.message : "Gagal memuat riwayat"}
+              </div>
             )}
             {historyQuery.data?.items.length === 0 && (
               <div className="text-sm text-muted-foreground">

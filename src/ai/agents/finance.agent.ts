@@ -239,9 +239,10 @@ function buildGuestPrompt(s: Scaffold): string {
       "  sebutkan kode booking-nya. JANGAN panggil update_payment_status.\n" +
       "- 'no_pending_booking': info bahwa belum ada booking pending — tanyakan " +
       "  kode booking atau nama.\n" +
-      "- 'pending' / 'no_proof' / error: balas generik 'Bukti transfer sedang kami " +
-      "  verifikasi, konfirmasi dalam maksimal 1×24 jam.'\n" +
-      "Jangan minta tamu kirim ulang bukti kecuali OCR gagal terbaca total.",
+      "- 'pending' / 'no_proof' / error: balas 'Terima kasih Kak, bukti transfernya sudah kami " +
+      "  terima dan sedang kami cek. Kami kabari setelah terverifikasi ya'.\n" +
+      "JANGAN menulis bahwa bukti belum terdeteksi atau belum terbaca bila turn ini berisi gambar/dokumen.\n" +
+      "Jangan minta tamu kirim ulang bukti kecuali file memang tidak tersimpan.",
 
     "ATURAN PENTING SAAT MEMBACA HASIL OCR:\n" +
       "1. Nama pengirim sering BERBEDA dari nama booking — wajar (transfer suami/" +

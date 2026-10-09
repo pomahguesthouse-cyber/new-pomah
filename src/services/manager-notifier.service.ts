@@ -764,6 +764,8 @@ export interface PaymentProofInput {
   messageId: string;
   /** Hasil analisis Vision OCR (opsional — jika undefined, kirim notif sederhana) */
   ocrResult?: PaymentProofResult;
+  /** Tautan inbox admin, mis. /admin/whatsapp?thread=… */
+  chatUrl?: string | null;
 }
 
 function matchStatusEmoji(status: string): string {
@@ -855,7 +857,8 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
         `Telepon: ${input.phone}\n\n` +
         `📋 Hasil OCR:\n${ocrLines || "  (tidak ada data terekstrak)"}\n\n` +
         `🔍 Pencocokan Booking:\n${matchLines}\n\n` +
-        "Silakan verifikasi dan konfirmasi di Dashboard.";
+        "Silakan verifikasi dan konfirmasi di Dashboard." +
+        (input.chatUrl ? `\n\nChat: ${input.chatUrl}` : "");
     } else {
       // Fallback: simple notification (OCR gagal atau tidak tersedia)
       message =
@@ -864,7 +867,8 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
         `Kode Booking: ${bookingCode ?? "-"}\n\n` +
         "Bukti transfer telah dikirim dan memerlukan verifikasi manual.\n" +
         (input.ocrResult?.error ? `\n⚠️ OCR gagal: ${input.ocrResult.error}\n` : "") +
-        (publicImageUrl ? `\nLampiran:\n${publicImageUrl}` : "");
+        (publicImageUrl ? `\nLampiran:\n${publicImageUrl}` : "") +
+        (input.chatUrl ? `\n\nChat: ${input.chatUrl}` : "");
     }
 
     const { waToken } = await getPropertyTokens(db);
