@@ -7,6 +7,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { collectPages, downloadCsv, type ExportRow } from "@/admin/lib/booking-export";
 import { downloadBookingListPdf } from "@/admin/lib/booking-list-pdf-client";
 import { bookingListPdfMessage, describeBookingListFilters } from "@/admin/lib/booking-list-pdf-model";
+import {
+  applyDayClauses,
+  buildDayClauses,
+  dayFilterHeaderDate,
+  dayWindow,
+  isTodayFamily,
+  parseBookingDayChip,
+  wibCalendarDate,
+  type BookingDayChip,
+  type BookingDayParam,
+} from "@/admin/lib/booking-day-filter";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,24 +32,47 @@ const InvoiceDialog = React.lazy(() =>
 
 const BOOKING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+type BookingsSearch = { booking?: string; when?: BookingDayParam };
+
 export const Route = createFileRoute("/admin/bookings")({
-  validateSearch: (search: Record<string, unknown>): { booking?: string } => {
+  validateSearch: (search: Record<string, unknown>): BookingsSearch => {
     const booking =
       typeof search.booking === "string" && BOOKING_ID.test(search.booking) ? search.booking : undefined;
-    return booking ? { booking } : {};
+    const when = parseBookingDayChip(search.when);
+    const out: BookingsSearch = {};
+    if (booking) out.booking = booking;
+    if (when !== "all") out.when = when;
+    return out;
   },
-  // Prefetch the default first page (what the page opens with) when the route is
-  // matched/preloaded, in parallel with the chunk download. Not awaited. The key
-  // and function are the same as the useQuery in BookingsPage.
-  loader: ({ context }) => {
+  loaderDeps: ({ search }) => ({ when: search.when ?? ("all" as const) }),
+  // Prefetch the first page for the date chip in the URL (default: Semua) when
+  // the route is matched, in parallel with the chunk download. Not awaited.
+  // The key and function match the useQuery in BookingsPage.
+  loader: ({ context, deps }) => {
     if (typeof window === "undefined") return;
+    const today = wibCalendarDate();
     void context.queryClient.prefetchQuery({
-      queryKey: [
-        "bookings",
-        { page: 1, statusFilter: "all", sourceFilter: "all", sortBy: "created_at", sortDir: "desc", search: "" },
-      ],
+      queryKey: bookingsQueryKey({
+        page: 1,
+        statusFilter: "all",
+        sourceFilter: "all",
+        sortBy: "created_at",
+        sortDir: "desc",
+        search: "",
+        when: deps.when,
+        today,
+      }),
       queryFn: () =>
-        fetchBookings({ page: 1, pageSize: PAGE_SIZE, status: "all", source: "all", search: "", sortBy: "created_at", sortDir: "desc" }),
+        fetchBookings({
+          page: 1,
+          pageSize: PAGE_SIZE,
+          status: "all",
+          source: "all",
+          search: "",
+          sortBy: "created_at",
+          sortDir: "desc",
+          when: deps.when,
+        }),
     });
   },
   component: BookingsPage,
@@ -160,18 +194,41 @@ function applySort(q: any, sortBy: SortKey, sortDir: SortDir) {
   if (sortBy !== "created_at") q = q.order("created_at", { ascending: false });
   return q;
 }
-async function fetchBookings(args: { page: number; pageSize: number; status?: string; source?: string; search?: string; sortBy: SortKey; sortDir: SortDir }): Promise<ListResult> {
+function bookingsQueryKey(args: {
+  page: number;
+  statusFilter: string;
+  sourceFilter: string;
+  sortBy: SortKey;
+  sortDir: SortDir;
+  search: string;
+  when: BookingDayChip;
+  today: string;
+}) {
+  return ["bookings", args] as const;
+}
+async function fetchBookings(args: {
+  page: number;
+  pageSize: number;
+  status?: string;
+  source?: string;
+  search?: string;
+  sortBy: SortKey;
+  sortDir: SortDir;
+  when?: BookingDayChip;
+  now?: Date;
+}): Promise<ListResult> {
   const from = (args.page - 1) * args.pageSize;
   const to = from + args.pageSize - 1;
   const search = sanitizeSearch(args.search);
   const guestIds = await getGuestIds(search);
+  const dayClauses = buildDayClauses(args.when ?? "all", dayWindow(args.now), args.status);
   let q = supabase.from("bookings").select(FULL_SELECT, { count: "exact" });
-  q = applyFilters(q, args.status, args.source, search, guestIds, true);
+  q = applyDayClauses(applyFilters(q, args.status, args.source, search, guestIds, true), dayClauses);
   const full = await applySort(q, args.sortBy, args.sortDir).range(from, to);
   if (!full.error) return { bookings: (full.data ?? []) as any, total: full.count ?? 0, page: args.page, pageSize: args.pageSize, degraded: false };
   if ((full.error as any).code !== "42703") throw full.error;
   let qb = supabase.from("bookings").select(BASE_SELECT, { count: "exact" });
-  qb = applyFilters(qb, args.status, args.source, search, guestIds, false);
+  qb = applyDayClauses(applyFilters(qb, args.status, args.source, search, guestIds, false), dayClauses);
   const base = await applySort(qb, args.sortBy, args.sortDir).range(from, to);
   if (base.error) throw base.error;
   return { bookings: (base.data ?? []) as any, total: base.count ?? 0, page: args.page, pageSize: args.pageSize, degraded: true };
@@ -200,15 +257,16 @@ function flattenExportRows(rows: any[]): ExportRow[] {
     } as ExportRow;
   });
 }
-async function fetchExportRows(args: { status?: string; source?: string; search?: string; sortBy: SortKey; sortDir: SortDir }) {
+async function fetchExportRows(args: { status?: string; source?: string; search?: string; sortBy: SortKey; sortDir: SortDir; when?: BookingDayChip; now?: Date }) {
   const search = sanitizeSearch(args.search);
   const guestIds = await getGuestIds(search);
+  const dayClauses = buildDayClauses(args.when ?? "all", dayWindow(args.now), args.status);
   let select = FULL_SELECT;
   let includeRef = true;
   const collected = await collectPages(async (from, to) => {
     const run = async () => {
       let q = supabase.from("bookings").select(select);
-      q = applyFilters(q, args.status, args.source, search, guestIds, includeRef);
+      q = applyDayClauses(applyFilters(q, args.status, args.source, search, guestIds, includeRef), dayClauses);
       return applySort(q, args.sortBy, args.sortDir).range(from, to);
     };
     let res = await run();
@@ -222,10 +280,34 @@ async function fetchExportRows(args: { status?: string; source?: string; search?
   });
   return { rows: flattenExportRows(collected.rows), capped: collected.capped };
 }
+const DAY_COUNT_CHIPS: BookingDayChip[] = ["all", "today", "checkin", "checkout", "stay", "tomorrow"];
+async function fetchDayCounts(args: { status?: string; source?: string; search?: string; now?: Date }): Promise<Partial<Record<BookingDayChip, number>>> {
+  const search = sanitizeSearch(args.search);
+  const guestIds = await getGuestIds(search);
+  const window = dayWindow(args.now);
+  const counts: Partial<Record<BookingDayChip, number>> = {};
+  await Promise.all(DAY_COUNT_CHIPS.map(async (chip) => {
+    let includeRef = true;
+    const run = async () => {
+      let q = supabase.from("bookings").select("id", { count: "exact", head: true });
+      q = applyDayClauses(applyFilters(q, args.status, args.source, search, guestIds, includeRef), buildDayClauses(chip, window, args.status));
+      return q;
+    };
+    let res = await run();
+    if (res.error && (res.error as { code?: string }).code === "42703" && includeRef) {
+      includeRef = false;
+      res = await run();
+    }
+    if (res.error) throw res.error;
+    counts[chip] = res.count ?? 0;
+  }));
+  return counts;
+}
 
 function BookingsPage() {
   const [exporting, setExporting] = React.useState<null | "csv" | "pdf">(null);
   const qc = useQueryClient();
+  const navigate = Route.useNavigate();
   const [page, setPage] = React.useState(1);
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [sourceFilter, setSourceFilter] = React.useState("all");
@@ -233,7 +315,9 @@ function BookingsPage() {
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
   const [searchInput, setSearchInput] = React.useState("");
   const [search, setSearch] = React.useState("");
-  const { booking: deepLinkId } = Route.useSearch();
+  const { booking: deepLinkId, when: whenParam } = Route.useSearch();
+  const when: BookingDayChip = whenParam ?? "all";
+  const today = wibCalendarDate();
   const [newOpen, setNewOpen] = React.useState(false);
   const [editCtx, setEditCtx] = React.useState<EditableBooking | null>(null);
   const [deleteCtx, setDeleteCtx] = React.useState<{ id: string; ref: string } | null>(null);
@@ -243,6 +327,22 @@ function BookingsPage() {
     const t = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 350);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [when]);
+
+  function selectWhen(next: BookingDayChip) {
+    setPage(1);
+    void navigate({
+      to: "/admin/bookings",
+      search: (prev) => {
+        const booking = prev.booking;
+        if (next === "all") return booking ? { booking } : {};
+        return booking ? { booking, when: next } : { when: next };
+      },
+    });
+  }
 
   React.useEffect(() => {
     if (!deepLinkId) return;
@@ -273,10 +373,15 @@ function BookingsPage() {
     };
   }, [deepLinkId]);
 
-  const filtersActive = statusFilter !== "all" || sourceFilter !== "all" || search !== "";
+  const filtersActive = statusFilter !== "all" || sourceFilter !== "all" || search !== "" || when !== "all";
   const { data, isLoading, isFetching, error } = useQuery({
-    queryKey: ["bookings", { page, statusFilter, sourceFilter, sortBy, sortDir, search }],
-    queryFn: () => fetchBookings({ page, pageSize: PAGE_SIZE, status: statusFilter, source: sourceFilter, search, sortBy, sortDir }),
+    queryKey: bookingsQueryKey({ page, statusFilter, sourceFilter, sortBy, sortDir, search, when, today }),
+    queryFn: () => fetchBookings({ page, pageSize: PAGE_SIZE, status: statusFilter, source: sourceFilter, search, sortBy, sortDir, when }),
+    placeholderData: keepPreviousData,
+  });
+  const { data: dayCounts } = useQuery({
+    queryKey: ["bookings", "day-counts", { statusFilter, sourceFilter, search, today }],
+    queryFn: () => fetchDayCounts({ status: statusFilter, source: sourceFilter, search }),
     placeholderData: keepPreviousData,
   });
 
@@ -304,7 +409,7 @@ function BookingsPage() {
   async function runExport(kind: "csv" | "pdf") {
     setExporting(kind);
     try {
-      const res = await fetchExportRows({ status: statusFilter, source: sourceFilter, search, sortBy, sortDir });
+      const res = await fetchExportRows({ status: statusFilter, source: sourceFilter, search, sortBy, sortDir, when });
       const rows = res.rows;
       if (rows.length === 0) { toast.info("Tidak ada booking yang cocok dengan filter saat ini."); return; }
       const stamp = new Date().toISOString().slice(0, 10);
@@ -317,7 +422,13 @@ function BookingsPage() {
         const result = await downloadBookingListPdf({
           rows,
           propertyName: "Pomah Guesthouse",
-          filterSummary: describeBookingListFilters({ status: statusFilter, source: sourceFilter, search }),
+          filterSummary: describeBookingListFilters({
+            status: statusFilter,
+            source: sourceFilter,
+            search,
+            day: when,
+            on: when === "all" ? null : dayFilterHeaderDate(when, dayWindow()),
+          }),
           generatedAt,
           capped: res.capped,
         });
@@ -337,7 +448,7 @@ function BookingsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rangeFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeTo = Math.min(page * PAGE_SIZE, total);
-  const resetFilters = () => { setStatusFilter("all"); setSourceFilter("all"); setSearchInput(""); setSearch(""); setPage(1); };
+  const resetFilters = () => { setStatusFilter("all"); setSourceFilter("all"); setSearchInput(""); setSearch(""); setPage(1); selectWhen("all"); };
   const setSort = (key: SortKey) => {
     setPage(1);
     setSortBy((current) => {
@@ -349,7 +460,7 @@ function BookingsPage() {
   const sortLabel = (key: SortKey) => (sortBy === key ? (sortDir === "desc" ? "↓" : "↑") : "");
 
   return (
-    <div className="space-y-5 p-2.5 sm:p-3.5 md:p-6 lg:space-y-6 lg:p-10">
+    <div className="min-w-0 max-w-full overflow-x-hidden space-y-5 p-2.5 sm:p-3.5 md:p-6 lg:space-y-6 lg:p-10">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div><p className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground lg:text-xs">Reservations</p><h1 className="mt-1.5 text-xl font-semibold tracking-tight sm:text-2xl lg:mt-2 lg:text-3xl">Bookings</h1></div>
         <div className="flex flex-wrap items-center gap-2">
@@ -368,6 +479,8 @@ function BookingsPage() {
         <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}><SelectTrigger className="h-10 w-[calc(50%-0.25rem)] text-[13px] sm:w-44 lg:h-9 lg:text-sm"><SelectValue /></SelectTrigger><SelectContent>{SOURCE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>
         {filtersActive && <Button variant="ghost" size="sm" className="h-10 gap-1.5 lg:h-9" onClick={resetFilters}><X className="h-3.5 w-3.5" />Reset</Button>}
       </div>
+
+      <DayFilterChips when={when} counts={dayCounts} activeTotal={isLoading ? undefined : total} onSelect={selectWhen} />
 
       <div className="hidden items-center gap-4 px-5 lg:grid" style={{ gridTemplateColumns: BOOKING_GRID }}>
         <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Kode Booking</span>
@@ -417,6 +530,74 @@ function BookingsPage() {
       ) : null}
       <Dialog open={!!deleteCtx} onOpenChange={(o) => !o && setDeleteCtx(null)}><DialogContent className="sm:max-w-[440px]"><DialogHeader><DialogTitle>Hapus booking {deleteCtx?.ref}?</DialogTitle><DialogDescription>Seluruh data booking ini akan dihapus permanen dan tidak bisa dikembalikan. Data tamu tidak ikut terhapus.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleteCtx(null)}>Batal</Button><Button variant="destructive" disabled={deleteMut.isPending} onClick={() => deleteCtx && deleteMut.mutate(deleteCtx.id)}>{deleteMut.isPending ? "Menghapus…" : "Hapus booking"}</Button></DialogFooter></DialogContent></Dialog>
     </div>
+  );
+}
+
+function DayFilterChips({
+  when,
+  counts,
+  activeTotal,
+  onSelect,
+}: {
+  when: BookingDayChip;
+  counts?: Partial<Record<BookingDayChip, number>>;
+  activeTotal?: number;
+  onSelect: (chip: BookingDayChip) => void;
+}) {
+  const countFor = (chip: BookingDayChip) => counts?.[chip] ?? (chip === when ? activeTotal : undefined);
+  const todayOn = isTodayFamily(when);
+  return (
+    <div className="min-w-0 max-w-full space-y-2">
+      <ChipScroller label="Filter tanggal">
+        <DateChip active={when === "all"} label="Semua" count={countFor("all")} onClick={() => onSelect("all")} />
+        <DateChip active={todayOn} label="Hari ini" count={countFor("today")} onClick={() => onSelect("today")} />
+        <DateChip active={when === "tomorrow"} label="Besok" count={countFor("tomorrow")} onClick={() => onSelect("tomorrow")} />
+      </ChipScroller>
+      {todayOn ? (
+        <div className="min-w-0 max-w-full rounded-2xl bg-muted/60 p-1">
+          <ChipScroller label="Rincian hari ini">
+            <DateChip active={when === "today"} label="Semua hari ini" count={countFor("today")} onClick={() => onSelect("today")} />
+            <DateChip active={when === "checkin"} label="Check-in hari ini" count={countFor("checkin")} onClick={() => onSelect("checkin")} />
+            <DateChip active={when === "checkout"} label="Check-out hari ini" count={countFor("checkout")} onClick={() => onSelect("checkout")} />
+            <DateChip active={when === "stay"} label="Menginap" count={countFor("stay")} onClick={() => onSelect("stay")} />
+          </ChipScroller>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ChipScroller({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 max-w-full">
+      <div
+        role="group"
+        aria-label={label}
+        className="flex w-full max-w-full snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain pr-1 [-ms-overflow-style:none] [scrollbar-width:none] md:snap-none md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DateChip({ active, label, count, onClick }: { active: boolean; label: string; count?: number; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`inline-flex h-11 min-h-11 shrink-0 snap-start items-center gap-2 rounded-full border px-3.5 text-[13px] font-semibold leading-none transition-colors lg:h-10 ${
+        active ? "border-primary bg-primary text-primary-foreground shadow-sm" : "border-border bg-card text-foreground hover:bg-muted"
+      }`}
+    >
+      <span className="whitespace-nowrap">{label}</span>
+      {typeof count === "number" ? (
+        <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 font-mono text-[11px] font-medium tabular-nums ${active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+          {count}
+        </span>
+      ) : null}
+    </button>
   );
 }
 
