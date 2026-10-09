@@ -115,8 +115,12 @@ export const getPaymentProofResult: ToolHandler = async (
       !!(
         (md as any).attachment_url ||
         (md as any).media_url ||
+        (md as any).payment_proof_candidate === true ||
         (md as any).attachment ||
         (md as any).evolution_message ||
+        (md as any).media_type === "image" ||
+        ((md as any).media_type === "document" &&
+          /^(image\/|application\/pdf)/i.test(String((md as any).mime_type ?? ""))) ||
         (md as any).intent === "payment_proof" ||
         (md as any).pipeline === "payment_proof_ocr"
       );
@@ -202,7 +206,7 @@ export const getPaymentProofResult: ToolHandler = async (
       ok: false,
       status: sawProof ? "pending" : "no_proof",
       message: sawProof
-        ? "Bukti transfer terdeteksi tapi belum bisa dibaca otomatis. Minta tamu mengirim ulang bukti transfer atau teruskan ke admin."
+        ? "Bukti transfer sudah diterima dan sedang dicek. Ucapkan terima kasih dan kabari setelah terverifikasi. Jangan katakan bukti belum terdeteksi atau belum terbaca."
         : "Belum ada bukti transfer yang dikirim oleh tamu.",
     });
 

@@ -76,6 +76,7 @@ import {
   threadQueryOptions,
   threadsQueryOptions,
 } from "@/admin/modules/whatsapp/wa-queries";
+import { getMessageAttachment } from "@/admin/modules/whatsapp/message-attachment";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -1969,35 +1970,8 @@ function MessageBadges({
   );
 }
 
-type AttachmentInfo = { url: string; kind: "image" | "video" | "audio" | "file"; name: string; mime: string };
-
-/**
- * Extract an attachment (image/video/audio/file) from a message's
- * metadata. Supports several common webhook field shapes so incoming
- * WhatsApp media is rendered regardless of the exact key used.
- */
-function getAttachment(m: any): AttachmentInfo | null {
-  const meta = (m.metadata ?? {}) as Record<string, any>;
-  const media = (meta.media ?? meta.attachment ?? null) as Record<string, any> | null;
-  const url =
-    meta.media_url ?? meta.mediaUrl ?? meta.attachment_url ?? meta.file_url ??
-    meta.fileUrl ?? meta.url ?? media?.url ?? media?.link ?? null;
-  if (!url || typeof url !== "string") return null;
-
-  const mime = String(
-    meta.mime_type ?? meta.mimetype ?? meta.media_type ?? meta.content_type ??
-    media?.mime_type ?? media?.type ?? "",
-  ).toLowerCase();
-  const name =
-    String(meta.file_name ?? meta.filename ?? meta.media_name ?? media?.file_name ?? media?.filename ?? "") ||
-    (url.split("?")[0].split("/").pop() ?? "file");
-  const ext = (url.split("?")[0].split(".").pop() ?? "").toLowerCase();
-
-  const isImg = mime.startsWith("image/") || mime === "image" || ["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg"].includes(ext);
-  const isVid = mime.startsWith("video/") || mime === "video" || ["mp4", "webm", "mov", "avi", "mkv"].includes(ext);
-  const isAud = mime.startsWith("audio/") || mime === "audio" || ["mp3", "ogg", "opus", "wav", "m4a", "aac"].includes(ext);
-  const kind: AttachmentInfo["kind"] = isImg ? "image" : isVid ? "video" : isAud ? "audio" : "file";
-  return { url, kind, name, mime };
+function getAttachment(m: any) {
+  return getMessageAttachment(m);
 }
 
 /** Render an attachment inside a message bubble (image/video/audio/file card). */
@@ -2008,15 +1982,28 @@ function MessageAttachment({ m }: { m: any }) {
   if (a.kind === "image") {
     return (
       <a href={a.url} target="_blank" rel="noopener noreferrer" className="mb-1 block max-w-full">
-        <img src={a.url} alt={a.name} loading="lazy" decoding="async" className="min-h-24 max-h-64 w-full max-w-full rounded-md bg-black/5 object-cover sm:max-w-[280px]" />
+        <img
+          src={a.url}
+          alt={a.name}
+          loading="lazy"
+          decoding="async"
+          className="max-h-52 w-full max-w-full rounded-md bg-black/5 object-cover min-[700px]:max-h-64 min-[700px]:max-w-[280px]"
+        />
       </a>
     );
   }
   if (a.kind === "video") {
-    return <video src={a.url} controls preload="none" className="mb-1 max-h-64 w-full max-w-full rounded-md sm:max-w-[280px]" />;
+    return (
+      <video
+        src={a.url}
+        controls
+        preload="none"
+        className="mb-1 max-h-52 w-full max-w-full rounded-md min-[700px]:max-h-64 min-[700px]:max-w-[280px]"
+      />
+    );
   }
   if (a.kind === "audio") {
-    return <audio src={a.url} controls preload="none" className="mb-1 w-full max-w-[240px]" />;
+    return <audio src={a.url} controls preload="none" className="mb-1 w-full max-w-full min-[700px]:max-w-[240px]" />;
   }
   // Generic file (PDF, doc, etc.) — card with icon + name + download.
   const label = a.mime.includes("pdf") || a.name.toLowerCase().endsWith(".pdf") ? "PDF" : (a.mime || "Berkas");

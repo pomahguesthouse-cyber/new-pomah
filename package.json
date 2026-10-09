@@ -46,6 +46,7 @@
     "test:meta-inbound-enqueue": "tsx scripts/test-meta-inbound-enqueue.ts",
     "test:guest-whatsapp": "tsx scripts/test-guest-whatsapp.ts",
     "test:wa-outbound-attachment": "tsx scripts/test-wa-outbound-attachment.ts",
+    "test:wa-inbound-media": "tsx scripts/test-wa-inbound-media.ts",
     "test:wa-composer-send": "tsx scripts/test-wa-composer-send.ts",
     "test:public-seo": "tsx scripts/test-public-seo.ts",
     "test:seo-redirects": "tsx scripts/test-seo-redirects.ts",

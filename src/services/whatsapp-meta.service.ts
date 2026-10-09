@@ -8,9 +8,11 @@
 import { phoneVariants } from "@/lib/phone";
 import { runDeferred } from "@/lib/cf-context";
 import { isUnsupportedMetaImage, prepareMetaImageForSend } from "@/services/meta-media";
+import { bytesToDataUri, classifyMetaMediaLookupFailure } from "@/services/wa-inbound-media";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/whatsapp";
-const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
+/** Batas unduh media masuk. Selaras dengan bucket `wa-inbound` (~16 MB). */
+const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
 
 export interface MetaSendResult {
   ok: boolean;
@@ -281,25 +283,49 @@ function noteMetaChannelHealth(ok: boolean, error: string | null): void {
   });
 }
 
-/** Unduh media masuk (mis. bukti transfer) sebagai data URI, dengan batas ukuran. */
-export async function fetchMetaMediaDataUri(mediaId: string): Promise<string | null> {
+export interface MetaMediaBytes {
+  ok: true;
+  bytes: Uint8Array;
+  mime: string;
+  size: number;
+}
+
+export type MetaMediaBytesResult =
+  | MetaMediaBytes
+  | { ok: false; reason: string };
+
+/**
+ * Unduh byte media masuk sekali (bukti transfer, dokumen, audio, video, stiker).
+ * `reason` singkat: `expired` bila Meta sudah menghapus media, selain itu kode kegagalan.
+ */
+export async function fetchMetaMediaBytes(
+  mediaId: string,
+  maxBytes = MAX_MEDIA_BYTES,
+): Promise<MetaMediaBytesResult> {
+  if (!mediaId) return { ok: false, reason: "empty_media_id" };
   const headers = gatewayHeaders();
-  if (!headers || !mediaId) return null;
+  if (!headers) return { ok: false, reason: "not_configured" };
+
   const metaRes = await fetch(`${GATEWAY_URL}/media/${encodeURIComponent(mediaId)}`, { headers });
   if (!metaRes.ok) {
-    console.warn(
-      `[WhatsAppMeta] media lookup [${metaRes.status}]: ${(await metaRes.text()).slice(0, 200)}`,
-    );
-    return null;
+    const body = (await metaRes.text()).slice(0, 200);
+    const reason = classifyMetaMediaLookupFailure(metaRes.status, body);
+    console.warn(`[WhatsAppMeta] media lookup [${metaRes.status}] ${reason}: ${body}`);
+    return { ok: false, reason };
   }
   const meta = (await metaRes.json()) as { url?: string; mime_type?: string; file_size?: number };
-  if (!meta.url) return null;
-  if (typeof meta.file_size === "number" && meta.file_size > MAX_MEDIA_BYTES) return null;
+  if (!meta.url) return { ok: false, reason: "no_url" };
+  if (typeof meta.file_size === "number" && meta.file_size > maxBytes) {
+    return { ok: false, reason: "too_large" };
+  }
 
   const dl = await fetch(`${GATEWAY_URL}/media_download`, {
     headers: { ...headers, "X-WhatsApp-Media-URL": meta.url },
   });
-  if (!dl.ok || !dl.body) return null;
+  if (!dl.ok || !dl.body) {
+    const reason = classifyMetaMediaLookupFailure(dl.status, "");
+    return { ok: false, reason: dl.ok ? "empty_body" : reason === "expired" ? reason : `download_${dl.status}` };
+  }
   const reader = dl.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -307,12 +333,13 @@ export async function fetchMetaMediaDataUri(mediaId: string): Promise<string | n
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > MAX_MEDIA_BYTES) {
+    if (total > maxBytes) {
       await reader.cancel();
-      return null;
+      return { ok: false, reason: "too_large" };
     }
     chunks.push(value);
   }
+  if (total === 0) return { ok: false, reason: "empty_body" };
   const buf = new Uint8Array(total);
   let off = 0;
   for (const c of chunks) {
@@ -320,5 +347,12 @@ export async function fetchMetaMediaDataUri(mediaId: string): Promise<string | n
     off += c.byteLength;
   }
   const mime = meta.mime_type ?? dl.headers.get("content-type") ?? "image/jpeg";
-  return `data:${mime};base64,${Buffer.from(buf).toString("base64")}`;
+  return { ok: true, bytes: buf, mime, size: total };
+}
+
+/** Unduh media masuk sebagai data URI. Memakai byte yang sama dengan `fetchMetaMediaBytes`. */
+export async function fetchMetaMediaDataUri(mediaId: string): Promise<string | null> {
+  const fetched = await fetchMetaMediaBytes(mediaId);
+  if (!fetched.ok) return null;
+  return bytesToDataUri(fetched.bytes, fetched.mime);
 }
