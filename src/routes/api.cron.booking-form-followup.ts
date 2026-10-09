@@ -73,10 +73,10 @@ async function fetchStates(
   return { plain, contexts };
 }
 
-async function getPropertyDefaults(): Promise<{ waToken: string | null; baseUrl: string }> {
+async function getPropertyDefaults(): Promise<{ baseUrl: string }> {
   const { data } = await (supabaseAdmin as any)
     .from("properties")
-    .select("wpp_token, public_domain")
+    .select("public_domain")
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -86,7 +86,7 @@ async function getPropertyDefaults(): Promise<{ waToken: string | null; baseUrl:
     ? (domain.startsWith("http") ? domain : `https://${domain}`).replace(/\/+$/, "")
     : "https://pomahguesthouse.com";
 
-  return { waToken: (data?.wpp_token as string | null) ?? null, baseUrl };
+  return { baseUrl };
 }
 
 async function resolveThreadId(row: FollowupTokenRow): Promise<string | null> {
@@ -105,15 +105,12 @@ async function resolveThreadId(row: FollowupTokenRow): Promise<string | null> {
  * ini, LLM tidak tahu nudge pernah dikirim dan berpotensi mengulanginya.
  */
 async function sendAndRecord(params: {
-  waToken: string | null;
   phone: string;
   message: string;
   threadId: string | null;
   agent: string;
 }): Promise<boolean> {
-  const result = await sendGuestWhatsApp(params.phone, params.message, {
-    evolutionToken: params.waToken,
-  });
+  const result = await sendGuestWhatsApp(params.phone, params.message);
   if (!result.ok) {
     console.warn(
       `[booking-form-followup] gagal kirim WA ke ${params.phone.slice(-6)}: ${result.error ?? "unknown"}`,
@@ -169,12 +166,12 @@ async function handle(): Promise<Response> {
     return Response.json({ ok: true, checked: tokens.length, nudged: 0, expired: 0 });
   }
 
-  const { waToken, baseUrl } = await getPropertyDefaults();
+  const { baseUrl } = await getPropertyDefaults();
   let nudged = 0;
   let expired = 0;
 
   // ── Fase 1: NUDGE ────────────────────────────────────────────────────────
-  const canSend = guestWhatsAppAvailable(waToken);
+  const canSend = guestWhatsAppAvailable();
   for (const row of plan.nudge) {
     if (!canSend) {
       console.warn("[booking-form-followup] WhatsApp tamu belum terkonfigurasi — nudge dilewati");
@@ -193,7 +190,6 @@ async function handle(): Promise<Response> {
     if (!claimed) continue;
 
     const ok = await sendAndRecord({
-      waToken,
       phone: row.phone,
       message: buildNudgeMessage(row, baseUrl, nowMs),
       threadId: await resolveThreadId(row),
@@ -250,7 +246,6 @@ async function handle(): Promise<Response> {
     if (!item.notify || !canSend) continue;
 
     await sendAndRecord({
-      waToken,
       phone: row.phone,
       message: FORM_EXPIRY_MESSAGE,
       threadId: await resolveThreadId(row),

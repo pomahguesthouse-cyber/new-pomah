@@ -1,11 +1,9 @@
 /**
  * Kanal WhatsApp Business resmi (Meta) lewat connector gateway Lovable.
  *
- * Nomor resmi dipakai untuk melayani tamu; nomor Evolution tetap aktif untuk
- * fungsi internal. Thread yang pesan terakhirnya masuk lewat Meta ditandai
- * `whatsapp_threads.provider = 'meta'`, dan balasan otomatis ikut kanal itu.
+ * Ini satu-satunya kanal WhatsApp. Thread tamu ditandai
+ * `whatsapp_threads.provider = 'meta'`.
  */
-import { phoneVariants } from "@/lib/phone";
 import { runDeferred } from "@/lib/cf-context";
 import { isUnsupportedMetaImage, prepareMetaImageForSend } from "@/services/meta-media";
 import { bytesToDataUri, classifyMetaMediaLookupFailure } from "@/services/wa-inbound-media";
@@ -54,28 +52,6 @@ type AdminClient = {
 async function getAdmin(): Promise<AdminClient> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin as unknown as AdminClient;
-}
-
-/** Cek apakah nomor ini sedang dilayani lewat kanal Meta. */
-export async function resolveThreadProvider(phone: string): Promise<"meta" | "evolution"> {
-  if (!isMetaConfigured()) return "evolution";
-  const variants = phoneVariants(String(phone ?? "").replace(/@.*$/, ""));
-  if (variants.length === 0) return "evolution";
-  try {
-    const admin = await getAdmin();
-    const { data } = await admin
-      .from("whatsapp_threads")
-      .select("provider")
-      .or(
-        `phone.in.(${variants.map((v) => `"${v}"`).join(",")}),canonical_phone.in.(${variants.map((v) => `"${v}"`).join(",")})`,
-      )
-      .order("last_message_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return (data as { provider?: string } | null)?.provider === "meta" ? "meta" : "evolution";
-  } catch {
-    return "evolution";
-  }
 }
 
 export function guessMediaType(url: string, filename?: string): "image" | "video" | "audio" | "document" {

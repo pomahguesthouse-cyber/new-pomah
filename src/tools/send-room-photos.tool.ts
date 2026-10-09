@@ -12,6 +12,7 @@
  */
 
 import type { ToolContext, ToolHandler } from "./types";
+import { isMetaConfigured } from "@/services/whatsapp-meta.service";
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
 import { loadRecentOutboundCaptions, roomPhotoCaption } from "@/services/wa-media-dedup";
 
@@ -62,7 +63,6 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
   }
 
   const phone = ctx.phone?.trim();
-  const token = (ctx.property as { wpp_token?: string })?.wpp_token?.trim();
 
   if (ctx.isSimulator) {
     return JSON.stringify({
@@ -72,11 +72,11 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
       rooms: targets.map((r) => ({ name: r.name, photos: pickImages(r, max) })),
     });
   }
-  if (!phone || !token) {
+  if (!phone || !isMetaConfigured()) {
     return JSON.stringify({
       ok: false,
       error:
-        "Tidak bisa mengirim foto sekarang (kredensial WhatsApp belum lengkap). " +
+        "Tidak bisa mengirim foto sekarang (WhatsApp Business belum terhubung). " +
         "Arahkan tamu ke pomahguesthouse.com untuk galeri lengkap.",
     });
   }
@@ -99,7 +99,7 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
       const photoCaption = i === 0 ? caption : "";
       const filename = `${room.name.replace(/\s+/g, "_")}_${i + 1}.jpg`;
       try {
-        const r = await sendWhatsAppMessage(token, phone, photoCaption, photos[i], filename);
+        const r = await sendWhatsAppMessage("", phone, photoCaption, photos[i], filename);
         if (r.ok) sent++;
         else {
           failed++;

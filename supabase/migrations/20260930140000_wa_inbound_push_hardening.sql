@@ -38,7 +38,7 @@ CREATE INDEX IF NOT EXISTS staff_push_seen_created_at_idx
 ALTER TABLE public.staff_push_seen ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.staff_push_seen FROM PUBLIC, anon, authenticated;
 
--- Maps a media hint (Meta type, Evolution messageType, or mime type) to a label.
+-- Maps a media hint (Meta type, message type, or mime type) to a label.
 CREATE OR REPLACE FUNCTION public.wa_push_media_label(p_hint text)
 RETURNS text
 LANGUAGE sql
@@ -82,7 +82,7 @@ BEGIN
     RETURN '[Pesan]';
   END IF;
 
-  -- Placeholders written by the Meta and Evolution inbound handlers.
+  -- Placeholders written by the Meta inbound handler.
   IF v ~* '^\[lampiran [^\]]*\]$' THEN
     RETURN public.wa_push_media_label(substring(v from '^\[[Ll]ampiran ([^\]]*)\]$'));
   END IF;

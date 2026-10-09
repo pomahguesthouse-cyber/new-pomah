@@ -117,7 +117,6 @@ assert.ok(!/\b(jangan|dilarang)\b/i.test(linkReply), "fallback tanpa teguran");
 
 async function main() {
   const calls: Array<{ to: string; message: string; fileUrl?: string; filename?: string }> = [];
-  let evolutionCalled = false;
   const deps: GuestWhatsAppDeps = {
     isMetaConfigured: () => true,
     toRecipient: (p) => p.replace(/\D/g, "").replace(/^0/, "62"),
@@ -126,11 +125,6 @@ async function main() {
       return { ok: true, error: null, messageId: "wamid.1" };
     },
     sendTemplate: async () => ({ ok: false, error: "unused" }),
-    evolutionReady: () => true,
-    sendEvolution: async () => {
-      evolutionCalled = true;
-      return { ok: true, error: null };
-    },
     isReengagement: () => false,
     templateName: () => "",
     templateLang: () => "id",
@@ -138,12 +132,11 @@ async function main() {
   const res = await sendGuestWhatsApp(
     "081234567890",
     BROCHURE_CAPTION,
-    { evolutionToken: "tok", fileUrl: fromStorage!.url, filename: fromStorage!.name },
+    { fileUrl: fromStorage!.url, filename: fromStorage!.name },
     deps,
   );
   assert.equal(res.ok, true);
   assert.equal(res.channel, "meta");
-  assert.equal(evolutionCalled, false, "Evolution mati: brosur tidak boleh lewat Evolution");
   assert.deepEqual(calls, [
     {
       to: "6281234567890",

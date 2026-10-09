@@ -14,6 +14,7 @@ import {
   type ArticleCategory,
 } from "@/admin/modules/seo/article-generator.functions";
 import { computeNextRunUTC, type Frequency } from "@/admin/modules/seo/schedules.functions";
+import { isMetaConfigured } from "@/services/whatsapp-meta.service";
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
 import { getWaitUntil, runDeferred } from "@/lib/cf-context";
 
@@ -52,14 +53,7 @@ async function notifyAdmins(
   client: SupabaseClient,
   message: string,
 ): Promise<void> {
-  // Pull token + admin phones
-  const { data: prop } = await (client as any)
-    .from("properties")
-    .select("wpp_token, public_domain")
-    .limit(1)
-    .maybeSingle();
-  const token = (prop?.wpp_token as string | null)?.trim();
-  if (!token) return;
+  if (!isMetaConfigured()) return;
   const { data: managers } = await (client as any)
     .from("property_managers")
     .select("phone, role")
@@ -70,7 +64,7 @@ async function notifyAdmins(
     .filter(Boolean) as string[];
   if (phones.length === 0) return;
   await Promise.all(
-    phones.map((p) => sendWhatsAppMessage(token, p, message).catch(() => undefined)),
+    phones.map((p) => sendWhatsAppMessage("", p, message).catch(() => undefined)),
   );
 }
 

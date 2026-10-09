@@ -171,13 +171,6 @@ export const sendPreArrivalReminder = createServerFn({ method: "POST" })
     const target = guest?.phone_normalized || guest?.phone;
     if (!target) throw new Error("Nomor tamu tidak tersedia");
 
-    const { data: prop } = await client
-      .from("properties")
-      .select("wpp_token")
-      .limit(1)
-      .maybeSingle();
-    const token = (prop as { wpp_token?: string } | null)?.wpp_token ?? null;
-
     const name = guest?.full_name ?? "Kak";
     const defaultMsg =
       `Halo ${name}, ini pengingat check-in di Pomah Guesthouse pada ${booking.check_in}. ` +
@@ -186,10 +179,10 @@ export const sendPreArrivalReminder = createServerFn({ method: "POST" })
     const body = data.message?.trim() || defaultMsg;
 
     const { guestWhatsAppAvailable, sendGuestWhatsApp } = await import("@/services/guest-whatsapp.service");
-    if (!guestWhatsAppAvailable(token)) {
-      throw new Error("WhatsApp tamu belum terkonfigurasi (Meta atau Evolution).");
+    if (!guestWhatsAppAvailable()) {
+      throw new Error("WhatsApp tamu belum terkonfigurasi. WhatsApp Business (Meta) belum terhubung.");
     }
-    const { ok, error } = await sendGuestWhatsApp(target, body, { evolutionToken: token });
+    const { ok, error } = await sendGuestWhatsApp(target, body);
     if (!ok) throw new Error(error ?? "Gagal kirim WhatsApp");
     return { ok: true };
   });

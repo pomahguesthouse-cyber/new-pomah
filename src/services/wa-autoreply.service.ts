@@ -5,6 +5,7 @@
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { saveOutboundMessage, updateThreadAutoReplyMeta } from "@/repositories/message.repository";
 import { sendWhatsAppMessage, markWaSeen, setWaTyping } from "@/services/whatsapp.service";
+import { isMetaConfigured } from "@/services/whatsapp-meta.service";
 import { sendRoomPhotos } from "@/tools/send-room-photos.tool";
 import { runMultiAgentOrchestration, deriveAgentLabelFromKey } from "@/ai/multi-agent-orchestrator";
 import { fmtDateID, nextDay, todayWIB } from "@/lib/date";
@@ -595,8 +596,7 @@ type BrochureSendOutcome =
   | { status: "unavailable" };
 
 /**
- * Kirim brosur PDF sebagai dokumen WhatsApp (Meta Cloud API bila terhubung;
- * Evolution hanya bila Meta tidak dikonfigurasi). Dalam
+ * Kirim brosur PDF sebagai dokumen WhatsApp lewat Meta Cloud API. Dalam
  * `BROCHURE_DEDUP_WINDOW_MS` (2 jam) caption yang sama di
  * `whatsapp_meta_outbound` membalas "sudah dikirim"; setelah jendela itu
  * brosur dikirim ulang. Pencarian caption memakai konstanta yang sama.
@@ -616,7 +616,6 @@ async function sendBrochureFastPath(
   if (recent.has(BROCHURE_CAPTION)) return { status: "already_sent", file };
   const { sendGuestWhatsApp } = await import("@/services/guest-whatsapp.service");
   const result = await sendGuestWhatsApp(phone || target, BROCHURE_CAPTION, {
-    evolutionToken: token,
     fileUrl: file.url,
     filename: file.name,
   });
@@ -698,10 +697,9 @@ export async function executeAutoreplyForPhone(
   const c = ctx as any;
   const sendTarget = String(c.send_target || c.external_chat_id || phone);
   const rawManager = await resolveManagerByPhone(phone);
-  // Nomor resmi Meta khusus melayani tamu: semua pengirim (termasuk manager)
-  // selalu dilayani Rani, bukan Asisten Admin.
-  const { resolveThreadProvider } = await import("./whatsapp-meta.service");
-  const viaOfficialNumber = (await resolveThreadProvider(phone)) === "meta";
+  // Satu-satunya kanal WhatsApp adalah nomor resmi Meta: semua pengirim
+  // (termasuk manager) selalu dilayani Rani, bukan Asisten Admin.
+  const viaOfficialNumber = true;
   // Manager bisa mengaktifkan "guest mode" untuk menguji alur tamu (booking,
   // invoice, pembayaran) tanpa ter-route ke agen manajerial.
   const guestModeActive = viaOfficialNumber || (rawManager ? await isManagerInGuestMode(phone) : false);
@@ -747,7 +745,7 @@ export async function executeAutoreplyForPhone(
       console.warn("[Autoreply] staff silence check failed (non-fatal):", e);
     }
   }
-  if ((!isManager && !c.auto_reply_enabled) || !c.wpp_token) {
+  if ((!isManager && !c.auto_reply_enabled) || !isMetaConfigured()) {
     return "skipped_config";
   }
 
@@ -794,7 +792,7 @@ export async function executeAutoreplyForPhone(
       QUICK_ACK_ENABLED &&
       !isManager &&
       !!queueEntryId &&
-      !!c.wpp_token &&
+      isMetaConfigured() &&
       !!earlyInbound.trim() &&
       shouldArmQuickAck(earlyInbound),
     delayMs: quickAckDelayMs(Date.now() - metrics.workerStartedAt),
@@ -2801,7 +2799,7 @@ export async function recoverUnqueuedInboundMessages(options?: {
         continue;
       }
 
-      const c = ctx as { auto_reply_enabled?: boolean; wpp_token?: string | null };
+      const c = ctx as { auto_reply_enabled?: boolean };
       if (!c.auto_reply_enabled) {
         logInboundSkip("QueueRecovery", "auto_reply_disabled", {
           message_id: row.id,
@@ -2809,7 +2807,7 @@ export async function recoverUnqueuedInboundMessages(options?: {
         });
         continue;
       }
-      if (!c.wpp_token) {
+      if (!isMetaConfigured()) {
         logInboundSkip("QueueRecovery", "missing_send_token", {
           message_id: row.id,
           phone_tail: phoneTail(phone),
@@ -2904,8 +2902,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
-    const { resolveThreadProvider: resolveProvider } = await import("./whatsapp-meta.service");
-    const entryViaOfficial = (await resolveProvider(entry.phone)) === "meta";
+    const entryViaOfficial = true;
     const isManagerEntry =
       !entryViaOfficial && (!!(await resolveManagerByPhone(entry.phone)) || isConfiguredAdminPhone(entry.phone));
     const fallbackBody = isManagerEntry ? MANAGER_FALLBACK_MESSAGE : FALLBACK_MESSAGE;
@@ -3002,7 +2999,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       console.warn("[Fallback] context fetch failed:", e);
     }
 
-    if (!waToken || (!autoReplyEnabled && !isManagerEntry)) {
+    if (!isMetaConfigured() || (!autoReplyEnabled && !isManagerEntry)) {
       // Tandai tetap supaya tidak dicek terus-menerus.
       await (supabaseAdmin as any)
         .from("wa_conversation_queue")
@@ -3055,7 +3052,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       console.warn("[Fallback] save outbound (pending) failed:", e);
     }
 
-    const { ok, error: sendErr } = await sendWhatsAppMessage(waToken, fallbackSendTarget, fallbackBody);
+    const { ok, error: sendErr } = await sendWhatsAppMessage(waToken ?? "", fallbackSendTarget, fallbackBody);
 
     if (!ok) {
       console.warn(`[Fallback] send failed for ${entry.phone.slice(-6)}: ${sendErr}`);

@@ -122,7 +122,6 @@ assert.equal(
 );
 
 assert.equal(location("https://www.pomahguesthouse.com/api/public/whatsapp/webhook"), null);
-assert.equal(location("http://pomahguesthouse.com/api/evolution"), null);
 assert.equal(location("https://www.pomahguesthouse.com/api/cron/process-wa-queue"), null);
 
 assert.equal(location("http://localhost:5173/explore"), null);

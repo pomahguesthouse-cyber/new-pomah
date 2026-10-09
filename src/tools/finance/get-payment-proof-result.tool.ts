@@ -115,9 +115,10 @@ export const getPaymentProofResult: ToolHandler = async (
       !!(
         (md as any).attachment_url ||
         (md as any).media_url ||
+        (md as any).storage_path ||
+        (md as any).meta_media_id ||
         (md as any).payment_proof_candidate === true ||
         (md as any).attachment ||
-        (md as any).evolution_message ||
         (md as any).media_type === "image" ||
         ((md as any).media_type === "document" &&
           /^(image\/|application\/pdf)/i.test(String((md as any).mime_type ?? ""))) ||
@@ -145,9 +146,8 @@ export const getPaymentProofResult: ToolHandler = async (
         return JSON.stringify(shape(meta.ocr_result, meta.ocr_match));
       }
 
-      // Detect a proof image still being OCR'd. Note: Evolution API sometimes
-      // delivers media without a public URL, so also trust the intent/pipeline
-      // tags the webhook writes for payment-proof images.
+      // Detect a proof image still being OCR'd. Meta sometimes stores only a
+      // media id, so also trust the intent/pipeline tags the webhook writes.
       const candidate = rows.find((m) => hasProofSignal(m.metadata));
       if (candidate) {
         sawProof = true;
@@ -168,16 +168,17 @@ export const getPaymentProofResult: ToolHandler = async (
 
     // OCR latar belakang webhook belum menghasilkan apa pun (tugas `waitUntil`
     // bisa mati sebelum selesai). Jalankan OCR SEKARANG, langsung di dalam tool,
-    // memakai record Evolution yang tersimpan di metadata pesan.
+    // memakai media Meta yang tersimpan di metadata pesan.
     if (proofRow) {
       const md = (proofRow.metadata ?? {}) as any;
       try {
-        const { fetchWaMediaDataUri } = await import("@/services/whatsapp.service");
+        const { fetchMetaMediaDataUri } = await import("@/services/whatsapp-meta.service");
         const { analyzePaymentProof } = await import("@/services/payment-proof.service");
 
         let imageSource: string | null = null;
-        if (md.evolution_message) {
-          imageSource = await fetchWaMediaDataUri("", md.evolution_message);
+        const mediaId = typeof md.meta_media_id === "string" ? md.meta_media_id.trim() : "";
+        if (mediaId) {
+          imageSource = await fetchMetaMediaDataUri(mediaId);
         }
         const publicUrl = md.attachment_url ?? md.media_url ?? md.attachment?.url ?? null;
         if (!imageSource && publicUrl && !/mmg\.whatsapp\.net/i.test(String(publicUrl))) {
