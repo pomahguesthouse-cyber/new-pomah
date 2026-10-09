@@ -16,6 +16,7 @@
  *     manager.
  */
 
+import { isMetaConfigured } from "@/services/whatsapp-meta.service";
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
 import type { ToolContext, ToolHandler } from "@/tools/types";
 
@@ -85,18 +86,11 @@ export const replyToGuest: ToolHandler = async (
     });
   }
 
-  // Resolve WhatsApp gateway token.
-  const { data: prop } = await (ctx.supabaseAdmin as any)
-    .from("properties")
-    .select("wpp_token")
-    .limit(1)
-    .maybeSingle();
-  const token = (prop?.wpp_token as string | null) ?? null;
-  if (!token) {
-    return JSON.stringify({ ok: false, error: "WhatsApp gateway token belum dikonfigurasi." });
+  if (!isMetaConfigured()) {
+    return JSON.stringify({ ok: false, error: "WhatsApp Business belum terhubung." });
   }
 
-  const sendRes = await sendWhatsAppMessage(token, phone, message);
+  const sendRes = await sendWhatsAppMessage("", phone, message);
   if (!sendRes.ok) {
     return JSON.stringify({ ok: false, error: `Gagal kirim WA: ${sendRes.error ?? "unknown"}` });
   }

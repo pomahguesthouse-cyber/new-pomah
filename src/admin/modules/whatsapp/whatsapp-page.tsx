@@ -769,8 +769,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   }, [current]);
 
   const metaWindowClosed = useMemo(() => {
-    const provider = (thread?.thread as { provider?: string } | undefined)?.provider;
-    if (provider !== "meta") return false;
+    // Semua thread dilayani Meta Cloud API, jadi jendela 24 jam berlaku untuk semuanya.
     // Pesan masuk terakhir dari server (bisa di luar jendela pesan terbaru yang dimuat).
     const latestIn = thread?.lastInboundAt ?? null;
     const local = lastInboundAt(allMessages);

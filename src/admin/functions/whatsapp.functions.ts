@@ -232,12 +232,6 @@ export const sendMessage = createServerFn({ method: "POST" })
       .single();
     if (!thread) throw new Error("Thread not found");
 
-    const { data: prop } = await context.supabase
-      .from("properties")
-      .select("wpp_token")
-      .limit(1)
-      .maybeSingle();
-
     const caption = data.body;
     const fileName = data.attachment
       ? fileNameForMime(data.attachment.name, data.attachment.mime)
@@ -284,7 +278,8 @@ export const sendMessage = createServerFn({ method: "POST" })
       if (error) throw error;
     };
 
-    if (prop?.wpp_token) {
+    const { isMetaConfigured } = await import("@/services/whatsapp-meta.service");
+    if (isMetaConfigured()) {
       let fileUrl: string | undefined;
       if (data.attachment) {
         const signed = await supabaseAdmin.storage
@@ -301,7 +296,7 @@ export const sendMessage = createServerFn({ method: "POST" })
       }
 
       const sendResult = await sendWhatsAppMessage(
-        prop.wpp_token,
+        "",
         thread.phone,
         caption,
         fileUrl,

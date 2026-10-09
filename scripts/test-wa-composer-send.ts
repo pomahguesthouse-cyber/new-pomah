@@ -171,7 +171,7 @@ const fnSrc = fs.readFileSync("src/admin/functions/whatsapp.functions.ts", "utf8
 const callAt = fnSrc.indexOf("const sendResult = await sendWhatsAppMessage");
 assert.ok(callAt > 0);
 const callBody = fnSrc.slice(callAt, fnSrc.indexOf(");", callAt));
-assert.match(callBody, /prop\??\.wpp_token/);
+assert.match(fnSrc, /isMetaConfigured\(\)/);
 assert.match(callBody, /thread\.phone/);
 assert.match(callBody, /caption/);
 assert.doesNotMatch(callBody, /clientId|client_id/);

@@ -87,18 +87,16 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
       .maybeSingle();
     if (logErr || !log) throw new Error("Log tidak ditemukan.");
 
-    // Resolusi kredensial WhatsApp gateway + base URL dari properti terkait.
-    let waToken: string | null = null;
+    // Base URL dari properti terkait. Kirim WhatsApp lewat Meta Cloud API.
     let baseUrl = "https://pomahguesthouse.com";
     let propertyName = "Pomah Guesthouse";
     if (log.property_id) {
       const { data: prop } = await admin
         .from("properties")
-        .select("name, wpp_token, public_domain")
+        .select("name, public_domain")
         .eq("id", log.property_id)
         .maybeSingle();
       if (prop) {
-        waToken = (prop.wpp_token as string | null) ?? null;
         propertyName = (prop.name as string | undefined) ?? propertyName;
         const domain = prop.public_domain as string | undefined;
         if (domain) baseUrl = domain.startsWith("http") ? domain : `https://${domain}`;
@@ -107,8 +105,8 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
     const { guestWhatsAppAvailable, sendGuestWhatsApp } = await import(
       "@/services/guest-whatsapp.service"
     );
-    if (!guestWhatsAppAvailable(waToken)) {
-      throw new Error("WhatsApp tamu belum terkonfigurasi (Meta atau Evolution).");
+    if (!guestWhatsAppAvailable()) {
+      throw new Error("WhatsApp tamu belum terkonfigurasi. WhatsApp Business (Meta) belum terhubung.");
     }
 
     // Buat token baru memakai prefill yang sama dengan log lama.
@@ -166,7 +164,7 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
       .single();
     if (insErr) throw new Error(`Gagal mencatat log baru: ${insErr.message}`);
 
-    const result = await sendGuestWhatsApp(log.phone, message, { evolutionToken: waToken });
+    const result = await sendGuestWhatsApp(log.phone, message);
 
     const patch: Record<string, unknown> = {
       status: result.ok ? "sent" : "failed",

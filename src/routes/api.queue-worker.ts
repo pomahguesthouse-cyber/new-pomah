@@ -9,7 +9,7 @@ function json(data: unknown, status = 200): Response {
 }
 
 function expectedQueueToken(): string | undefined {
-  return process.env.QUEUE_WORKER_TOKEN || process.env.EVOLUTION_WEBHOOK_TOKEN || process.env.WPP_WEBHOOK_TOKEN;
+  return process.env.QUEUE_WORKER_TOKEN || process.env.WPP_WEBHOOK_TOKEN;
 }
 
 function requestQueueToken(request: Request): string | null {

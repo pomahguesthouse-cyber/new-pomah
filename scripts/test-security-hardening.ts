@@ -5,7 +5,7 @@
  *   S1 — validasi bentuk identifier booking di lookup invoice publik
  *   S2 — otorisasi update_payment_status (manager vs tamu tanpa bukti OCR)
  *   B1 — formatter TIDAK boleh bilang "penuh" saat status tidak diketahui
- *   S4 — webhook Evolution fail-closed saat token env kosong
+ *   S4 — pola fail-closed: token env kosong menolak request
  */
 
 import assert from "node:assert/strict";
@@ -37,7 +37,7 @@ assert.equal(BOOKING_LOOKUP_ID_RE.test("PG A"), false);
 assert.equal(BOOKING_LOOKUP_ID_RE.test(""), false);
 
 // ── S4: fail-closed ──────────────────────────────────────────────────────────
-// Replika logika authorize() di src/routes/api.evolution.ts.
+// Token env kosong harus menolak, bukan menerima semua request.
 function authorizeStatus(expected: string | undefined, providedToken: string | null): number {
   if (!expected) return 503;
   return providedToken === expected ? 200 : 403;

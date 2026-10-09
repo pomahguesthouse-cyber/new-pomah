@@ -179,7 +179,7 @@ const TOOLS = [
 ];
 
 const FLOW_NODES: FlowNodeMeta[] = [
-  { id: "incoming", title: "Incoming WA", desc: "Evolution webhook", x: 0, y: 240, icon: MessageCircle, tone: "green", drawer: "inbox", kind: "trigger" },
+  { id: "incoming", title: "Incoming WA", desc: "Meta webhook", x: 0, y: 240, icon: MessageCircle, tone: "green", drawer: "inbox", kind: "trigger" },
   { id: "parser", title: "Parser", desc: "Normalize phone + dedup", x: 230, y: 135, icon: GitBranch, tone: "cyan", kind: "system" },
   { id: "queue", title: "Queue + Delay", desc: "Debounce pesan beruntun", x: 230, y: 345, icon: Clock, tone: "blue", drawer: "queue", kind: "system" },
   { id: "intent", title: "Intent AI", desc: "Rule + LLM fallback", x: 470, y: 240, icon: Brain, tone: "violet", drawer: "routing", kind: "ai" },
