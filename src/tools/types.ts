@@ -72,7 +72,7 @@ export interface ToolContext {
   lastDates?: { checkIn: string; checkOut: string };
   /**
    * True when the caller is in managerial/admin mode (e.g. running pricing
-   * tools from the admin Telegram bot). Tools that mutate property data check
+   * tools from the managerial WhatsApp channel). Tools that mutate property data check
    * this before running.
    */
   isManager?: boolean;

@@ -48,7 +48,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       description:
         "Buat SATU booking (satu reference_code) yang bisa berisi SATU atau BEBERAPA kamar. " +
         "Mode tamu (WA): WAJIB nama+email+HP lengkap (untuk invoice & konfirmasi). " +
-        "Mode manajerial (staff entry via Telegram/manajer): cukup nama + minimal 1 tipe kamar + " +
+        "Mode manajerial (staff entry via WhatsApp manajer): cukup nama + minimal 1 tipe kamar + " +
         "check_in. Email/HP boleh kosong — staf isi belakangan via admin UI. " +
         "check_out boleh kosong (default 1 malam = check_in + 1 hari).\n\n" +
         "MULTI-KAMAR: pakai `rooms: [{room_type, quantity}, ...]`. Total akan dihitung " +
@@ -399,7 +399,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       name: "reply_to_guest",
       description:
         "Kirim pesan WhatsApp ke tamu yang sudah punya thread. Dipakai oleh Manager Agent " +
-        "saat manajer minta meneruskan balasan kustom ke tamu via Telegram. " +
+        "saat manajer minta meneruskan balasan kustom ke tamu via WhatsApp. " +
         "Refuse kalau tamu belum pernah inisiasi chat.",
       parameters: {
         type: "object",
@@ -645,7 +645,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       description:
         "MANAJER ONLY. Ubah tarif dasar (base_rate) dan/atau tarif extrabed " +
         "sebuah tipe kamar di tabel room_types. Panggil HANYA saat super admin / " +
-        "manajer secara eksplisit menginstruksikan perubahan harga via Telegram atau " +
+        "manajer secara eksplisit menginstruksikan perubahan harga via " +
         "WhatsApp (mis. 'ganti harga Deluxe jadi 350rb', 'naikin extrabed Single jadi 75000'). " +
         "JANGAN PERNAH panggil saat berbicara dengan tamu — tool akan menolak. " +
         "Konfirmasi nominal ke manajer SEBELUM memanggil bila terdapat ambiguitas (mis. 'naikin 50rb' " +

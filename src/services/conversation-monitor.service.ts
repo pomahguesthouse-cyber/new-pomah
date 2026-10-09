@@ -12,7 +12,6 @@
  *  5. KEYWORD      — Kata sensitif / keluhan keras terdeteksi
  *
  * Alert disimpan di tabel conversation_alerts untuk dashboard admin.
- * Tidak dikirim lewat Telegram.
  *
  * Fire-and-forget — semua fungsi exported tidak pernah throw,
  * hanya log warning agar tidak memblokir pipeline utama.
@@ -152,7 +151,6 @@ async function insertAlert(
     aiStatus: "auto" | "human";
     severity: "low" | "medium" | "high" | "critical";
     dedupeKey: string;
-    telegramMessageId?: string;
   },
 ): Promise<string | null> {
   const { data, error } = await db
@@ -168,7 +166,6 @@ async function insertAlert(
       severity: opts.severity,
       dedupe_key: opts.dedupeKey,
       status: "open",
-      telegram_message_id: opts.telegramMessageId ?? null,
     })
     .select("id")
     .single();
@@ -216,7 +213,7 @@ async function dispatchAlert(opts: AlertOptions): Promise<void> {
 
   const dedupeKey = `conv_alert:${opts.phone}:${opts.triggerType}:${Date.now()}`;
 
-  // 1. Simpan alert dulu (tanpa telegram_message_id)
+  // 1. Simpan alert
   const alertId = await insertAlert(db, {
     threadId: opts.threadId,
     phone: opts.phone,

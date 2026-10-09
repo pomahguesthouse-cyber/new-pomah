@@ -4,9 +4,9 @@
  *  - GUEST (WhatsApp tamu, default): the heavy path — greetings, room
  *    inquiries, availability, kicking off the booking state machine via
  *    `start_booking_details`.
- *  - MANAGERIAL (Telegram per-agent bot, e.g. Rania bot, or a WA number
- *    in property_managers): operational ops — "ada kamar kosong tanggal
- *    X?", "buatkan booking atas nama Y", "siapa check-in besok?".
+ *  - MANAGERIAL (WhatsApp number registered in property_managers):
+ *    operational ops — "ada kamar kosong tanggal X?", "buatkan booking
+ *    atas nama Y", "siapa check-in besok?".
  *    NEVER auto-trigger `start_booking_details` here; manager either
  *    passes complete data or uses `get_bookings` / admin UI.
  */
@@ -44,7 +44,7 @@ const pickTools = (toolNames: readonly string[]) =>
  * Strategi: SET INTI selalu ada; grup media & grup booking hanya disuntik
  * saat intent turn ini memang membutuhkannya. Tanpa sinyal intent
  * (`ctx.intent === undefined`) agent tetap memakai SET PENUH — pemanggil lama
- * (AI Lab simulator, Telegram) tidak berubah perilakunya.
+ * (AI Lab simulator, jalur manajerial WhatsApp) tidak berubah perilakunya.
  */
 
 /** Selalu tersedia: cek kamar, spesifikasi, dan menyimpan slot parsial. */
@@ -188,8 +188,7 @@ const FRONT_OFFICE_MANAGER_TOOLS = pickTools([
   "change_booking_room",
   "delete_booking",
   "update_booking_status",
-  // Blokir kamar juga harus bisa dari kanal WhatsApp mode manajerial,
-  // bukan cuma Telegram.
+  // Blokir kamar juga harus bisa dari kanal WhatsApp mode manajerial.
   "block_room",
   "unblock_room",
 ] as const);
@@ -924,7 +923,7 @@ function buildManagerialPrompt(s: Scaffold): string {
 
     "FORMAT TANGGAL: Bahasa Indonesia ('17–18 Juli 2026'), JANGAN ISO ke manajer. Pakai YYYY-MM-DD hanya untuk argumen tool.",
 
-    "FORMAT PESAN: Telegram — teks polos, baris baru untuk daftar, hindari Markdown (*, _, #) dan tabel kompleks.",
+    "FORMAT PESAN: WhatsApp — teks polos, baris baru untuk daftar, hindari Markdown (*, _, #) dan tabel kompleks.",
 
     BOOKING_LIST_FORMAT_BLOCK,
   ]

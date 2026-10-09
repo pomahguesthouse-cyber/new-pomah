@@ -4,8 +4,8 @@
  * Two-track agent — same persona ("Santi/Sinta, Finance"), two audiences:
  *   - GUEST (default, WhatsApp tamu): warm "Kak" tone, focus on
  *     paying / invoice / payment-proof verification flow.
- *   - MANAGERIAL (ctx.mode === "managerial", Telegram per-agent bot or
- *     a WA number registered in property_managers): peer-to-peer, no
+ *   - MANAGERIAL (ctx.mode === "managerial", WhatsApp number registered
+ *     in property_managers): peer-to-peer, no
  *     "Kak", reports & piutang queries.
  *
  * The prompt branches early — guest sections never read managerial
@@ -266,7 +266,7 @@ function buildGuestPrompt(s: Scaffold): string {
   ].filter(Boolean).join("\n\n");
 }
 
-// ─── Managerial mode (Telegram per-agent bot / WA manajer terdaftar) ─────────
+// ─── Managerial mode (WhatsApp manajer terdaftar) ────────────────────────────
 
 function buildManagerialPrompt(s: Scaffold): string {
   return [
@@ -312,7 +312,7 @@ function buildManagerialPrompt(s: Scaffold): string {
       "(mis. 'kirim ulang invoice ke PG-XXXX' → `send_invoice`). JANGAN auto-trigger " +
       "alur OCR di sini — itu untuk WhatsApp tamu.",
 
-    "FORMAT PESAN: Telegram — teks polos, gunakan baris baru untuk daftar, hindari " +
+    "FORMAT PESAN: WhatsApp — teks polos, gunakan baris baru untuk daftar, hindari " +
       "Markdown (*, _, #) dan tabel kompleks.",
 
     BOOKING_LIST_FORMAT_BLOCK,

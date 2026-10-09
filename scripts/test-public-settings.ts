@@ -49,9 +49,6 @@ const leakedRow = {
   gemini_api_key: googleKey,
   serper_api_key: "serper-test-key",
   tavily_api_key: "tavily-test-key",
-  telegram_bot_token: "0000:telegram-test",
-  telegram_webhook_secret: "webhook-test-secret",
-  telegram_bot_username: "pomah_bot",
   ai_api_key: "ai-test-key",
   ai_base_url: "https://ai.internal",
   ai_model: "internal-model",
@@ -71,8 +68,6 @@ const rawPaths = findSecretPaths(leakedRow);
 assert.ok(rawPaths.some((path) => path.endsWith("gemini_api_key")), "detector sees gemini_api_key");
 assert.ok(rawPaths.some((path) => path.endsWith("serper_api_key")));
 assert.ok(rawPaths.some((path) => path.endsWith("tavily_api_key")));
-assert.ok(rawPaths.some((path) => path.endsWith("telegram_bot_token")));
-assert.ok(rawPaths.some((path) => path.endsWith("telegram_webhook_secret")));
 assert.ok(rawPaths.some((path) => path.endsWith("wpp_token")));
 assert.ok(rawPaths.some((path) => path.endsWith("payment_account_number")));
 assert.ok(rawPaths.some((path) => path.includes("explore_config.gemini_api_key")));
@@ -103,9 +98,6 @@ for (const forbidden of [
   "gemini_api_key",
   "serper_api_key",
   "tavily_api_key",
-  "telegram_bot_token",
-  "telegram_webhook_secret",
-  "telegram_bot_username",
   "ai_api_key",
   "ai_base_url",
   "ai_model",
@@ -131,7 +123,6 @@ const serialized = JSON.stringify(publicSettings);
 assert.equal(serialized.includes(googleKey), false);
 assert.equal(serialized.includes("serper-test-key"), false);
 assert.equal(serialized.includes("tavily-test-key"), false);
-assert.equal(serialized.includes("webhook-test-secret"), false);
 assert.equal(serialized.includes("wpp-test-token"), false);
 assert.equal(serialized.includes("0000000000"), false);
 

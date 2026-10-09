@@ -19,7 +19,7 @@ async function handle(request: Request): Promise<Response> {
     // 1. Fetch managers
     const { data: managers, error: managerErr } = await (supabaseAdmin as any)
       .from("property_managers")
-      .select("id, name, phone, role, is_active, telegram_chat_id");
+      .select("id, name, phone, role, is_active");
     report.managers = managers;
     report.manager_error = managerErr ? managerErr.message : null;
 

@@ -13,7 +13,7 @@
  *    "yang di-override vs yang masih base".
  *
  * Output JSON murni (atas permintaan): array per (room_type_id, date).
- * Tidak ada formatting Telegram — biar LLM yang rangkum.
+ * Tidak ada formatting khusus — biar LLM yang rangkum.
  *
  * Guard: ctx.isManager === true.
  */

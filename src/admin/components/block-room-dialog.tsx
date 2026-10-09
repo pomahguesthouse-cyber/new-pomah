@@ -2,7 +2,7 @@
  * Dialog "Blokir Kamar" untuk kalender admin.
  *
  * Sumber kebenaran ketersediaan adalah `room_daily_rates.stop_sell` — sama
- * seperti tool `block_room` di kanal WhatsApp/Telegram — jadi dialog ini
+ * seperti tool `block_room` di kanal WhatsApp — jadi dialog ini
  * menulis lewat server fn `upsertDailyRates` agar semua kanal konsisten.
  */
 
@@ -126,7 +126,7 @@ export function BlockRoomDialog({
         <DialogHeader>
           <DialogTitle>Blokir kamar</DialogTitle>
           <DialogDescription>
-            Tipe kamar yang diblokir tidak akan ditawarkan chatbot WhatsApp, Telegram,
+            Tipe kamar yang diblokir tidak akan ditawarkan chatbot WhatsApp
             maupun form booking pada rentang tanggal ini.
           </DialogDescription>
         </DialogHeader>

@@ -151,7 +151,7 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
   }
 
   // ── 2. Optional: kirim invoice langsung ke WhatsApp tamu ────────────────
-  //     Manajer via Telegram bisa perintah "kirim invoice PMH-XXXX ke tamu";
+  //     Manajer via WhatsApp bisa perintah "kirim invoice PMH-XXXX ke tamu";
   //     Finance Agent set send_to_guest=true. Tool memanggil pipeline yang
   //     sama seperti tombol "Kirim Invoice" di admin.
   let waSent = false;

@@ -81,7 +81,6 @@ Catatan: enforcement `allowedToolNames` di `src/ai/multi-agent-orchestrator.ts:5
 - `src/tools/finance/get-payment-info.tool.ts:53`
 - `src/tools/finance/update-payment-status.tool.ts:60`
 - `src/public/functions/webchat.functions.ts:195`
-- `src/services/telegram-callbacks.ts:57`
 
 Semua memakai `.ilike("reference_code", <input dari tamu/LLM>)` lalu `.limit(1)`. Tidak ada satu pun yang memverifikasi booking itu milik `ctx.phone`.
 
@@ -108,7 +107,7 @@ if (!expected) return true;   // ← tanpa token env, semua request diterima
 
 **Lokasi** `src/routes/api.cron.process-wa-queue.ts:20-100` (handler `GET` dan `POST`, tanpa cek token)
 
-Komentar di file menjelaskan alasannya (pg_cron sulit membawa secret tanpa Vault). Tapi konsekuensinya: siapa pun yang tahu URL bisa memanggil berulang → tiap panggilan menjalankan cleanup RPC, `recoverUnqueuedInboundMessages`, `drainQueue`, `sendFailureFallbackToGuests`, dan bisa memicu notifikasi Telegram zombie ke super admin.
+Komentar di file menjelaskan alasannya (pg_cron sulit membawa secret tanpa Vault). Tapi konsekuensinya: siapa pun yang tahu URL bisa memanggil berulang → tiap panggilan menjalankan cleanup RPC, `recoverUnqueuedInboundMessages`, `drainQueue`, `sendFailureFallbackToGuests`, dan bisa memicu notifikasi zombie ke super admin.
 
 **Perbaikan.** Simpan token di Supabase Vault dan kirim via header dari pg_cron, atau minimal: (a) tolak `GET` (crawler/prefetch), (b) rate-limit per IP, (c) cek header `User-Agent`/secret query sederhana. Prinsipnya sama dengan S4 — endpoint yang membelanjakan uang harus punya penjaga.
 
@@ -331,7 +330,7 @@ Jalur balasan melakukan read-then-write berlapis: cek ack (2 SELECT), cek dedup 
 
 | Temuan | Perubahan |
 |--------|-----------|
-| **S3** | Helper baru `src/lib/booking-code.ts`: `normalizeBookingCode()` (validasi bentuk + huruf besar), `invalidBookingCodeError()`, dan `bookingBelongsToPhone()` (cek kepemilikan lewat `guests!inner(phone)` + `phoneVariants`). Dipakai di `send-invoice`, `get-payment-info`, `update-payment-status`, `telegram-callbacks`, dan `startWebchatSession` — semuanya kini `.eq()` bukan `.ilike()`. Tool jalur tamu (`send_invoice`, `get_payment_info`) menolak kode yang bukan milik nomor penelepon; manajer dikecualikan. Bonus: `get_payment_info` tidak lagi mempercayai argumen `guest_phone` dari LLM di kanal tamu — nomor percakapan yang berlaku, sehingga tamu tidak bisa mengintip booking nomor lain. |
+| **S3** | Helper baru `src/lib/booking-code.ts`: `normalizeBookingCode()` (validasi bentuk + huruf besar), `invalidBookingCodeError()`, dan `bookingBelongsToPhone()` (cek kepemilikan lewat `guests!inner(phone)` + `phoneVariants`). Dipakai di `send-invoice`, `get-payment-info`, `update-payment-status`, dan `startWebchatSession` — semuanya kini `.eq()` bukan `.ilike()`. Tool jalur tamu (`send_invoice`, `get_payment_info`) menolak kode yang bukan milik nomor penelepon; manajer dikecualikan. Bonus: `get_payment_info` tidak lagi mempercayai argumen `guest_phone` dari LLM di kanal tamu — nomor percakapan yang berlaku, sehingga tamu tidak bisa mengintip booking nomor lain. |
 | **B3** | `AI_TIMEOUT_MS` 18 s → 22 s, `AI_TIMEOUT_LIGHT_MS` 14 s → 16 s. Anggaran juga dipangkas dinamis agar tidak menabrak `HANDLE_ONE_DEADLINE_MS`: `min(budget, 26s − elapsed − 3s cadangan kirim)`. `MultiAgentInput` menerima `deadlineAt`; `resolveCallTimeoutMs()` menghitung timeout tiap panggilan LLM dari sisa anggaran (batas atas 10 s, lantai 3,5 s, cadangan 1,5 s), dan retry internal dilewati bila sisa waktu tidak cukup untuk satu panggilan penuh. AbortController luar sekarang jadi jaring pengaman, bukan pemutus rutin. |
 | **P3** | `scheduleQueueNudge` dihapus dari webhook (hemat 1 subrequest + hingga 15 detik `waitUntil` per pesan). Migrasi `20260807093000_drop_dead_queue_worker_triggers.sql` menghapus trigger `t_process_wa_queue`, `t_process_wa_queue_update`, dan fungsi `trigger_process_wa_queue()` yang mem-POST ke endpoint ber-status `disabled`. |
 | **P1** | `/api/cron/process-wa-queue` dibuka dengan gerbang murah: satu `SELECT id … WHERE status IN (pending,waiting,processing,retrying) LIMIT 1` (memakai partial index `idx_wa_cq_phone_active`); bila kosong → langsung `{idle:true}` tanpa cleanup/scan/claim. Pekerjaan safety-net dipindah ke route baru `/api/cron/wa-queue-safety-net` + migrasi `20260807094000_wa_queue_safety_net_cron.sql` (pg_cron tiap 1 menit). Drain tetap 2 detik untuk menjaga latency balasan. |

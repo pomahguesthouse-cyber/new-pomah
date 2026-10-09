@@ -1101,7 +1101,7 @@ const AI_ALERT_TITLE: Record<string, string> = {
 
 const AI_ALERT_ACTION: Record<string, string> = {
   credit_exhausted:
-    "Segera top up kredit AI di Lovable. Jika kredit habis, chatbot WhatsApp/Telegram berhenti membalas tamu.",
+    "Segera top up kredit AI di Lovable. Jika kredit habis, chatbot WhatsApp berhenti membalas tamu.",
   policy_blocked:
     "Cek pengaturan Lovable AI workspace (fitur AI dimatikan atau limit kredit admin tercapai).",
   rate_limited:

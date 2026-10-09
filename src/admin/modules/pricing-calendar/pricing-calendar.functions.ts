@@ -172,7 +172,7 @@ export const upsertDailyRates = createServerFn({ method: "POST" })
  * Update a room type's base rate and/or extrabed rate. This used to live in
  * the standalone /admin/pricing page; consolidated here so all pricing edits
  * happen in one place. The Pricing Agent's `update_room_rate` tool does the
- * same thing for the Telegram/WhatsApp managerial path.
+ * same thing for the WhatsApp managerial path.
  */
 export const updateRoomTypeRates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

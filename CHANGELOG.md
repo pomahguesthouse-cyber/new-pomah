@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-09 — Telegram AI chat removed
+
+Removed the Telegram AI chat bot: `/api/telegram`, `/api/telegram/$agentKey`, Admin → Telegram (bots, linking, group bindings), the settings bot-token field, and the chat services. Staff alerts stay on WhatsApp and push. WhatsApp guest chat, AI agents, the manager notifier, the conversation monitor, and push are unchanged.
+
+Apply `supabase/migrations/20261010020000_drop_telegram.sql` manually after deploy. It drops `telegram_agent_conversations`, `telegram_agent_bots`, `telegram_agent_channels`, and `telegram_chat_history`, the `properties.telegram_*` columns, the `property_managers.telegram_*` columns (including `telegram_chat_id`), `conversation_alerts.telegram_message_id`, the link-token guard, and any cron job whose name or command matches telegram. Bookings, prices, and WhatsApp history are not touched.
+
+Before applying, run the preflight in the pull request (row counts, columns, cron jobs, bot usernames only). Then delete each bot webhook (`deleteWebhook`) and revoke the bot token in BotFather. The only username written in product code is `rania_pomah_bot`; live usernames are in `properties.telegram_bot_username` and `telegram_agent_bots.bot_username`.
+
 ## 2026-10-09 — WhatsApp is Meta Cloud API only
 
 Removed the retired Evolution API gateway (routes, inbox poll, send fallback, admin token/webhook UI, and `EVOLUTION_*` env usage).

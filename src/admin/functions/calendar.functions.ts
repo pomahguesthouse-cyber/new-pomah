@@ -186,7 +186,7 @@ export const getCalendarData = createServerFn({ method: "GET" })
     const { supabase } = context;
     // Rentang tanggal diteruskan oleh pemanggil (from/to YYYY-MM-DD). Ambil
     // stop_sell harian dalam rentang ini supaya kalender bisa menampilkan
-    // bar "Blokir" per tipe kamar — sumber yang sama dengan chatbot WA/Telegram.
+    // bar "Blokir" per tipe kamar — sumber yang sama dengan chatbot WhatsApp.
     const from = data?.from as string | undefined;
     const to = data?.to as string | undefined;
 

@@ -20,7 +20,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
  * room_type_availability_detail) semuanya memfilter
  * status IN ('pending','confirmed','checked_in') — 'expired' tidak termasuk.
  *
- *   4. Kirim notifikasi WhatsApp/Telegram ke manajemen untuk setiap booking
+ *   4. Kirim notifikasi WhatsApp ke manajemen untuk setiap booking
  *      yang baru saja expired (fire-and-forget, dedupe per booking id).
  *
  * Akses: tidak ada secret — sama dengan endpoint cron lain di project ini

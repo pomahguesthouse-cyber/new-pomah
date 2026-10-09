@@ -18,7 +18,6 @@ import {
   View,
   AlertTriangle,
   Bell,
-  Send,
   Newspaper,
   TrendingUp,
   LifeBuoy,
@@ -99,7 +98,6 @@ const DEFAULT_GROUPS: NavGroup[] = [
     items: [
       { to: "/admin/contacts", label: "Contacts", icon: Users },
       { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
-      { to: "/admin/telegram", label: "Telegram", icon: Send },
       { to: "/admin/complaints", label: "Komplain", icon: AlertTriangle },
       { to: "/admin/handoff", label: "Human Handoff", icon: LifeBuoy },
       { to: "/admin/booking-form-logs", label: "Log Form Booking", icon: Link2 },

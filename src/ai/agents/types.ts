@@ -155,11 +155,10 @@ export interface AgentContext {
    * Conversation register. "guest" (default) is the customer-facing
    * tone used when answering tamu via WhatsApp — sapa "Kak", empathetic,
    * full hospitality scripts. "managerial" overrides the tone for
-   * internal Telegram channels where the agent is talking to the property
+   * internal staff chats where the agent is talking to the property
    * manager/staff: concise, peer-to-peer, no apologies, operational vocab.
    *
-   * Set to "managerial" by Telegram entry points (per-agent bot router)
-   * AND by the WhatsApp autoreply when the sender's number matches an
+   * Set to "managerial" by the WhatsApp autoreply when the sender's number matches an
    * active property_managers row. Otherwise left unset so guest-facing
    * behavior is preserved.
    */
@@ -231,7 +230,7 @@ export interface AgentDefinition {
    *
    * Bila agent mengimplementasikan pemisahan statis/dinamis di bawah, method
    * ini WAJIB mengembalikan gabungan keduanya — pemanggil yang tidak tahu soal
-   * pemisahan (AI Lab simulator, Telegram) tetap dapat prompt utuh.
+   * pemisahan (AI Lab simulator, jalur manajerial WhatsApp) tetap dapat prompt utuh.
    */
   buildSystemPrompt(ctx: AgentContext): string;
   /**

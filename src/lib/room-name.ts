@@ -1,7 +1,7 @@
 /**
  * Normalisasi nama tipe kamar yang datang dari manusia atau dari LLM.
  *
- * Insiden 10 Agu 2026 (Telegram, agen Juminten): manajer mengetik
+ * Insiden 10 Agu 2026 (kanal manajer, agen Juminten): manajer mengetik
  * "rubah harga single 250 rb". Perintah tidak tertangkap parser deterministik,
  * jatuh ke LLM, dan LLM meneruskan `room_type: "kamar Single menjadi"` ke
  * `update_room_rate`. Resolver menolaknya ("Tipe kamar ... tidak ditemukan"),

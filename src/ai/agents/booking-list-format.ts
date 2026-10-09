@@ -4,7 +4,7 @@
  * Appended to any agent prompt that exposes `get_bookings` (Manager,
  * Finance). One canonical layout means manager sees the same emoji-block
  * report whether they ask "5 booking terbaru" (Manager) or "siapa belum
- * lunas" (Finance) — readable on Telegram, no markdown bullets.
+ * lunas" (Finance) — readable on WhatsApp, no markdown bullets.
  *
  * Keep this in ONE place so the format doesn't drift between agents.
  */
