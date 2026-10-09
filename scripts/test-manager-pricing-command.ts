@@ -1,5 +1,5 @@
 /**
- * Regresi: perintah harga dari manajer (Telegram) harus tertangkap parser
+ * Regresi: perintah harga dari manajer harus tertangkap parser
  * DETERMINISTIK, bukan jatuh ke rantai LLM → ask_agent → sub-agent pricing.
  *
  * Insiden 10 Agu 2026 (agen Juminten):

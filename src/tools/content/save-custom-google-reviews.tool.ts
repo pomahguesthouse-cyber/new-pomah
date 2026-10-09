@@ -67,8 +67,7 @@ export const saveCustomGoogleReviews: ToolHandler = async (
     return JSON.stringify({
       ok: false,
       error: "Hanya manajer/super admin yang boleh menyimpan ulasan kustom. " +
-             "Tool ini hanya tersedia di kanal internal (Telegram bot agent atau " +
-             "nomor WhatsApp manajer terdaftar).",
+             "Tool ini hanya tersedia di kanal internal (nomor WhatsApp manajer terdaftar).",
     });
   }
 

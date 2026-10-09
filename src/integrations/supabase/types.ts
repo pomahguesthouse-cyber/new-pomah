@@ -1524,9 +1524,6 @@ export type Database = {
           smart_delay_config: Json | null
           tagline: string | null
           tavily_api_key: string | null
-          telegram_bot_token: string | null
-          telegram_bot_username: string | null
-          telegram_webhook_secret: string | null
           tiktok_url: string | null
           timezone: string
           updated_at: string
@@ -1576,9 +1573,6 @@ export type Database = {
           smart_delay_config?: Json | null
           tagline?: string | null
           tavily_api_key?: string | null
-          telegram_bot_token?: string | null
-          telegram_bot_username?: string | null
-          telegram_webhook_secret?: string | null
           tiktok_url?: string | null
           timezone?: string
           updated_at?: string
@@ -1628,9 +1622,6 @@ export type Database = {
           smart_delay_config?: Json | null
           tagline?: string | null
           tavily_api_key?: string | null
-          telegram_bot_token?: string | null
-          telegram_bot_username?: string | null
-          telegram_webhook_secret?: string | null
           tiktok_url?: string | null
           timezone?: string
           updated_at?: string
@@ -1650,10 +1641,6 @@ export type Database = {
           phone: string
           property_id: string
           role: string
-          telegram_chat_id: string | null
-          telegram_link_token: string | null
-          telegram_linked_at: string | null
-          telegram_token_expires_at: string | null
         }
         Insert: {
           created_at?: string
@@ -1664,10 +1651,6 @@ export type Database = {
           phone: string
           property_id: string
           role: string
-          telegram_chat_id?: string | null
-          telegram_link_token?: string | null
-          telegram_linked_at?: string | null
-          telegram_token_expires_at?: string | null
         }
         Update: {
           created_at?: string
@@ -1678,10 +1661,6 @@ export type Database = {
           phone?: string
           property_id?: string
           role?: string
-          telegram_chat_id?: string | null
-          telegram_link_token?: string | null
-          telegram_linked_at?: string | null
-          telegram_token_expires_at?: string | null
         }
         Relationships: [
           {
@@ -2671,99 +2650,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      telegram_agent_bots: {
-        Row: {
-          agent_key: string
-          bot_token: string
-          bot_username: string | null
-          is_active: boolean
-          updated_at: string
-          webhook_secret: string | null
-          webhook_set_at: string | null
-        }
-        Insert: {
-          agent_key: string
-          bot_token: string
-          bot_username?: string | null
-          is_active?: boolean
-          updated_at?: string
-          webhook_secret?: string | null
-          webhook_set_at?: string | null
-        }
-        Update: {
-          agent_key?: string
-          bot_token?: string
-          bot_username?: string | null
-          is_active?: boolean
-          updated_at?: string
-          webhook_secret?: string | null
-          webhook_set_at?: string | null
-        }
-        Relationships: []
-      }
-      telegram_agent_channels: {
-        Row: {
-          agent_key: string
-          chat_id: string
-          chat_type: string | null
-          created_at: string
-          id: string
-          is_active: boolean
-          label: string | null
-          message_thread_id: string | null
-        }
-        Insert: {
-          agent_key: string
-          chat_id: string
-          chat_type?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          label?: string | null
-          message_thread_id?: string | null
-        }
-        Update: {
-          agent_key?: string
-          chat_id?: string
-          chat_type?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          label?: string | null
-          message_thread_id?: string | null
-        }
-        Relationships: []
-      }
-      telegram_agent_conversations: {
-        Row: {
-          agent_key: string
-          chat_id: string
-          created_at: string
-          id: string
-          message_thread_id: string | null
-          messages: Json
-          updated_at: string
-        }
-        Insert: {
-          agent_key: string
-          chat_id: string
-          created_at?: string
-          id?: string
-          message_thread_id?: string | null
-          messages?: Json
-          updated_at?: string
-        }
-        Update: {
-          agent_key?: string
-          chat_id?: string
-          created_at?: string
-          id?: string
-          message_thread_id?: string | null
-          messages?: Json
-          updated_at?: string
-        }
-        Relationships: []
       }
       user_modes: {
         Row: {

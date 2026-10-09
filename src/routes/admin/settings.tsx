@@ -23,7 +23,6 @@ import {
   FileText,
   Users,
   Plus,
-  Send,
   BellOff,
   Bell,
   Share2,
@@ -701,7 +700,7 @@ function LogoUploadCard({
 }
 
 /* ------------------------------------------------------------------ */
-/* Kredensial tab — Telegram & AI Chatbot Keys                        */
+/* Kredensial tab — AI Chatbot Keys                                   */
 /* ------------------------------------------------------------------ */
 
 function CredentialTab() {
@@ -717,7 +716,6 @@ function CredentialTab() {
   const mutation = useMutation({
     mutationFn: (v: {
       id: string;
-      telegram_bot_token?: string | null;
       ai_api_key?: string | null;
       ai_base_url?: string | null;
       ai_model?: string | null;
@@ -745,16 +743,6 @@ function CredentialTab() {
         gateway diatur di environment (<code>LOVABLE_API_KEY</code> dan{" "}
         <code>WHATSAPP_API_KEY</code>), bukan di halaman ini.
       </p>
-      <TextSettingCard
-        icon={<Send className="h-4 w-4" />}
-        label="Telegram Bot Token"
-        description="Token dari @BotFather (format: 123456:ABC-DEF…). Setelah diisi, buka Admin → Telegram lalu klik 'Setup webhook' untuk menyambungkan."
-        placeholder="123456789:ABCDEF..."
-        secret
-        value={(data as any)?.telegram_bot_token ?? null}
-        disabled={disabled}
-        onSave={(v) => id && mutation.mutate({ id, telegram_bot_token: v })}
-      />
       <TextSettingCard
         icon={<Sparkles className="h-4 w-4" />}
         label="AI Chatbot — API Key"

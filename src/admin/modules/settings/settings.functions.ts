@@ -187,13 +187,12 @@ export const updateBrandingSettings = createServerFn({ method: "POST" })
   });
 
 /* ------------------------------------------------------------------ */
-/* Integrations — Telegram, Google services, payment                  */
+/* Integrations — Google services, payment                           */
 /* properties.wpp_token stays in the database for internal route auth. */
 /* It is not an admin setting and is not used to send WhatsApp.       */
 /* ------------------------------------------------------------------ */
 
 const INTEGRATION_FIELDS = [
-  "telegram_bot_token",
   "google_place_id",
   "google_places_api_key",
   "google_analytics_id",
@@ -230,7 +229,6 @@ export const getIntegrationSettings = createServerFn({ method: "GET" })
     const row = (data ?? {}) as Record<string, unknown>;
     return {
       id: (row.id as string | undefined) ?? null,
-      telegram_bot_token: (row.telegram_bot_token as string | null) ?? null,
       google_place_id: (row.google_place_id as string | null) ?? null,
       google_places_api_key: (row.google_places_api_key as string | null) ?? null,
       google_analytics_id: (row.google_analytics_id as string | null) ?? null,
@@ -254,7 +252,6 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
     z
       .object({
         id: z.string().uuid(),
-        telegram_bot_token: z.string().max(200).nullable().optional(),
         google_place_id: z.string().max(300).nullable().optional(),
         google_places_api_key: z.string().max(500).nullable().optional(),
         google_analytics_id: z.string().max(100).nullable().optional(),

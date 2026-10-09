@@ -9,8 +9,8 @@ export const sendToManager: ToolHandler = async (
     urgency?: string;
   };
 
-  // In a real system, this might send an email, a Telegram notification,
-  // or a push notification to the manager's device. For now, we simulate
+  // In a real system, this might send an email or a push notification
+  // to the manager's device. For now, we simulate
   // the delivery.
   console.log(`[sendToManager] [${urgency?.toUpperCase() || "NORMAL"}] Forwarding to manager: ${message}`);
   

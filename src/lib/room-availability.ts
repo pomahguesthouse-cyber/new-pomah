@@ -1,6 +1,6 @@
 /**
  * Precheck bentrok kamar — sumber tunggal untuk semua kanal
- * (admin UI, tool AI create_booking, Telegram/WhatsApp manager).
+ * (admin UI, tool AI create_booking, WhatsApp manager).
  *
  * Database punya jaring terakhir berupa exclusion constraint
  * `booking_rooms_no_overlap`. Precheck ini mencegah constraint itu sering

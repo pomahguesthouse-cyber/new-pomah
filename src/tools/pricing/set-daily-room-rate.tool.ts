@@ -85,8 +85,7 @@ export const setDailyRoomRate: ToolHandler = async (
       ok: false,
       error:
         "Hanya manajer/super admin yang boleh men-set harga harian. Tool ini " +
-        "hanya tersedia di kanal internal (Telegram bot Hana/Julia atau " +
-        "nomor WhatsApp manajer terdaftar).",
+        "hanya tersedia di kanal internal (nomor WhatsApp manajer terdaftar).",
     });
   }
 

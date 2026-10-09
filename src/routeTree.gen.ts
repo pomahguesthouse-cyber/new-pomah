@@ -45,7 +45,6 @@ import { Route as AdminRoomsRouteImport } from './routes/admin/rooms'
 import { Route as AdminRoutingDebugRouteImport } from './routes/admin/routing-debug'
 import { Route as AdminSeoRouteImport } from './routes/admin/seo'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
-import { Route as AdminTelegramRouteImport } from './routes/admin/telegram'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
 import { Route as AdminWalkthroughRouteImport } from './routes/admin/walkthrough'
 import { Route as AdminWebchatRouteImport } from './routes/admin/webchat'
@@ -56,7 +55,6 @@ import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
 import { Route as ApiPublicSiteRouteImport } from './routes/api.public-site'
 import { Route as ApiPublicSiteDataRouteImport } from './routes/api.public-site-data'
 import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
-import { Route as ApiTelegramRouteImport } from './routes/api.telegram'
 import { Route as BookIndexRouteImport } from './routes/book.index'
 import { Route as ExploreIndexRouteImport } from './routes/explore.index'
 import { Route as ExploreSlugRouteImport } from './routes/explore.$slug'
@@ -75,7 +73,6 @@ import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-e
 import { Route as ApiCronWaQueueSafetyNetRouteImport } from './routes/api.cron.wa-queue-safety-net'
 import { Route as ApiCronWaSummaryRefreshRouteImport } from './routes/api.cron.wa-summary-refresh'
 import { Route as ApiPublicHealthCheckRouteImport } from './routes/api.public.health-check'
-import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 import { Route as BookingFormTokenRouteImport } from './routes/booking.form.$token'
 import { Route as ApiBookingInvoiceIdSendRouteImport } from './routes/api.booking-invoice.$id.send'
@@ -265,11 +262,6 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminTelegramRoute = AdminTelegramRouteImport.update({
-  id: '/telegram',
-  path: '/telegram',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminTrainingRoute = AdminTrainingRouteImport.update({
   id: '/training',
   path: '/training',
@@ -319,11 +311,6 @@ const ApiPublicSiteDataRoute = ApiPublicSiteDataRouteImport.update({
 const ApiQueueWorkerRoute = ApiQueueWorkerRouteImport.update({
   id: '/api/queue-worker',
   path: '/api/queue-worker',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiTelegramRoute = ApiTelegramRouteImport.update({
-  id: '/api/telegram',
-  path: '/api/telegram',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookIndexRoute = BookIndexRouteImport.update({
@@ -420,11 +407,6 @@ const ApiPublicHealthCheckRoute = ApiPublicHealthCheckRouteImport.update({
   path: '/api/public/health-check',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiTelegramAgentKeyRoute = ApiTelegramAgentKeyRouteImport.update({
-  id: '/$agentKey',
-  path: '/$agentKey',
-  getParentRoute: () => ApiTelegramRoute,
-} as any)
 const BookConfirmationIdRoute = BookConfirmationIdRouteImport.update({
   id: '/book/confirmation/$id',
   path: '/book/confirmation/$id',
@@ -494,7 +476,6 @@ export interface FileRoutesByFullPath {
   '/admin/routing-debug': typeof AdminRoutingDebugRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/walkthrough': typeof AdminWalkthroughRoute
   '/admin/webchat': typeof AdminWebchatRoute
@@ -505,7 +486,6 @@ export interface FileRoutesByFullPath {
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
-  '/api/telegram': typeof ApiTelegramRouteWithChildren
   '/explore/$slug': typeof ExploreSlugRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
@@ -525,7 +505,6 @@ export interface FileRoutesByFullPath {
   '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
-  '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
   '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
@@ -567,7 +546,6 @@ export interface FileRoutesByTo {
   '/admin/routing-debug': typeof AdminRoutingDebugRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/walkthrough': typeof AdminWalkthroughRoute
   '/admin/webchat': typeof AdminWebchatRoute
@@ -578,7 +556,6 @@ export interface FileRoutesByTo {
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
-  '/api/telegram': typeof ApiTelegramRouteWithChildren
   '/explore/$slug': typeof ExploreSlugRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
@@ -598,7 +575,6 @@ export interface FileRoutesByTo {
   '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
-  '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
   '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
@@ -643,7 +619,6 @@ export interface FileRoutesById {
   '/admin/routing-debug': typeof AdminRoutingDebugRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/walkthrough': typeof AdminWalkthroughRoute
   '/admin/webchat': typeof AdminWebchatRoute
@@ -654,7 +629,6 @@ export interface FileRoutesById {
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
-  '/api/telegram': typeof ApiTelegramRouteWithChildren
   '/explore/$slug': typeof ExploreSlugRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
@@ -674,7 +648,6 @@ export interface FileRoutesById {
   '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
-  '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
   '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
@@ -720,7 +693,6 @@ export interface FileRouteTypes {
     | '/admin/routing-debug'
     | '/admin/seo'
     | '/admin/settings'
-    | '/admin/telegram'
     | '/admin/training'
     | '/admin/walkthrough'
     | '/admin/webchat'
@@ -731,7 +703,6 @@ export interface FileRouteTypes {
     | '/api/public-site'
     | '/api/public-site-data'
     | '/api/queue-worker'
-    | '/api/telegram'
     | '/explore/$slug'
     | '/lp/$slug'
     | '/rooms/$slug'
@@ -751,7 +722,6 @@ export interface FileRouteTypes {
     | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
-    | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
     | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
@@ -793,7 +763,6 @@ export interface FileRouteTypes {
     | '/admin/routing-debug'
     | '/admin/seo'
     | '/admin/settings'
-    | '/admin/telegram'
     | '/admin/training'
     | '/admin/walkthrough'
     | '/admin/webchat'
@@ -804,7 +773,6 @@ export interface FileRouteTypes {
     | '/api/public-site'
     | '/api/public-site-data'
     | '/api/queue-worker'
-    | '/api/telegram'
     | '/explore/$slug'
     | '/lp/$slug'
     | '/rooms/$slug'
@@ -824,7 +792,6 @@ export interface FileRouteTypes {
     | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
-    | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
     | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
@@ -868,7 +835,6 @@ export interface FileRouteTypes {
     | '/admin/routing-debug'
     | '/admin/seo'
     | '/admin/settings'
-    | '/admin/telegram'
     | '/admin/training'
     | '/admin/walkthrough'
     | '/admin/webchat'
@@ -879,7 +845,6 @@ export interface FileRouteTypes {
     | '/api/public-site'
     | '/api/public-site-data'
     | '/api/queue-worker'
-    | '/api/telegram'
     | '/explore/$slug'
     | '/lp/$slug'
     | '/rooms/$slug'
@@ -899,7 +864,6 @@ export interface FileRouteTypes {
     | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
-    | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
     | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
@@ -927,7 +891,6 @@ export interface RootRouteChildren {
   ApiPublicSiteRoute: typeof ApiPublicSiteRoute
   ApiPublicSiteDataRoute: typeof ApiPublicSiteDataRoute
   ApiQueueWorkerRoute: typeof ApiQueueWorkerRoute
-  ApiTelegramRoute: typeof ApiTelegramRouteWithChildren
   LpSlugRoute: typeof LpSlugRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
   TourSlugRoute: typeof TourSlugRoute
@@ -1204,13 +1167,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/telegram': {
-      id: '/admin/telegram'
-      path: '/telegram'
-      fullPath: '/admin/telegram'
-      preLoaderRoute: typeof AdminTelegramRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/training': {
       id: '/admin/training'
       path: '/training'
@@ -1279,13 +1235,6 @@ declare module '@tanstack/react-router' {
       path: '/api/queue-worker'
       fullPath: '/api/queue-worker'
       preLoaderRoute: typeof ApiQueueWorkerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/telegram': {
-      id: '/api/telegram'
-      path: '/api/telegram'
-      fullPath: '/api/telegram'
-      preLoaderRoute: typeof ApiTelegramRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/book/': {
@@ -1414,13 +1363,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHealthCheckRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/telegram/$agentKey': {
-      id: '/api/telegram/$agentKey'
-      path: '/$agentKey'
-      fullPath: '/api/telegram/$agentKey'
-      preLoaderRoute: typeof ApiTelegramAgentKeyRouteImport
-      parentRoute: typeof ApiTelegramRoute
-    }
     '/book/confirmation/$id': {
       id: '/book/confirmation/$id'
       path: '/book/confirmation/$id'
@@ -1489,7 +1431,6 @@ interface AdminRouteChildren {
   AdminRoutingDebugRoute: typeof AdminRoutingDebugRoute
   AdminSeoRoute: typeof AdminSeoRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
-  AdminTelegramRoute: typeof AdminTelegramRoute
   AdminTrainingRoute: typeof AdminTrainingRoute
   AdminWalkthroughRoute: typeof AdminWalkthroughRoute
   AdminWebchatRoute: typeof AdminWebchatRoute
@@ -1521,7 +1462,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminRoutingDebugRoute: AdminRoutingDebugRoute,
   AdminSeoRoute: AdminSeoRoute,
   AdminSettingsRoute: AdminSettingsRoute,
-  AdminTelegramRoute: AdminTelegramRoute,
   AdminTrainingRoute: AdminTrainingRoute,
   AdminWalkthroughRoute: AdminWalkthroughRoute,
   AdminWebchatRoute: AdminWebchatRoute,
@@ -1545,17 +1485,6 @@ const ExploreRouteChildren: ExploreRouteChildren = {
 const ExploreRouteWithChildren =
   ExploreRoute._addFileChildren(ExploreRouteChildren)
 
-interface ApiTelegramRouteChildren {
-  ApiTelegramAgentKeyRoute: typeof ApiTelegramAgentKeyRoute
-}
-
-const ApiTelegramRouteChildren: ApiTelegramRouteChildren = {
-  ApiTelegramAgentKeyRoute: ApiTelegramAgentKeyRoute,
-}
-
-const ApiTelegramRouteWithChildren = ApiTelegramRoute._addFileChildren(
-  ApiTelegramRouteChildren,
-)
 
 interface ApiBookingInvoiceIdRouteChildren {
   ApiBookingInvoiceIdSendRoute: typeof ApiBookingInvoiceIdSendRoute
@@ -1599,7 +1528,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicSiteRoute: ApiPublicSiteRoute,
   ApiPublicSiteDataRoute: ApiPublicSiteDataRoute,
   ApiQueueWorkerRoute: ApiQueueWorkerRoute,
-  ApiTelegramRoute: ApiTelegramRouteWithChildren,
   LpSlugRoute: LpSlugRoute,
   RoomsSlugRoute: RoomsSlugRoute,
   TourSlugRoute: TourSlugRoute,

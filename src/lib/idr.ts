@@ -1,7 +1,7 @@
 /**
  * Parser nominal rupiah dari bahasa manajer.
  *
- * Satu implementasi dipakai parser perintah Telegram DAN tool pricing —
+ * Satu implementasi dipakai parser perintah manajer DAN tool pricing —
  * sebelumnya ada dua salinan yang sudah menyimpang, dan keduanya salah untuk
  * "1.2jt" (satuan ditempel ke bagian desimal → NaN).
  *

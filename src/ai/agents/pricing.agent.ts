@@ -3,7 +3,7 @@
  *
  *  - GUEST (WhatsApp tamu, default): tanya harga, tarif, diskon, paket.
  *    Tools yang biasa dipanggil: `check_room_availability`.
- *  - MANAGERIAL (Telegram Julia bot / WA manajer terdaftar):
+ *  - MANAGERIAL (WhatsApp manajer terdaftar):
  *    rate update via `update_room_rate`, kompetitor benchmarking via
  *    `scrape_competitor_prices`, plus laporan tarif singkat.
  *
@@ -274,7 +274,7 @@ function buildManagerialPrompt(s: Scaffold): string {
       "stop_sell=true (tidak perlu kirim rate; tool snapshot dari base_rate).\n\n" +
       "Untuk MELIHAT harga harian ('lihat harga harian bulan Juni', 'harga Deluxe minggu " +
       "depan', 'tanggal apa yang sudah di-set khusus'), panggil `get_daily_room_rates`. " +
-      "Rangkum hasil dengan format Telegram: tanggal — nominal — sumber (override/base).\n\n" +
+      "Rangkum hasil dengan format teks polos: tanggal — nominal — sumber (override/base).\n\n" +
       "Untuk MEMBATALKAN override ('reset Deluxe 11 Juni ke base', 'hapus override Juli " +
       "minggu pertama'), panggil `delete_daily_room_rate`. Untuk rentang ≥31 hari, tool " +
       "akan minta confirmed=true.",
@@ -293,7 +293,7 @@ function buildManagerialPrompt(s: Scaffold): string {
       "  • Manajer SECARA EKSPLISIT menyebut kota lain → `city: '...'`. Default Semarang.\n\n" +
       "Setelah hasil masuk, sajikan ringkas: rentang harga (min–max), median, posisi " +
       "tarif kita relatif (kalau diketahui), rekomendasi adjust 1–2 kalimat. Format " +
-      "Telegram-friendly: teks polos, baris baru untuk daftar.",
+      "teks polos, baris baru untuk daftar.",
 
     "CEK TARIF + AVAILABILITY: Pakai `check_room_availability` saat manajer minta status " +
       "harga + ketersediaan untuk tanggal tertentu. Sajikan ringkas, no fluff.",
@@ -305,7 +305,7 @@ function buildManagerialPrompt(s: Scaffold): string {
     "FORMAT TANGGAL: Bahasa Indonesia ('17–18 Juli 2026'), JANGAN ISO ke manajer. " +
       "Pakai YYYY-MM-DD hanya untuk argumen tool.",
 
-    "FORMAT PESAN: Telegram — teks polos, baris baru untuk daftar, hindari Markdown " +
+    "FORMAT PESAN: WhatsApp — teks polos, baris baru untuk daftar, hindari Markdown " +
       "(*, _, #) dan tabel kompleks.",
   ].filter(Boolean).join("\n\n");
 }

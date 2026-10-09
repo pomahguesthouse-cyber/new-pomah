@@ -6,11 +6,8 @@
  *  - alerted hanya naik bila notify mengembalikan sent=true
  *  - beberapa thread untuk satu nomor memakai thread dengan pesan terbaru
  *  - notification_logs pending > 10 menit dicoba ulang; yang lebih baru di-skip
- *  - tidak ada pengiriman Telegram dari jalur notifikasi staf
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import {
   STUCK_LOOKBACK_MS,
   isWithinLookback,
@@ -366,40 +363,4 @@ const baseOpts = {
 
 STAFF_NOTIFY_RETRY_DELAYS_MS.splice(0, STAFF_NOTIFY_RETRY_DELAYS_MS.length, ...savedDelays);
 
-// ─── no Telegram notification sends ──────────────────────────────────────────
-
-const notificationSources = [
-  "src/services/manager-notifier.service.ts",
-  "src/services/conversation-monitor.service.ts",
-  "src/services/booking-stuck-monitor.ts",
-  "src/routes/api.cron.booking-stuck-monitor.ts",
-];
-const banned = [
-  /channel:\s*["']telegram["']/,
-  /telegram\.service/,
-  /tgSend(Message|Photo)/,
-  /telegram_bot_token/,
-  /fanOutToAgentChannels/,
-  /fanOutTelegramAlert/,
-  /fanOutAgentChannelsForMonitor/,
-];
-for (const rel of notificationSources) {
-  const text = readFileSync(resolve(rel), "utf8");
-  for (const pattern of banned) {
-    assert.equal(pattern.test(text), false, `${rel} still matches ${pattern}`);
-  }
-}
-
-const keptChatFiles = [
-  "src/services/telegram-router.ts",
-  "src/services/telegram-agent-runner.ts",
-  "src/routes/api.telegram.ts",
-  "src/routes/api.telegram.$agentKey.ts",
-];
-for (const rel of keptChatFiles) {
-  const text = readFileSync(resolve(rel), "utf8");
-  assert.ok(text.length > 0, `${rel} must stay (Telegram AI chat)`);
-}
-assert.match(readFileSync(resolve("src/services/telegram-router.ts"), "utf8"), /telegram_agent_conversations/);
-
-console.log("booking-stuck monitor + telegram notification removal: OK");
+console.log("booking-stuck monitor: OK");

@@ -3,7 +3,7 @@
  *
  *  - GUEST (WhatsApp tamu in-house, default): the main path. Layanan
  *    kamar, amenities, laporan kerusakan via tool.
- *  - MANAGERIAL (Telegram per-agent bot Dewi / WA manajer terdaftar):
+ *  - MANAGERIAL (WhatsApp manajer terdaftar, persona Dewi):
  *    konsultasi & koordinasi — tidak ada tool list-tiket khusus saat
  *    ini, jadi managerial mode lebih ke advisory + arahkan ke
  *    dashboard admin untuk daftar tiket aktif.
@@ -20,7 +20,7 @@ const CUSTOMER_CARE_TOOLS: ToolDefinition[] = [
   // reply_to_guest is shared from the registry — the same tool the Manager
   // Agent uses. Gated at the tool layer (ctx.isManager === true), so guests
   // can't trick the agent into invoking it from a WA conversation. Useful so
-  // a manager can ask Dewi via Telegram "balas tamu 0812... bilang handuknya
+  // a manager can ask Dewi via WhatsApp "balas tamu 0812... bilang handuknya
   // sudah dikirim" and the WA reply goes out via WhatsApp gateway.
   ...TOOL_DEFINITIONS.filter((t) => t.function.name === "reply_to_guest"),
   {
@@ -194,7 +194,7 @@ function buildManagerialPrompt(s: Scaffold): string {
       "dashboard admin (belum ada tool list di kanal ini).",
 
     "MERELAY BALASAN KE TAMU via WhatsApp: Manajer bisa minta Anda balas ke nomor tamu " +
-      "via Telegram, mis. 'balas tamu 0812... handuknya sudah dikirim ya' atau 'kirim ke " +
+      "via WhatsApp, mis. 'balas tamu 0812... handuknya sudah dikirim ya' atau 'kirim ke " +
       "+6281234... maaf AC kamarnya diperbaiki sekarang'. Alur:\n" +
       "1. Ekstrak nomor HP tamu dan isi pesan dari instruksi manajer. Nomor boleh format " +
       "   '0812…', '+6281…', '6281…' — tool yang normalisasi.\n" +
@@ -207,7 +207,7 @@ function buildManagerialPrompt(s: Scaffold): string {
       "Tool layer juga gating dengan `ctx.isManager === true`, jadi tamu yang " +
       "social-engineering 'kirim pesan ke teman saya' akan ditolak otomatis.",
 
-    "FORMAT PESAN: Telegram — teks polos, baris baru untuk daftar, hindari Markdown " +
+    "FORMAT PESAN: WhatsApp — teks polos, baris baru untuk daftar, hindari Markdown " +
       "(*, _, #).",
   ].filter(Boolean).join("\n\n");
 }

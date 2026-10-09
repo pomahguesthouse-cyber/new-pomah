@@ -86,7 +86,6 @@ import { TrainingRagSettings } from "@/admin/modules/ai-lab/training-rag-setting
 import { WhatsappCorrectionsPage } from "@/admin/modules/training/whatsapp-corrections-live-page";
 import { HealthPage } from "@/admin/modules/health/health-page";
 import { RoutingDebugPage } from "@/admin/modules/routing/routing-debug-page";
-import { TelegramPage } from "@/admin/modules/telegram/telegram-page";
 import { TrainingPage } from "@/admin/modules/training/training-page";
 import { WhatsAppPage } from "@/admin/modules/whatsapp/whatsapp-page";
 import { cn } from "@/lib/utils";
@@ -106,7 +105,6 @@ export const Route = createFileRoute("/admin/ai-lab")({
 type DrawerKey =
   | "training"
   | "knowledge"
-  | "telegram"
   | "health"
   | "routing"
   | "settings"
@@ -188,7 +186,7 @@ const FLOW_NODES: FlowNodeMeta[] = [
   { id: "pricing", title: "Pricing", desc: "Tarif real-time", x: 960, y: 125, icon: Wallet, tone: "blue", drawer: "settings", kind: "agent" },
   { id: "customer-care", title: "Customer Care", desc: "Keluhan & layanan", x: 960, y: 230, icon: Headphones, tone: "green", drawer: "settings", kind: "agent" },
   { id: "finance", title: "Finance", desc: "Payment proof", x: 960, y: 335, icon: Bell, tone: "amber", drawer: "settings", kind: "agent" },
-  { id: "manager", title: "Manager", desc: "Escalation gate", x: 960, y: 440, icon: ShieldAlert, tone: "rose", drawer: "telegram", kind: "agent" },
+  { id: "manager", title: "Manager", desc: "Escalation gate", x: 960, y: 440, icon: ShieldAlert, tone: "rose", drawer: "settings", kind: "agent" },
   { id: "content", title: "Content", desc: "SEO / city guide", x: 960, y: 545, icon: Sparkles, tone: "slate", drawer: "settings", kind: "agent" },
   { id: "room-availability", title: "Room Availability", desc: "Cek stok & harga", x: 1245, y: 0, icon: CalendarCheck, tone: "green", kind: "tool" },
   { id: "pms-database", title: "PMS Database", desc: "Booking & pembayaran", x: 1245, y: 110, icon: Database, tone: "cyan", kind: "tool" },
@@ -1117,7 +1115,6 @@ function FeatureDrawer({ drawer, setDrawer, config, commitConfig }: { drawer: Dr
   const meta: Record<Exclude<DrawerKey, null>, { title: string; desc: string }> = {
     training: { title: "Training & Evaluation", desc: "Curated examples, correction loop, and auto evaluation." },
     knowledge: { title: "Knowledge / RAG", desc: "SOP knowledge, RAG settings, and retrieval debugger." },
-    telegram: { title: "Managerial / Telegram", desc: "Manager linking and internal agent channels." },
     health: { title: "Health Detail", desc: "Delivery, latency, handoff, and intent distribution." },
     routing: { title: "Routing Detail", desc: "Intent mapping, actual agent, mismatch warning." },
     settings: { title: "Control Room Settings", desc: "Auto reply, agent toggles, tool enablement, and safety." },
@@ -1150,7 +1147,6 @@ function FeatureDrawer({ drawer, setDrawer, config, commitConfig }: { drawer: Dr
 function DrawerContent({ drawer, config, commitConfig }: { drawer: Exclude<DrawerKey, null>; config: AiLabConfig; commitConfig: (next: AiLabConfig, msg?: string) => Promise<void> }) {
   if (drawer === "training") return <DarkDrawerBody><TrainingPage /><WhatsappCorrectionsPage /></DarkDrawerBody>;
   if (drawer === "knowledge") return <DarkDrawerBody><RagDebugger /><SopKnowledgeView /><TrainingRagSettings /></DarkDrawerBody>;
-  if (drawer === "telegram") return <DarkDrawerBody><TelegramPage /></DarkDrawerBody>;
   if (drawer === "health") return <DarkDrawerBody><HealthPage /></DarkDrawerBody>;
   if (drawer === "routing") return <DarkDrawerBody><RoutingDebugPage /></DarkDrawerBody>;
   if (drawer === "settings") return <DarkDrawerBody><SettingsPanel config={config} commitConfig={commitConfig} openDrawer={() => undefined} /><HumanTakeoverSettings config={config} commitConfig={commitConfig} /><SmartDelaySettings /><IntentRulesView /></DarkDrawerBody>;

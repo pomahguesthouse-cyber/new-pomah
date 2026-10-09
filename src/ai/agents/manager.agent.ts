@@ -2,9 +2,9 @@
  * Manager Agent
  *
  * Always invoked in managerial mode — the multi-agent orchestrator routes
- * directly here when `isManager === true` (Telegram per-agent bot, or a
- * WhatsApp number registered in property_managers). Guests never reach
- * this agent, so the prompt is single-track managerial. No overlay, no
+ * directly here when `isManager === true` (a WhatsApp number registered
+ * in property_managers). Guests never reach this agent, so the prompt
+ * is single-track managerial. No overlay, no
  * "Sapa tamu dengan Kak" leftovers.
  *
  * Special tool: `ask_agent` — delegate to a specialist agent and feed the
@@ -250,9 +250,9 @@ export const managerAgent: AgentDefinition = {
         "keamanan), beri saran tindakan operasional segera dan ingatkan kontak darurat " +
         "lokal — JANGAN suruh tamu menunggu balasan bot.",
 
-      // ── Output formatting (Telegram-friendly) ───────────────────────────
-      "FORMAT PESAN: Telegram — teks polos, gunakan baris baru untuk daftar, hindari " +
-        "Markdown (*, _, #) dan tabel kompleks (Telegram tidak render tabel).",
+      // ── Output formatting (plain text) ──────────────────────────────────
+      "FORMAT PESAN: WhatsApp — teks polos, gunakan baris baru untuk daftar, hindari " +
+        "Markdown (*, _, #) dan tabel kompleks (WhatsApp tidak render tabel).",
 
       BOOKING_LIST_FORMAT_BLOCK,
     ].join("\n\n");

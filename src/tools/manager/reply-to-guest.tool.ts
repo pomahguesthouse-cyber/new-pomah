@@ -1,7 +1,7 @@
 /**
  * Tool: reply_to_guest (Manager Agent)
  *
- * Lets a manager (typically via the Telegram bot) send a custom WhatsApp
+ * Lets a manager (via the managerial WhatsApp channel) send a custom WhatsApp
  * reply to a guest thread without leaving the chat. The message is sent
  * via WhatsApp gateway and logged into whatsapp_messages so it shows up in the
  * admin inbox with the rest of the conversation.
@@ -44,8 +44,7 @@ export const replyToGuest: ToolHandler = async (
       ok: false,
       error:
         "Hanya manajer/super admin yang boleh mengirim pesan ke nomor WhatsApp tamu. " +
-        "Tool ini hanya tersedia di kanal internal (Telegram bot Manager / Customer Care / " +
-        "agent lain, atau nomor WhatsApp manajer terdaftar).",
+        "Tool ini hanya tersedia di kanal internal (nomor WhatsApp manajer terdaftar).",
     });
   }
 

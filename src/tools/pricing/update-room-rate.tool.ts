@@ -1,7 +1,7 @@
 /**
  * Tool: update_room_rate
  *
- * Lets the super admin / manager change room pricing from a Telegram
+ * Lets the super admin / manager change room pricing from a WhatsApp
  * chat by speaking to the Pricing Agent ("ganti harga Deluxe jadi
  * 350rb", "naikin extrabed semua jadi 100rb"). Updates
  * `room_types.base_rate` and optionally `room_types.extrabed_rate`.
@@ -10,8 +10,8 @@
  * run unless ALL of the following are true):
  *
  *  1. `ctx.isManager === true` — the caller is identified as an
- *     internal user (Telegram per-agent bot path or WhatsApp manager
- *     number). Without this flag we are talking to a guest, who must
+ *     internal user (WhatsApp manager number). Without this flag we are
+ *     talking to a guest, who must
  *     NEVER be able to reprice a room by social-engineering the agent.
  *
  *  2. The target room is resolved via case-insensitive name match
@@ -40,7 +40,7 @@ const MAX_RATE = 50_000_000;      // sanity ceiling
 function num(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   // "350000", "350.000", "350 rb", "1.2jt", "Rp 350.000" — parser bersama,
-  // sama persis dengan yang dipakai parser perintah Telegram.
+  // sama persis dengan yang dipakai parser perintah manajer.
   if (typeof v === "string") return parseIDRAmount(v);
   return null;
 }
@@ -61,8 +61,7 @@ export const updateRoomRate: ToolHandler = async (
       ok: false,
       error:
         "Hanya manajer/super admin yang boleh mengubah tarif. Tool ini " +
-        "hanya tersedia di kanal internal (Telegram bot Hana/Julia atau " +
-        "nomor WhatsApp manajer terdaftar).",
+        "hanya tersedia di kanal internal (nomor WhatsApp manajer terdaftar).",
     });
   }
 
