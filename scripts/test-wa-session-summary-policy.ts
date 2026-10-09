@@ -6,6 +6,7 @@ import {
   parseStructuredSummary,
   shouldForceSummary,
 } from "../src/services/wa-autoreply/session-summary-policy";
+import { threadSummaryRefreshDue } from "../src/services/whatsapp-summary.service";
 
 assert.equal(SUMMARY_REGEN_COOLDOWN_MS, 3 * 60 * 1000);
 assert.equal(shouldForceSummary("Halo Kak"), false);
@@ -67,6 +68,39 @@ for (const forbidden of [
     false,
     `wa-autoreply.service.ts still duplicates summary policy: ${forbidden}`,
   );
+}
+
+{
+  const now = new Date("2026-10-09T12:00:00.000Z");
+  const recent = new Date(now.getTime() - 30_000).toISOString();
+  const staleMessage = new Date(now.getTime() - 10 * 60_000).toISOString();
+  const oldSummary = new Date(now.getTime() - 20 * 60_000).toISOString();
+  assert.equal(
+    threadSummaryRefreshDue({ last_message_at: staleMessage, chat_summary_updated_at: null }, now),
+    true,
+    "thread tanpa ringkasan dan pesan yang sudah lewat margin ikut di-refresh",
+  );
+  assert.equal(
+    threadSummaryRefreshDue({ last_message_at: recent, chat_summary_updated_at: null }, now),
+    false,
+    "pesan yang baru saja masuk menunggu margin supaya tidak balapan",
+  );
+  assert.equal(
+    threadSummaryRefreshDue(
+      { last_message_at: staleMessage, chat_summary_updated_at: oldSummary },
+      now,
+    ),
+    true,
+    "pesan baru setelah ringkasan lama ikut di-refresh",
+  );
+  assert.equal(
+    threadSummaryRefreshDue(
+      { last_message_at: oldSummary, chat_summary_updated_at: staleMessage },
+      now,
+    ),
+    false,
+  );
+  assert.equal(threadSummaryRefreshDue({ last_message_at: null, chat_summary_updated_at: null }, now), false);
 }
 
 console.log("✓ WhatsApp session summary policy regressions and wiring cases passed");

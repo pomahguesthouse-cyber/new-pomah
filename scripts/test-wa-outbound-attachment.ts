@@ -216,8 +216,12 @@ assert.equal(adminSendFailureMessage(false, "  "), "Pesan gagal dikirim.");
 const fnSrc = fs.readFileSync("src/admin/functions/whatsapp.functions.ts", "utf8");
 assert.match(fnSrc, /sendResult\.messageId/);
 assert.doesNotMatch(fnSrc, /raw\?\.id/);
-assert.match(fnSrc, /createSignedUrls/);
-assert.match(fnSrc, /createSignedUrl/);
+// Satu lampiran keluar memakai createSignedUrl. Penandatanganan batch inbox
+// (createSignedUrls) ada di wa-signed-media, dipanggil lewat withOutboundMediaUrls.
+assert.match(fnSrc, /createSignedUrl\(/);
+assert.match(fnSrc, /withSignedWhatsAppMedia|withOutboundMediaUrls/);
+const signedSrc = fs.readFileSync("src/services/wa-signed-media.ts", "utf8");
+assert.match(signedSrc, /createSignedUrls/);
 assert.match(fnSrc, /isMetaReengagementError/);
 assert.match(fnSrc, /send_status: sendStatus/);
 assert.match(fnSrc, /META_WINDOW_CLOSED_MESSAGE|adminSendFailureMessage/);

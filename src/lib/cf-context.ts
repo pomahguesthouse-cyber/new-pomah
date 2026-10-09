@@ -6,6 +6,10 @@
  * to keep background work alive after the response is returned. We stash it in
  * an AsyncLocalStorage so any handler running within the same request can reach
  * it via `getWaitUntil()`.
+ *
+ * Do not copy `waitUntil` onto `globalThis`. A previous request's callback stays
+ * there after that request has finished, and handing new work to it drops the
+ * promise in production (inbound media and chat summaries never finished).
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -20,33 +24,29 @@ const storage = new AsyncLocalStorage<CfRequestContext>();
 
 /** Run `fn` with the given Worker context bound for the duration of the request. */
 export function runWithCfContext<T>(ctx: CfRequestContext, fn: () => T): T {
-  if (ctx.waitUntil) {
-    (globalThis as any).__cfWaitUntil = ctx.waitUntil;
-  }
   return storage.run(ctx, fn);
 }
 
 /**
- * Returns the Worker's `waitUntil` if available, else undefined (e.g. local dev
- * / non-Cloudflare runtime). Callers should fall back to `await`-ing their work.
+ * Returns the Worker's `waitUntil` for the current request, else undefined
+ * (local dev, or a continuation that lost the request context).
  */
 export function getWaitUntil(): WaitUntil | undefined {
-  return storage.getStore()?.waitUntil || (globalThis as any).__cfWaitUntil;
+  return storage.getStore()?.waitUntil;
 }
 
 /**
- * Run `task` in the background. On Cloudflare Workers, hands it to
- * `waitUntil` so the runtime keeps the request alive until it settles;
- * elsewhere falls back to awaiting it. Either way, errors are logged and
- * swallowed so callers stay non-blocking.
+ * Run `task` after the response when the current request has `waitUntil`.
+ * Otherwise the promise is returned so a caller can await it, and a warning is
+ * logged — a `void` call will not keep the work alive.
  */
 export function runDeferred(label: string, task: () => Promise<unknown>): void | Promise<void> {
-  const safe = task().catch((err) => console.error(`[${label}] deferred task failed:`, err));
   const wu = getWaitUntil();
+  const safe = task().catch((err) => console.error(`[${label}] deferred task failed:`, err));
   if (wu) {
     wu(safe);
     return;
   }
-  // Local dev / non-CF: await so the process doesn't exit early.
+  console.warn(`[${label}] deferred work has no waitUntil; it will not be kept alive after the response`);
   return safe.then(() => undefined);
 }

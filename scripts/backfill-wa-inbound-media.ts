@@ -91,6 +91,7 @@ async function main(): Promise<void> {
         fileName: full.fileName,
       },
       at: new Date(full.sentAt),
+      sentAt: full.sentAt,
     });
     return { mediaDownloadStatus: result.mediaDownloadStatus };
   });

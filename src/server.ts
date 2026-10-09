@@ -176,9 +176,25 @@ export default {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      await runWithCfContext({ waitUntil }, () => handler.fetch(request, env, ctx));
+      try {
+        await runWithCfContext({ waitUntil }, () => handler.fetch(request, env, ctx));
+      } catch (error) {
+        console.error("[scheduled] WA queue drain failed:", error);
+      }
+      // Ringkasan chat tidak boleh bergantung pada waitUntil yang di-drop.
+      // Route ini menunggu pekerjaannya sendiri dan mencakup thread yang
+      // belum pernah punya chat_summary_updated_at.
+      try {
+        const summaryRequest = new Request(`${origin}/api/cron/wa-summary-refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        await runWithCfContext({ waitUntil }, () => handler.fetch(summaryRequest, env, ctx));
+      } catch (error) {
+        console.error("[scheduled] WA summary refresh failed:", error);
+      }
     } catch (error) {
-      console.error("[scheduled] WA queue drain failed:", error);
+      console.error("[scheduled] WA cron failed:", error);
     }
   },
 };
