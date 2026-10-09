@@ -1,4 +1,4 @@
-ALTER TABLE public.whatsapp_threads ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'evolution';
+ALTER TABLE public.whatsapp_threads ADD COLUMN IF NOT EXISTS provider text NOT NULL DEFAULT 'meta';
 
 CREATE TABLE public.whatsapp_webhook_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

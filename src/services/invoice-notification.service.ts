@@ -115,9 +115,8 @@ export interface InvoiceResult {
  * (`/book/confirmation/{id}`), which renders and downloads the invoice
  * client-side (browser react-pdf) and always works.
  *
- * - WhatsApp goes out through the guest helper: Meta Cloud when configured,
- *   Evolution only as a fallback when Meta is not configured. `wpp_token` is
- *   not required for the Meta path.
+ * - WhatsApp goes out through the guest helper on Meta Cloud API.
+ *   `wpp_token` is not required.
  * - `skipWhatsApp` keeps the `invoices` record in sync (e.g. after a payment
  *   update) without re-messaging the guest.
  */
@@ -162,7 +161,6 @@ export async function generateAndSendInvoiceNotification({
           phone,
           whatsapp_number,
           public_domain,
-          wpp_token,
           payment_bank_name,
           payment_account_number,
           payment_account_holder
@@ -258,7 +256,6 @@ export async function generateAndSendInvoiceNotification({
 
     // ── 5. WhatsApp send (optional, skipped gracefully) ─────────────────
     let waSent = false;
-    const wppToken = (property?.wpp_token as string | null | undefined) ?? null;
 
     if (skipWhatsApp) {
       return { ok: true, error: null, pdf_url: invoiceUrl, wa_sent: false };
@@ -307,7 +304,7 @@ ${invoiceUrl}
 
 Terima kasih.`;
 
-    if (!guestWhatsAppAvailable(wppToken)) {
+    if (!guestWhatsAppAvailable()) {
       console.warn(`[InvoiceNotification] ${CHANNEL_UNAVAILABLE_ERROR}`);
       return { ok: false, error: CHANNEL_UNAVAILABLE_ERROR, pdf_url: invoiceUrl, wa_sent: false };
     }
@@ -350,7 +347,6 @@ Terima kasih.`;
 
     console.log(`[InvoiceNotification] Sending invoice link via WhatsApp to ${cleanedPhone}…`);
     const sendResult = await sendGuestWhatsApp(cleanedPhone, messageBody, {
-      evolutionToken: wppToken,
       invoiceTemplate: {
         guestName: String(guest.full_name ?? "Tamu"),
         bookingCode: String(booking.reference_code ?? booking.id.slice(0, 8)),
@@ -449,7 +445,7 @@ export async function sendExtraBedUpdateSummary({
         id, reference_code, check_in, check_out, total_amount,
         payment_status, paid_amount,
         guests ( id, full_name, phone ),
-        properties ( name, wpp_token, public_domain )
+        properties ( name, public_domain )
         `,
       )
       .eq("id", bookingId)
@@ -462,8 +458,6 @@ export async function sendExtraBedUpdateSummary({
     if (!guest?.phone) {
       return { ok: false, wa_sent: false, error: "Guest tanpa nomor HP" };
     }
-    const wppToken = (property?.wpp_token as string | null | undefined) ?? null;
-
     const { data: brs } = await supabase
       .from("booking_rooms")
       .select("nightly_rate, extra_bed_count, extra_bed_rate, room_types(name)")
@@ -523,9 +517,7 @@ Terima kasih.`;
       return { ok: false, wa_sent: false, error: `Nomor tidak valid: ${guest.phone}` };
     }
 
-    const sendResult = await sendGuestWhatsApp(cleanedPhone, messageBody, {
-      evolutionToken: wppToken,
-    });
+    const sendResult = await sendGuestWhatsApp(cleanedPhone, messageBody);
     const sent = sendResult.ok;
     const sendErr = sendResult.error;
 

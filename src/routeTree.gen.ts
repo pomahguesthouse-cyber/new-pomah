@@ -52,7 +52,6 @@ import { Route as AdminWebchatRouteImport } from './routes/admin/webchat'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
 import { Route as AdminWhatsappCorrectionsRouteImport } from './routes/admin/whatsapp-corrections'
 import { Route as ApiDebugDbRouteImport } from './routes/api.debug-db'
-import { Route as ApiEvolutionRouteImport } from './routes/api.evolution'
 import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
 import { Route as ApiPublicSiteRouteImport } from './routes/api.public-site'
 import { Route as ApiPublicSiteDataRouteImport } from './routes/api.public-site-data'
@@ -69,7 +68,6 @@ import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
 import { Route as ApiCronBookingFormFollowupRouteImport } from './routes/api.cron.booking-form-followup'
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
-import { Route as ApiCronEvolutionInboxPollRouteImport } from './routes/api.cron.evolution-inbox-poll'
 import { Route as ApiCronExpireBookingsRouteImport } from './routes/api.cron.expire-bookings'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
@@ -303,11 +301,6 @@ const ApiDebugDbRoute = ApiDebugDbRouteImport.update({
   path: '/api/debug-db',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiEvolutionRoute = ApiEvolutionRouteImport.update({
-  id: '/api/evolution',
-  path: '/api/evolution',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiPlacePhotoRoute = ApiPlacePhotoRouteImport.update({
   id: '/api/place-photo',
   path: '/api/place-photo',
@@ -389,12 +382,6 @@ const ApiCronBookingStuckMonitorRoute =
   ApiCronBookingStuckMonitorRouteImport.update({
     id: '/api/cron/booking-stuck-monitor',
     path: '/api/cron/booking-stuck-monitor',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiCronEvolutionInboxPollRoute =
-  ApiCronEvolutionInboxPollRouteImport.update({
-    id: '/api/cron/evolution-inbox-poll',
-    path: '/api/cron/evolution-inbox-poll',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiCronExpireBookingsRoute = ApiCronExpireBookingsRouteImport.update({
@@ -514,7 +501,6 @@ export interface FileRoutesByFullPath {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
-  '/api/evolution': typeof ApiEvolutionRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
@@ -532,7 +518,6 @@ export interface FileRoutesByFullPath {
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
-  '/api/cron/evolution-inbox-poll': typeof ApiCronEvolutionInboxPollRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -589,7 +574,6 @@ export interface FileRoutesByTo {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
-  '/api/evolution': typeof ApiEvolutionRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
@@ -607,7 +591,6 @@ export interface FileRoutesByTo {
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
-  '/api/cron/evolution-inbox-poll': typeof ApiCronEvolutionInboxPollRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -667,7 +650,6 @@ export interface FileRoutesById {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
-  '/api/evolution': typeof ApiEvolutionRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
@@ -685,7 +667,6 @@ export interface FileRoutesById {
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
-  '/api/cron/evolution-inbox-poll': typeof ApiCronEvolutionInboxPollRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -746,7 +727,6 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/admin/whatsapp-corrections'
     | '/api/debug-db'
-    | '/api/evolution'
     | '/api/place-photo'
     | '/api/public-site'
     | '/api/public-site-data'
@@ -764,7 +744,6 @@ export interface FileRouteTypes {
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
-    | '/api/cron/evolution-inbox-poll'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
@@ -821,7 +800,6 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/admin/whatsapp-corrections'
     | '/api/debug-db'
-    | '/api/evolution'
     | '/api/place-photo'
     | '/api/public-site'
     | '/api/public-site-data'
@@ -839,7 +817,6 @@ export interface FileRouteTypes {
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
-    | '/api/cron/evolution-inbox-poll'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
@@ -898,7 +875,6 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/admin/whatsapp-corrections'
     | '/api/debug-db'
-    | '/api/evolution'
     | '/api/place-photo'
     | '/api/public-site'
     | '/api/public-site-data'
@@ -916,7 +892,6 @@ export interface FileRouteTypes {
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
-    | '/api/cron/evolution-inbox-poll'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
@@ -948,7 +923,6 @@ export interface RootRouteChildren {
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   ApiDebugDbRoute: typeof ApiDebugDbRoute
-  ApiEvolutionRoute: typeof ApiEvolutionRoute
   ApiPlacePhotoRoute: typeof ApiPlacePhotoRoute
   ApiPublicSiteRoute: typeof ApiPublicSiteRoute
   ApiPublicSiteDataRoute: typeof ApiPublicSiteDataRoute
@@ -963,7 +937,6 @@ export interface RootRouteChildren {
   ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRouteWithChildren
   ApiCronBookingFormFollowupRoute: typeof ApiCronBookingFormFollowupRoute
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
-  ApiCronEvolutionInboxPollRoute: typeof ApiCronEvolutionInboxPollRoute
   ApiCronExpireBookingsRoute: typeof ApiCronExpireBookingsRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
@@ -1280,13 +1253,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDebugDbRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/evolution': {
-      id: '/api/evolution'
-      path: '/api/evolution'
-      fullPath: '/api/evolution'
-      preLoaderRoute: typeof ApiEvolutionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/place-photo': {
       id: '/api/place-photo'
       path: '/api/place-photo'
@@ -1397,13 +1363,6 @@ declare module '@tanstack/react-router' {
       path: '/api/cron/booking-stuck-monitor'
       fullPath: '/api/cron/booking-stuck-monitor'
       preLoaderRoute: typeof ApiCronBookingStuckMonitorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/cron/evolution-inbox-poll': {
-      id: '/api/cron/evolution-inbox-poll'
-      path: '/api/cron/evolution-inbox-poll'
-      fullPath: '/api/cron/evolution-inbox-poll'
-      preLoaderRoute: typeof ApiCronEvolutionInboxPollRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/cron/expire-bookings': {
@@ -1636,7 +1595,6 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   ApiDebugDbRoute: ApiDebugDbRoute,
-  ApiEvolutionRoute: ApiEvolutionRoute,
   ApiPlacePhotoRoute: ApiPlacePhotoRoute,
   ApiPublicSiteRoute: ApiPublicSiteRoute,
   ApiPublicSiteDataRoute: ApiPublicSiteDataRoute,
@@ -1651,7 +1609,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRouteWithChildren,
   ApiCronBookingFormFollowupRoute: ApiCronBookingFormFollowupRoute,
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
-  ApiCronEvolutionInboxPollRoute: ApiCronEvolutionInboxPollRoute,
   ApiCronExpireBookingsRoute: ApiCronExpireBookingsRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,

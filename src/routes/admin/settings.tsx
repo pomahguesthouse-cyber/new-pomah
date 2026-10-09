@@ -701,7 +701,7 @@ function LogoUploadCard({
 }
 
 /* ------------------------------------------------------------------ */
-/* Kredensial tab — WhatsApp gateway WhatsApp & AI Chatbot Keys                  */
+/* Kredensial tab — Telegram & AI Chatbot Keys                        */
 /* ------------------------------------------------------------------ */
 
 function CredentialTab() {
@@ -717,7 +717,6 @@ function CredentialTab() {
   const mutation = useMutation({
     mutationFn: (v: {
       id: string;
-      wpp_token?: string | null;
       telegram_bot_token?: string | null;
       ai_api_key?: string | null;
       ai_base_url?: string | null;
@@ -741,26 +740,10 @@ function CredentialTab() {
           Data properti belum ada — kredensial belum bisa disimpan.
         </p>
       )}
-      <TextSettingCard
-        icon={<MessageCircle className="h-4 w-4" />}
-        label="WhatsApp Token — Evolution API"
-        description="Token sesi Evolution API untuk menghubungkan WhatsApp gateway dengan aplikasi ini."
-        placeholder="Token Evolution API"
-        secret
-        value={(data as any)?.wpp_token ?? null}
-        disabled={disabled}
-        onSave={(v) => id && mutation.mutate({ id, wpp_token: v })}
-      />
-      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-        <strong>Webhook Evolution API (wajib):</strong>{" "}
-        <code className="break-all">
-          {typeof window !== "undefined"
-            ? `${window.location.origin}/api/evolution`
-            : "https://pomahguesthouse.com/api/evolution"}
-        </code>
-        <br />
-        Jangan pakai Supabase Edge Function (<code>…/functions/v1/whatsapp-webhook</code>) — itu
-        proyek/layanan lain dan tidak menjalankan chatbot aplikasi ini.
+      <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        WhatsApp tamu terhubung lewat WhatsApp Business (Meta Cloud API). Kunci
+        gateway diatur di environment (<code>LOVABLE_API_KEY</code> dan{" "}
+        <code>WHATSAPP_API_KEY</code>), bukan di halaman ini.
       </p>
       <TextSettingCard
         icon={<Send className="h-4 w-4" />}
@@ -821,7 +804,6 @@ function IntegrationTab() {
   const mutation = useMutation({
     mutationFn: (v: {
       id: string;
-      wpp_token?: string | null;
       google_place_id?: string | null;
       google_places_api_key?: string | null;
       google_analytics_id?: string | null;

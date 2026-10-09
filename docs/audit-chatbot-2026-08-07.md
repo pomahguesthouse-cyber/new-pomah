@@ -1,7 +1,7 @@
 # Audit Chatbot & Backend Pomah — 7 Agustus 2026
 
 Ruang lingkup: seluruh backend (jalur balasan tamu, cron/background job, tools AI, admin server functions, RPC Supabase).
-Basis kode: commit `bca70af0` (setelah "Hapus semua kode WPPConnect" — gateway sekarang hanya Evolution API).
+Basis kode: commit `bca70af0` (setelah gateway WhatsApp lama dihapus — kanal yang tersisa adalah Meta Cloud API, 9 Oktober 2026).
 
 Setiap temuan disertai lokasi `file:baris`, dampak nyata, dan usulan perbaikan. Prioritas dibaca dari atas.
 
@@ -18,7 +18,7 @@ Setiap temuan disertai lokasi `file:baris`, dampak nyata, dan usulan perbaikan. 
 | S1 | RPC invoice publik menerima wildcard `%` | 🔴 Kritis | Data tamu (nama, email, HP) + rekening properti bocor ke publik dengan 1 request |
 | S2 | `update_payment_status` bisa dipanggil dari chat tamu | 🔴 Kritis | Tamu bisa menandai booking "lunas" tanpa bayar |
 | S3 | Lookup `reference_code` pakai `ILIKE` tanpa cek kepemilikan | 🟠 Tinggi | Invoice/booking tamu lain bisa dikirim ke penanya |
-| S4 | Webhook `/api/evolution` fail-open bila token kosong | 🟠 Tinggi | Siapa pun bisa menyuntik "pesan tamu" palsu |
+| S4 | Webhook WhatsApp lama fail-open bila token kosong | 🟠 Tinggi | Siapa pun bisa menyuntik "pesan tamu" palsu |
 | S5 | `/api/cron/process-wa-queue` tanpa autentikasi | 🟡 Sedang | Amplifikasi biaya + spam notifikasi admin |
 | B1 | Error RPC ketersediaan tidak dicek → tamu dibilang "penuh" | 🔴 Kritis | Kehilangan booking, diam-diam, tanpa alert |
 | B2 | `coerceDate` tidak naik tahun | 🟠 Tinggi | "3 Januari" dibaca sebagai tanggal yang sudah lewat |
@@ -91,18 +91,18 @@ Semua memakai `.ilike("reference_code", <input dari tamu/LLM>)` lalu `.limit(1)`
 
 **Perbaikan.** Ganti ke `.eq("reference_code", code.toUpperCase())`, validasi format, dan untuk tool jalur tamu tambahkan filter kepemilikan (`guest_id` yang phone-nya cocok dengan `ctx.phone`). Bila tidak cocok → balas "kode booking tidak ditemukan untuk nomor ini".
 
-### S4 — 🟠 Webhook Evolution fail-open
+### S4 — 🟠 Webhook WhatsApp lama fail-open
 
-**Lokasi** `src/routes/api.evolution.ts:40-42`
+**Lokasi** webhook masuk lama (dihapus 9 Oktober 2026). Inbound tamu sekarang hanya `src/routes/api.public.whatsapp.webhook.ts`.
 
 ```ts
 const expected = expectedWebhookToken();
 if (!expected) return true;   // ← tanpa token env, semua request diterima
 ```
 
-**Dampak.** Bila `EVOLUTION_WEBHOOK_TOKEN`/`WPP_WEBHOOK_TOKEN` hilang dari environment (salah deploy, rotasi env, project clone), endpoint berubah jadi terbuka: siapa pun bisa POST payload berformat Evolution → pesan masuk palsu tersimpan, antrian terisi, LLM jalan, WhatsApp mengirim balasan ke nomor yang ditentukan penyerang. Endpoint `GET ?debug=1` juga ikut terbuka.
+**Dampak.** Bila token webhook hilang dari environment (salah deploy, rotasi env, project clone), endpoint berubah jadi terbuka: siapa pun bisa POST payload → pesan masuk palsu tersimpan, antrian terisi, LLM jalan, WhatsApp mengirim balasan ke nomor yang ditentukan penyerang. Endpoint debug juga ikut terbuka.
 
-**Perbaikan.** Fail-closed: bila token tidak diset, tolak 503 dan log keras. Ini pilihan yang benar untuk endpoint yang memicu pengeluaran (LLM + WA API).
+**Perbaikan.** Fail-closed: bila token tidak diset, tolak 503 dan log keras. Route lama sudah dihapus. Webhook Meta menolak bila `WHATSAPP_API_KEY` kosong (503) dan menolak tanda tangan yang salah (401).
 
 ### S5 — 🟡 `/api/cron/process-wa-queue` tanpa autentikasi
 
@@ -167,7 +167,7 @@ Tambahan: `makeIsoDate`-style validasi tidak ada di sini, sehingga "31 Februari"
 
 ### B4 — 🟡 Dedup echo outbound tidak difilter per thread
 
-**Lokasi** `src/routes/api.evolution.ts:138-156`
+**Lokasi** webhook masuk lama (dihapus), sekitar penyimpanan pesan keluar.
 
 ```ts
 .eq("direction", "out")
@@ -181,7 +181,7 @@ Tambahan: `makeIsoDate`-style validasi tidak ada di sini, sehingga "31 Februari"
 
 ### B5 — 🟡 Thread lookup pada jalur outbound memakai nomor mentah
 
-**Lokasi** `src/routes/api.evolution.ts:160-166` — `.eq("phone", customerPhone).maybeSingle()`
+**Lokasi** webhook masuk lama (dihapus) — `.eq("phone", customerPhone).maybeSingle()`
 
 Jalur inbound memakai RPC `get_autoreply_context` yang paham `canonical_phone`/`external_chat_id`/`@lid`, tapi jalur outbound native tidak. Untuk kontak yang datang sebagai `@lid`, ini bisa membuat thread duplikat. `maybeSingle()` juga melempar error bila ada >1 baris untuk nomor yang sama — ditelan `catch` di baris 218 dan pesan admin hilang diam-diam.
 
@@ -246,7 +246,7 @@ Tabel `properties` berisi satu baris tapi ditarik **seluruh kolom** (termasuk `a
 ### P3 — 🟡 Dua jalur "nudge" yang sudah dimatikan masih menghabiskan resource
 
 **Lokasi**
-- `src/routes/api.evolution.ts:62-84, 348-355` — `scheduleQueueNudge` tidur hingga 15 detik di dalam `waitUntil`, lalu POST ke `/api/queue-worker`
+- webhook masuk lama (dihapus) — `scheduleQueueNudge` tidur hingga 15 detik di dalam `waitUntil`, lalu POST ke `/api/queue-worker`
 - `src/routes/api.queue-worker.ts:29-40` — endpoint itu mengembalikan `202 {disabled:true}` untuk semua panggilan non-manual
 - `supabase/migrations/20260525220000_pg_net_queue_trigger.sql:26-33` — trigger DB `t_process_wa_queue` juga masih mem-POST ke endpoint yang sama pada setiap INSERT antrian
 
@@ -256,7 +256,7 @@ Jadi tiap pesan masuk membakar: 1 subrequest Worker + hingga 15 detik masa hidup
 
 ### P4 — 🟡 Notifikasi WhatsApp ke super admin untuk **setiap** pesan tamu
 
-**Lokasi** `src/routes/api.evolution.ts:281-295` → `src/services/manager-notifier.service.ts:1337-1380`
+**Lokasi** webhook masuk lama (dihapus) → `src/services/manager-notifier.service.ts`
 
 Tiap pesan masuk memicu: 2 query (token + daftar manager), penulisan baris dedupe, lalu kiriman WhatsApp per super admin dengan retry. Pada jam ramai ini menggandakan trafik keluar ke gateway (risiko rate-limit dari WhatsApp) dan menenggelamkan admin.
 
@@ -264,7 +264,7 @@ Tiap pesan masuk memicu: 2 query (token + daftar manager), penulisan baris dedup
 
 ### P5 — 🟡 `get_autoreply_context` dipanggil dua kali per pesan
 
-**Lokasi** `src/routes/api.evolution.ts:298` dan `src/services/wa-autoreply.service.ts:502`
+**Lokasi** webhook masuk lama (dihapus) dan `src/services/wa-autoreply.service.ts`
 
 RPC yang sama (dengan agregasi pesan + summary) dieksekusi di webhook lalu diulang di worker beberapa detik kemudian.
 
@@ -321,11 +321,11 @@ Jalur balasan melakukan read-then-write berlapis: cek ack (2 SELECT), cek dedup 
 | **S1** | Migrasi `supabase/migrations/20260807090000_secure_public_booking_invoice_lookup.sql`: `reference_code ILIKE p_id` → `upper(reference_code) = upper(p_id)` + tolak input di luar `^[A-Z0-9-]{3,20}$`, plus index `idx_bookings_reference_code_upper`. Sisi TS: `getBookingInvoice` memvalidasi bentuk id di Zod dan fallback tabelnya memakai `.eq()` (bukan `.ilike()`). |
 | **S2** | `update-payment-status.tool.ts`: kanal managerial bebas; kanal tamu HANYA lolos bila ada `ocr_match.status="matched"` untuk kode booking yang sama di thread nomor tersebut (≤24 jam) **dan** booking itu terdaftar atas nomor tersebut. Kode booking divalidasi bentuknya, lookup memakai `.eq()`. Deskripsi tool di `finance.agent.ts` diperbarui supaya LLM tidak menabrak gate ini berulang. |
 | **B1** | `availability.tool.ts` memeriksa `error` dari `room_type_availability_detail` dan mengembalikan `availability_unknown: true` + `reply_to_guest` alih-alih data kosong. `availability-formatters.ts` menambah `unknownAvailabilityReply()`: status tidak diketahui (RPC gagal **atau** semua tipe kamar tanpa angka) tidak lagi diterjemahkan jadi "kamar sudah penuh". Salinan RPC di `webchat.functions.ts` ikut diperbaiki. |
-| **S4** | `api.evolution.ts`: `isAuthorized()` → `authorize()` yang fail-closed — token env kosong sekarang menghasilkan `503` + `console.error`, bukan menerima semua request. Berlaku untuk `POST` dan endpoint `GET ?debug=1`. |
+| **S4** | Webhook lama dijadikan fail-closed (token env kosong → 503). Route itu dihapus 9 Oktober 2026; inbound tamu hanya webhook Meta. |
 
 **Test.** `scripts/test-security-hardening.ts` (baru, terdaftar di `bun run test:security` dan rantai `test:wa-refactor`) menutup: payload wildcard ditolak, fail-closed 503/403/200, status tak diketahui tidak pernah berbunyi "penuh" sementara stok 0 asli tetap dilaporkan penuh, dan tamu tanpa bukti OCR tidak bisa menandai lunas (tanpa satu pun `UPDATE` ke `bookings`). Seluruh suite lain tetap hijau kecuali `test-returning-guest-memory.ts` yang **sudah merah sebelum perubahan ini** (sapaan tamu lama, tidak berkaitan).
 
-**Yang perlu dipastikan saat deploy.** S4 membuat webhook menolak semua request bila `EVOLUTION_WEBHOOK_TOKEN` (atau `WPP_WEBHOOK_TOKEN`) tidak ada di environment produksi. Pastikan variabel itu benar-benar terset di Lovable/Cloudflare sebelum rilis, dan URL webhook di manager Evolution masih membawa `?token=…` yang sama.
+**Yang perlu dipastikan saat deploy.** Webhook Meta menolak bila `WHATSAPP_API_KEY` tidak ada. Jangan mengembalikan route gateway lama.
 
 ### 7 Agustus 2026 (lanjutan) — S3, B3, P3, P1 selesai
 

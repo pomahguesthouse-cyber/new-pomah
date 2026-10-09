@@ -11,6 +11,7 @@
  */
 
 import type { ToolContext, ToolHandler } from "./types";
+import { isMetaConfigured } from "@/services/whatsapp-meta.service";
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
 
 function normalizeName(value: unknown): string {
@@ -118,12 +119,11 @@ export const sendRoomTour: ToolHandler = async (args, ctx): Promise<string> => {
   }
 
   const phone = ctx.phone?.trim();
-  const token = (ctx.property as { wpp_token?: string })?.wpp_token?.trim();
-  if (!phone || !token) {
+  if (!phone || !isMetaConfigured()) {
     return JSON.stringify({
       ok: false,
       error:
-        "Tidak bisa mengirim tour sekarang (kredensial WhatsApp belum lengkap). " +
+        "Tidak bisa mengirim tour sekarang (WhatsApp Business belum terhubung). " +
         "Bagikan link ini ke tamu secara manual.",
       body,
       links,
@@ -131,7 +131,7 @@ export const sendRoomTour: ToolHandler = async (args, ctx): Promise<string> => {
   }
 
   try {
-    const r = await sendWhatsAppMessage(token, phone, body);
+    const r = await sendWhatsAppMessage("", phone, body);
     if (!r.ok) {
       return JSON.stringify({
         ok: false,

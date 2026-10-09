@@ -1,6 +1,6 @@
 /**
- * Fast-path foto/brosur, konversi WebP sebelum kirim Meta, ambang quick-ack
- * (hanya setelah jawaban belum siap ~3 dtk), dan gerbang poll Evolution.
+ * Fast-path foto/brosur, konversi WebP sebelum kirim Meta, dan ambang quick-ack
+ * (hanya setelah jawaban belum siap ~3 dtk).
  *
  * Tidak mengirim WhatsApp. Urutan ack vs balasan diuji di
  * `scripts/test-quick-ack.ts` dengan timer palsu.
@@ -27,7 +27,6 @@ import {
 import { isMediaRequest, isViewRoomRequest } from "../src/services/wa-autoreply/message-parsers";
 import { classifyIntent } from "../src/ai/router/intent-classifier";
 import { isBrochureRequest } from "../src/services/reply-postprocess";
-import { evolutionInboxPollDecision } from "../src/services/evolution-inbox-gate";
 import {
   BROCHURE_CAPTION,
   MEDIA_DEDUP_WINDOW_MS,
@@ -336,43 +335,6 @@ const metaSource = fs.readFileSync("src/services/whatsapp-meta.service.ts", "utf
 assert.ok(metaSource.includes("prepareMetaImageForSend"));
 assert.ok(metaSource.includes("131053"));
 
-// ─── Evolution poll tidak menyentuh tamu Meta ────────────────────────────────
-
-assert.equal(
-  evolutionInboxPollDecision({
-    LOVABLE_API_KEY: "lov",
-    WHATSAPP_API_KEY: "wa",
-  }).run,
-  false,
-);
-assert.match(
-  evolutionInboxPollDecision({ LOVABLE_API_KEY: "lov", WHATSAPP_API_KEY: "wa" }).reason,
-  /Meta/,
-);
-assert.equal(
-  evolutionInboxPollDecision({
-    LOVABLE_API_KEY: "lov",
-    WHATSAPP_API_KEY: "wa",
-    EVOLUTION_INBOX_POLL_ENABLED: "true",
-  }).run,
-  true,
-  "flag eksplisit menghidupkan poll internal",
-);
-assert.equal(
-  evolutionInboxPollDecision({
-    LOVABLE_API_KEY: "lov",
-    WHATSAPP_API_KEY: "wa",
-    WA_PRIMARY_GUEST_CHANNEL: "evolution",
-  }).run,
-  true,
-);
-assert.equal(evolutionInboxPollDecision({}).run, true);
-assert.equal(evolutionInboxPollDecision({ EVOLUTION_INBOX_POLL_ENABLED: "false" }).run, false);
-
-const pollSource = fs.readFileSync("src/services/evolution-inbox-poll.service.ts", "utf8");
-assert.ok(pollSource.includes("evolutionInboxPollDecision"));
-assert.ok(!pollSource.includes("delete from"), "kode Evolution tidak dihapus");
-
 const brochurePhrases = [
   "boleh difotokan kak?",
   "difotoin dong",
@@ -424,5 +386,5 @@ const ownPhoto = await classifyIntent("boleh foto-foto di area taman?");
 assert.notEqual(ownPhoto.category, "media_request");
 
 console.log(
-  "✓ meta guest fast-path: ack waits 3s, photo gate, webp remap, evolution poll gated",
+  "✓ meta guest fast-path: ack waits 3s, photo gate, webp remap",
 );

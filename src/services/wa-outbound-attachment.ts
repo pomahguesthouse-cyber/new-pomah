@@ -11,7 +11,7 @@ export const WA_OUTBOUND_BUCKET = "wa-outbound";
 export const WA_OUTBOUND_MAX_BYTES = 25 * 1024 * 1024;
 /** Gambar di atas batas Cloud API dikirim sebagai dokumen. */
 export const WA_IMAGE_INLINE_MAX_BYTES = META_IMAGE_MAX_BYTES;
-/** Signed URL untuk Meta/Evolution dan pratinjau inbox. Lebih dari 1 jam. */
+/** Signed URL untuk kirim Meta dan pratinjau inbox. Lebih dari 1 jam. */
 export const WA_SIGNED_URL_TTL_SECONDS = 2 * 60 * 60;
 export const META_CUSTOMER_WINDOW_MS = 24 * 60 * 60 * 1000;
 

@@ -1,6 +1,6 @@
 /**
- * Guest WhatsApp routing: Meta for new numbers, Evolution only as fallback,
- * invoice template retry on a closed 24h window. Does not send WhatsApp.
+ * Guest WhatsApp routing: Meta Cloud API only, invoice template retry on a
+ * closed 24h window. Does not send WhatsApp.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -10,8 +10,8 @@ import {
   toMetaRecipient,
 } from "../src/services/whatsapp-meta.service";
 import {
+  CHANNEL_UNAVAILABLE_ERROR,
   INVOICE_TEMPLATE_MISSING_ERROR,
-  evolutionFallbackReady,
   isMetaReengagementError,
   sendGuestWhatsApp,
   type GuestWhatsAppDeps,
@@ -27,9 +27,6 @@ globalThis.fetch = (async () => {
 const savedEnv = {
   WHATSAPP_INVOICE_TEMPLATE_NAME: process.env.WHATSAPP_INVOICE_TEMPLATE_NAME,
   WHATSAPP_INVOICE_TEMPLATE_LANG: process.env.WHATSAPP_INVOICE_TEMPLATE_LANG,
-  EVOLUTION_BASE_URL: process.env.EVOLUTION_BASE_URL,
-  EVOLUTION_INSTANCE: process.env.EVOLUTION_INSTANCE,
-  EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY,
 };
 
 function restoreEnv() {
@@ -84,7 +81,6 @@ assert.equal(sanitizeTemplateParam("   "), "-");
 
 interface HarnessOptions {
   meta?: boolean;
-  evolution?: boolean;
   metaResult?: { ok: boolean; error: string | null; raw?: unknown; status?: number };
   templateResult?: { ok: boolean; error: string | null };
 }
@@ -101,11 +97,6 @@ function harness(options: HarnessOptions) {
     sendTemplate: async (phone, name, lang, params) => {
       calls.push(`template:${name}:${lang}:${params.join("|")}:${phone}`);
       return options.templateResult ?? { ok: true, error: null, messageId: "wamid.template" };
-    },
-    evolutionReady: () => options.evolution === true,
-    sendEvolution: async (token, phone) => {
-      calls.push(`evolution:${token}:${phone}`);
-      return { ok: true, error: null };
     },
     isReengagement: isMetaReengagementError,
     templateName: () => (process.env.WHATSAPP_INVOICE_TEMPLATE_NAME ?? "").trim(),
@@ -132,12 +123,7 @@ delete process.env.WHATSAPP_INVOICE_TEMPLATE_LANG;
 
 {
   const { calls, deps } = harness({ meta: true });
-  const result = await sendGuestWhatsApp(
-    "081234567890",
-    "Halo",
-    { evolutionToken: "evo-token" },
-    deps,
-  );
+  const result = await sendGuestWhatsApp("081234567890", "Halo", undefined, deps);
   assert.equal(result.ok, true);
   assert.equal(result.channel, "meta");
   assert.deepEqual(calls, ["meta:6281234567890"]);
@@ -146,13 +132,8 @@ delete process.env.WHATSAPP_INVOICE_TEMPLATE_LANG;
 {
   process.env.WHATSAPP_INVOICE_TEMPLATE_NAME = "invoice_pemesanan";
   process.env.WHATSAPP_INVOICE_TEMPLATE_LANG = "id";
-  const { calls, deps } = harness({ meta: true, evolution: true, metaResult: closed });
-  const result = await sendGuestWhatsApp(
-    "+6281234567890",
-    "Invoice",
-    { evolutionToken: "evo-token", invoiceTemplate },
-    deps,
-  );
+  const { calls, deps } = harness({ meta: true, metaResult: closed });
+  const result = await sendGuestWhatsApp("+6281234567890", "Invoice", { invoiceTemplate }, deps);
   assert.equal(result.ok, true);
   assert.equal(result.channel, "meta");
   assert.equal(calls.length, 2);
@@ -161,15 +142,11 @@ delete process.env.WHATSAPP_INVOICE_TEMPLATE_LANG;
     calls[1],
     "template:invoice_pemesanan:id:Sari|PG-NPWPX|Rp 1.500.000|https://pomahguesthouse.com/book/confirmation/PG-NPWPX:6281234567890",
   );
-  assert.equal(
-    calls.some((call) => call.startsWith("evolution:")),
-    false,
-  );
 }
 
 {
   delete process.env.WHATSAPP_INVOICE_TEMPLATE_NAME;
-  const { calls, deps } = harness({ meta: true, evolution: true, metaResult: closed });
+  const { calls, deps } = harness({ meta: true, metaResult: closed });
   const result = await sendGuestWhatsApp("6281234567890", "Invoice", { invoiceTemplate }, deps);
   assert.equal(result.ok, false);
   assert.equal(result.error, INVOICE_TEMPLATE_MISSING_ERROR);
@@ -192,7 +169,6 @@ delete process.env.WHATSAPP_INVOICE_TEMPLATE_LANG;
 {
   const { calls, deps } = harness({
     meta: true,
-    evolution: true,
     metaResult: { ok: false, error: "HTTP 500: gateway down", raw: { error: { code: 1 } } },
   });
   const result = await sendGuestWhatsApp("6281234567890", "Invoice", { invoiceTemplate }, deps);
@@ -202,39 +178,12 @@ delete process.env.WHATSAPP_INVOICE_TEMPLATE_LANG;
 }
 
 {
-  delete process.env.WHATSAPP_INVOICE_TEMPLATE_NAME;
-  const { calls, deps } = harness({ meta: false, evolution: true });
-  const result = await sendGuestWhatsApp(
-    "081234567890",
-    "Halo",
-    { evolutionToken: "prop-token" },
-    deps,
-  );
-  assert.equal(result.ok, true);
-  assert.equal(result.channel, "evolution");
-  assert.deepEqual(calls, ["evolution:prop-token:6281234567890"]);
-}
-
-{
-  const { calls, deps } = harness({ meta: false, evolution: false });
-  const result = await sendGuestWhatsApp("081234567890", "Halo", { evolutionToken: null }, deps);
+  const { calls, deps } = harness({ meta: false });
+  const result = await sendGuestWhatsApp("081234567890", "Halo", undefined, deps);
   assert.equal(result.ok, false);
   assert.equal(result.channel, "none");
-  assert.match(result.error ?? "", /Meta tidak aktif/);
+  assert.equal(result.error, CHANNEL_UNAVAILABLE_ERROR);
   assert.deepEqual(calls, []);
-}
-
-{
-  delete process.env.EVOLUTION_BASE_URL;
-  delete process.env.EVOLUTION_INSTANCE;
-  delete process.env.EVOLUTION_API_KEY;
-  assert.equal(evolutionFallbackReady("token-saja"), false);
-  process.env.EVOLUTION_BASE_URL = "https://example.invalid";
-  process.env.EVOLUTION_INSTANCE = "pomah";
-  assert.equal(evolutionFallbackReady(null), false);
-  assert.equal(evolutionFallbackReady("prop-token"), true);
-  process.env.EVOLUTION_API_KEY = "env-key";
-  assert.equal(evolutionFallbackReady(null), true);
 }
 
 const invoiceSrc = fs.readFileSync(
@@ -264,6 +213,13 @@ for (const rel of [
   const src = fs.readFileSync(new URL(rel, import.meta.url), "utf8");
   assert.match(src, /sendGuestWhatsApp/, rel);
 }
+
+const sendSrc = fs.readFileSync(
+  new URL("../src/services/whatsapp.service.ts", import.meta.url),
+  "utf8",
+);
+assert.match(sendSrc, /sendMetaMessage/);
+assert.doesNotMatch(sendSrc, /sendText/);
 
 assert.equal(fetchCalls, 0, "unit test performed an HTTP call");
 restoreEnv();

@@ -17,6 +17,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fmtDateID } from "@/lib/date";
 import { findNotificationThreadId } from "./notification-thread-resolver";
+import { isMetaConfigured } from "./whatsapp-meta.service";
 import { sendWhatsAppMessage } from "./whatsapp.service";
 
 type Db = SupabaseClient<any, any, any>;
@@ -222,10 +223,10 @@ export async function sendWithRetry(
 
 async function dispatchByChannel(
   opts: SendOptions,
-  waToken: string | null,
+  _waToken: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!waToken) return { ok: false, error: "no whatsapp token" };
-  const r = await sendWhatsAppMessage(waToken, opts.recipient.phone, opts.message, opts.fileUrl);
+  if (!isMetaConfigured()) return { ok: false, error: "WhatsApp Business belum terhubung" };
+  const r = await sendWhatsAppMessage("", opts.recipient.phone, opts.message, opts.fileUrl);
   return { ok: r.ok, error: r.error ?? undefined };
 }
 
@@ -539,9 +540,8 @@ export interface PaymentProofInput {
   threadId: string | null;
   phone: string;
   guestName: string | null;
-  /** URL publik gambar bukti transfer. Opsional: Evolution API tidak memberi URL
-   *  publik, jadi bisa undefined — dalam kasus itu notif dikirim teks saja
-   *  (tanpa forward gambar), dan hasil OCR tetap disertakan. */
+  /** URL publik gambar bukti transfer. Opsional: bila tidak ada URL http(s),
+   *  notif dikirim teks saja (tanpa forward gambar), dan hasil OCR tetap disertakan. */
   imageUrl?: string;
   messageId: string;
   /** Hasil analisis Vision OCR (opsional — jika undefined, kirim notif sederhana) */
@@ -603,7 +603,7 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
     const match = input.ocrResult?.match;
 
     // Hanya URL http(s) yang bisa diteruskan sebagai lampiran WhatsApp.
-    // Data URI (Evolution API base64) atau undefined → notif teks saja.
+    // Data URI atau undefined → notif teks saja.
     const publicImageUrl =
       input.imageUrl && /^https?:\/\//i.test(input.imageUrl) ? input.imageUrl : undefined;
 
