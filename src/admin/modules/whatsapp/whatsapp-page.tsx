@@ -77,6 +77,7 @@ import {
   threadsQueryOptions,
 } from "@/admin/modules/whatsapp/wa-queries";
 import { getMessageAttachment } from "@/admin/modules/whatsapp/message-attachment";
+import { formatPaymentProofSummary, type PaymentMatchResult } from "@/services/payment-proof-match";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -1969,6 +1970,35 @@ function MessageBadges({
   );
 }
 
+function readOcrMatch(metadata: unknown): Partial<PaymentMatchResult> | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const match = (metadata as { ocr_match?: unknown }).ocr_match;
+  if (!match || typeof match !== "object") return null;
+  return match as Partial<PaymentMatchResult>;
+}
+
+function OcrMatchNote({ metadata }: { metadata: unknown }) {
+  const match = readOcrMatch(metadata);
+  if (!match?.status) return null;
+  const summary = formatPaymentProofSummary(match);
+  if (!summary) return null;
+  const matched = String(match.status).startsWith("matched");
+  const destinationFlag = match.destination_ok === false;
+  return (
+    <div
+      className={cn(
+        "mt-1 max-w-[min(85%,34rem)] rounded-md px-2 py-1 text-[11px] leading-snug",
+        matched && !destinationFlag
+          ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"
+          : "bg-amber-50 text-amber-950 dark:bg-amber-950/40 dark:text-amber-100",
+      )}
+    >
+      <p>{summary}</p>
+      {destinationFlag && <p className="mt-0.5 font-medium">Rekening tujuan perlu dicek staf.</p>}
+    </div>
+  );
+}
+
 function getAttachment(m: any) {
   return getMessageAttachment(m);
 }
@@ -2112,6 +2142,7 @@ const MessageBubble = memo(function MessageBubble({
           {failed && <span className="font-medium text-red-600 dark:text-red-300">Gagal</span>}
         </div>
       </div>
+      {m.direction !== "out" && <OcrMatchNote metadata={m.metadata} />}
       <MessageBadges m={m} aiLabConfig={aiLabConfig} />
       {canRetryMessage(m) && (
         <button

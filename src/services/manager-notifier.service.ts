@@ -16,6 +16,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fmtDateID } from "@/lib/date";
+import { formatPaymentProofSummary } from "./payment-proof-match";
+import type { PaymentProofResult } from "./payment-proof.service";
 import { findNotificationThreadId } from "./notification-thread-resolver";
 import { isMetaConfigured } from "./whatsapp-meta.service";
 import { sendWhatsAppMessage } from "./whatsapp.service";
@@ -534,8 +536,6 @@ export async function notifyBookingUpdated(
   }
 }
 
-import type { PaymentProofResult } from "./payment-proof.service";
-
 export interface PaymentProofInput {
   threadId: string | null;
   phone: string;
@@ -554,12 +554,22 @@ function matchStatusEmoji(status: string): string {
   switch (status) {
     case "matched":
       return "✅ COCOK";
+    case "matched_dp":
+      return "✅ COCOK DP 50%";
+    case "matched_full":
+      return "✅ COCOK LUNAS";
+    case "matched_remaining":
+      return "✅ COCOK SISA";
+    case "partial":
+      return "⚠️ KURANG DARI TAGIHAN";
+    case "overpaid":
+      return "⚠️ LEBIH BAYAR";
     case "unmatched":
-      return "❌ TIDAK COCOK";
+      return "❌ BELUM COCOK";
     case "ambiguous":
       return "⚠️ PERLU DICEK";
     case "no_pending_booking":
-      return "ℹ️ TIDAK ADA BOOKING PENDING";
+      return "ℹ️ TIDAK ADA BOOKING TERBUKA";
     default:
       return "❓ " + status;
   }
@@ -622,12 +632,19 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
         .filter(Boolean)
         .join("\n");
 
+      const summary = match ? (match.summary || formatPaymentProofSummary(match)) : null;
       const matchLines = match
         ? [
+            summary ? `  ${summary}` : null,
             `  Status: ${matchStatusEmoji(match.status)}`,
             match.booking_code ? `  Kode Booking: ${match.booking_code}` : null,
+            match.expected_amount != null ? `  Patokan: ${fmtRp(match.expected_amount)}` : null,
             match.booking_amount != null ? `  Total Tagihan: ${fmtRp(match.booking_amount)}` : null,
             match.amount_diff != null ? `  Selisih: ${fmtRp(match.amount_diff)}` : null,
+            match.destination_ok === false
+              ? "  ⚠️ Rekening tujuan perlu dicek staf (bukan BCA 0095584379 a.n. Faizal Abdurachman)."
+              : null,
+            "  Pembayaran tidak diubah otomatis — staf yang mengonfirmasi.",
           ]
             .filter(Boolean)
             .join("\n")

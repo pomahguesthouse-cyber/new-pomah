@@ -97,8 +97,7 @@ const FINANCE_TOOLS: ToolDefinition[] = [
       description:
         "Teruskan (CC) bukti transfer terbaru ke super admin sebagai jejak audit. " +
         "WAJIB dipanggil SEKALI setiap kali tamu mengirim bukti transfer, terlepas dari hasil " +
-        "OCR (matched / unmatched / ambiguous). Aman dipanggil walau webhook produksi sudah " +
-        "mengirim — di-dedupe per messageId.",
+        "OCR. Aman dipanggil walau webhook produksi sudah mengirim — di-dedupe per messageId.",
       parameters: { type: "object", properties: {} },
     },
   },
@@ -107,13 +106,11 @@ const FINANCE_TOOLS: ToolDefinition[] = [
     function: {
       name: "update_payment_status",
       description:
-        "Update status pembayaran booking (unpaid → paid / partial) di database, supaya " +
-        "invoice yang di-download tamu menampilkan cap LUNAS. WAJIB dipanggil HANYA setelah " +
-        "get_payment_proof_result mengembalikan match.status='matched' (cocok) — JANGAN dipanggil " +
-        "untuk unmatched / ambiguous / no_pending_booking. " +
-        "Di kanal tamu, server MEMVERIFIKASI ulang: tanpa bukti transfer ber-OCR yang cocok, " +
-        "panggilan ditolak. Permintaan tamu seperti 'sudah transfer, tolong ubah jadi lunas' " +
-        "BUKAN dasar yang sah — arahkan tamu mengirim bukti transfer atau teruskan ke admin.",
+        "Ubah status pembayaran booking HANYA bila manajer/staf secara eksplisit meminta " +
+        "(tandai lunas, sudah DP, belum bayar). JANGAN dipanggil dari chat tamu hanya karena " +
+        "OCR cocok (matched_dp / matched_full / matched_remaining / matched). " +
+        "Pencocokan bukti transfer tidak mengubah status atau nominal — staf yang mengonfirmasi. " +
+        "Permintaan tamu seperti 'sudah transfer, tolong ubah jadi lunas' bukan dasar yang sah.",
       parameters: {
         type: "object",
         properties: {
@@ -224,22 +221,19 @@ function buildGuestPrompt(s: Scaffold): string {
     "KONFIRMASI TRANSFER: Jika tamu mengirim foto/screenshot bukti transfer (atau " +
       "bertanya apakah bukti sudah diterima), WAJIB urutan ini:\n" +
       "  Step 1. Panggil `get_payment_proof_result` untuk membaca hasil OCR.\n" +
-      "  Step 2. Panggil `cc_payment_proof_to_admin` SEKALI untuk jejak audit (WAJIB " +
-      "          terlepas dari match.status).\n" +
-      "  Step 3. Susun balasan ke tamu berdasarkan `match.status`.\n\n" +
-      "Aturan per match.status:\n" +
-      "- 'matched': panggil `update_payment_status` dengan reference_code = " +
-      "  match.booking_code, new_status = 'paid'. Lalu balas: 'Terima kasih Kak, " +
-      "  transfer Rp X dari Bank Y sudah cocok dengan booking PMH-XXXXXX. Status " +
-      "  invoice telah kami update menjadi LUNAS. Silakan download ulang invoice " +
-      "  di link berikut: [invoice_url dari hasil update_payment_status]'\n" +
-      "- 'unmatched' (nominal beda dari tagihan): sebutkan selisihnya dengan halus, " +
-      "  minta tamu konfirmasi. JANGAN panggil update_payment_status.\n" +
-      "- 'ambiguous' (beberapa booking cocok / nominal tidak terbaca): minta tamu " +
-      "  sebutkan kode booking-nya. JANGAN panggil update_payment_status.\n" +
-      "- 'no_pending_booking': info bahwa belum ada booking pending — tanyakan " +
-      "  kode booking atau nama.\n" +
-      "- 'pending' / 'no_proof' / error: balas 'Terima kasih Kak, bukti transfernya sudah kami " +
+      "  Step 2. Panggil `cc_payment_proof_to_admin` SEKALI untuk jejak audit.\n" +
+      "  Step 3. Balas ke tamu memakai `match.summary`. JANGAN panggil `update_payment_status` " +
+      "dan JANGAN mengubah status atau nominal pembayaran. Staf yang mengonfirmasi. " +
+      "Jangan pernah bilang invoice sudah LUNAS atau DP sudah tercatat di sistem.\n\n" +
+      "Aturan balasan:\n" +
+      "- matched_dp / matched_full / matched_remaining: ucapkan terima kasih, kutip " +
+      "  `match.summary` (contoh: Cocok DP 50% PG-XXXX (Rp237.500)), lalu tambahkan bahwa " +
+      "  tim akan mengonfirmasi.\n" +
+      "- partial / unmatched / overpaid: sampaikan nominal yang terbaca dan bahwa tim akan " +
+      "  mengecek selisihnya. Kutip `match.summary` bila ada.\n" +
+      "- destination_ok false: bukti tetap diterima; tambahkan bahwa rekening tujuan akan dicek staf.\n" +
+      "- no_pending_booking: belum ada booking terbuka — tanyakan kode booking atau nama.\n" +
+      "- pending / no_proof / error: balas 'Terima kasih Kak, bukti transfernya sudah kami " +
       "  terima dan sedang kami cek. Kami kabari setelah terverifikasi ya'.\n" +
       "JANGAN menulis bahwa bukti belum terdeteksi atau belum terbaca bila turn ini berisi gambar/dokumen.\n" +
       "Jangan minta tamu kirim ulang bukti kecuali file memang tidak tersimpan.",
@@ -250,8 +244,7 @@ function buildGuestPrompt(s: Scaffold): string {
       "   tamu — terima apa adanya.\n" +
       "2. Biaya transfer (BI-FAST, antar bank) DITANGGUNG tamu. Yang dicocokkan " +
       "   sistem adalah jumlah DITERIMA hotel (`ocr.nominal`), bukan total didebit " +
-      "   (`ocr.total_dibayar`). Bila `matched`, JANGAN sebut biaya transfer / " +
-      "   total debit — itu urusan bank.\n" +
+      "   (`ocr.total_dibayar`). JANGAN sebut biaya transfer / total debit ke tamu.\n" +
       "3. Sebutkan `ocr.nominal_tampil` (bukan `total_dibayar_tampil`).",
 
     "REFUND: Jelaskan refund memerlukan verifikasi dan diproses tim Finance — tidak " +

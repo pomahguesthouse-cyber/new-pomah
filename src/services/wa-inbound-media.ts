@@ -7,6 +7,7 @@
  */
 import { saveMessageMetadata } from "@/repositories/message.repository";
 import type { PaymentProofResult } from "@/services/payment-proof.service";
+import { formatPaymentProofSummary } from "@/services/payment-proof-match";
 
 export const WA_INBOUND_BUCKET = "wa-inbound";
 /** Selaras dengan file_size_limit di migrasi bucket. */
@@ -314,6 +315,10 @@ export interface PaymentProofStaffNotice {
   message: string;
   pushTitle: string;
   pushBody: string;
+  matchSummary: string | null;
+  destinationOk: boolean | null;
+  /** Hanya untuk fan-out teks. Tidak disimpan sebagai metadata booking. */
+  ocrResult?: PaymentProofResult | null;
 }
 
 export function buildPaymentProofStaffNotice(input: {
@@ -322,18 +327,29 @@ export function buildPaymentProofStaffNotice(input: {
   bookingRef?: string | null;
   threadId?: string | null;
   messageId: string;
+  matchSummary?: string | null;
+  destinationOk?: boolean | null;
+  ocrResult?: PaymentProofResult | null;
 }): PaymentProofStaffNotice {
   const guestName = (input.guestName || "").trim() || "Tamu";
   const phone = String(input.phone ?? "").trim();
   const bookingRef = (input.bookingRef || "").trim() || null;
   const threadId = input.threadId && THREAD_UUID_RE.test(input.threadId) ? input.threadId : null;
   const url = threadId ? `/admin/whatsapp?thread=${threadId}` : "/admin/whatsapp";
-  const message =
-    "💳 BUKTI TRANSFER DITERIMA\n\n" +
-    `Tamu: ${guestName}\n` +
-    `Telepon: ${phone}\n` +
-    `Kode Booking: ${bookingRef ?? "-"}\n` +
-    `Chat: ${url}`;
+  const matchSummary = (input.matchSummary || "").trim() || null;
+  const destinationOk = typeof input.destinationOk === "boolean" ? input.destinationOk : null;
+  const lines = [
+    "💳 BUKTI TRANSFER DITERIMA",
+    "",
+    `Tamu: ${guestName}`,
+    `Telepon: ${phone}`,
+    `Kode Booking: ${bookingRef ?? "-"}`,
+  ];
+  if (matchSummary) lines.push(`Pencocokan: ${matchSummary}`);
+  if (destinationOk === false) lines.push("⚠️ Rekening tujuan perlu dicek staf.");
+  lines.push(`Chat: ${url}`);
+  const pushCore = `${guestName} · ${phone}${bookingRef ? ` · ${bookingRef}` : ""}`;
+  const pushBody = (matchSummary ? `${pushCore} · ${matchSummary}` : pushCore).slice(0, 180);
   return {
     messageId: input.messageId,
     phone,
@@ -342,9 +358,12 @@ export function buildPaymentProofStaffNotice(input: {
     threadId,
     relatedId: threadId,
     url,
-    message,
-    pushTitle: "Bukti transfer masuk",
-    pushBody: `${guestName} · ${phone}${bookingRef ? ` · ${bookingRef}` : ""}`,
+    message: lines.join("\n"),
+    pushTitle: destinationOk === false ? "Bukti transfer — cek rekening" : "Bukti transfer masuk",
+    pushBody,
+    matchSummary,
+    destinationOk,
+    ocrResult: input.ocrResult ?? null,
   };
 }
 
@@ -729,12 +748,18 @@ async function maybeNotify(
     return false;
   }
   if (!deps.claimNotice) return false;
+  const match = _ocr?.match ?? null;
+  const matchSummary = match ? formatPaymentProofSummary(match) : null;
+  const destinationOk = match && typeof match.destination_ok === "boolean" ? match.destination_ok : null;
   const notice = buildPaymentProofStaffNotice({
     phone: input.phone,
     guestName,
-    bookingRef,
+    bookingRef: match?.booking_code || bookingRef,
     threadId: input.threadId,
     messageId: input.messageId,
+    matchSummary,
+    destinationOk,
+    ocrResult: _ocr,
   });
   const result = await deps.claimNotice(notice);
   return result === "sent" || result === "duplicate";
@@ -959,6 +984,7 @@ export async function runInboundMediaJob(
           guestName: notice.guestName,
           messageId: notice.messageId,
           chatUrl: notice.url,
+          ocrResult: notice.ocrResult ?? undefined,
         });
       }),
   });

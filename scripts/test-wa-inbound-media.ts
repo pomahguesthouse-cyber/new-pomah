@@ -310,6 +310,8 @@ function storageClient(failBucket = false) {
   assert.match(h.notices[0].message, new RegExp(PHONE));
   assert.match(h.notices[0].message, /Sari/);
   assert.match(h.notices[0].url, new RegExp(THREAD));
+  assert.match(h.notices[0].message, /Pencocokan:/);
+  assert.match(h.notices[0].message, /Tidak ada booking terbuka/);
 
   const logs: Array<Record<string, unknown>> = [];
   const pushes: unknown[] = [];

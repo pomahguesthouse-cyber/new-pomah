@@ -15,6 +15,7 @@
  * can fall back to a generic acknowledgement.
  */
 
+import { formatPaymentProofSummary } from "@/services/payment-proof-match";
 import { formatRupiahOcr } from "@/services/payment-proof.service";
 import type { ToolContext, ToolHandler } from "@/tools/types";
 
@@ -31,13 +32,27 @@ interface OcrShape {
 }
 
 interface MatchShape {
-  status:         string;
-  booking_code:   string | null;
-  booking_amount: number | null;
-  amount_diff:    number | null;
+  status:            string;
+  booking_code:      string | null;
+  booking_amount:    number | null;
+  expected_amount?:  number | null;
+  amount_diff:       number | null;
+  match_reason?:     string | null;
+  destination_ok?:   boolean | null;
+  summary?:          string | null;
+  received_amount?:  number | null;
+  dp_amount?:        number | null;
+  remaining_amount?: number | null;
 }
 
-function shape(ocr: OcrShape, match: MatchShape) {
+function shape(ocr: OcrShape, match: MatchShape | null | undefined) {
+  const safe: MatchShape = match ?? {
+    status: "pending",
+    booking_code: null,
+    booking_amount: null,
+    amount_diff: null,
+  };
+  const summary = safe.summary || formatPaymentProofSummary(safe) || null;
   return {
     ok: true,
     ocr: {
@@ -54,12 +69,17 @@ function shape(ocr: OcrShape, match: MatchShape) {
       nomor_referensi:   ocr.nomor_referensi,
     },
     match: {
-      status:                match.status,
-      booking_code:          match.booking_code,
-      booking_amount:        match.booking_amount,
-      booking_amount_tampil: formatRupiahOcr(match.booking_amount),
-      amount_diff:           match.amount_diff,
-      amount_diff_tampil:    match.amount_diff != null ? formatRupiahOcr(match.amount_diff) : null,
+      status:                safe.status,
+      booking_code:          safe.booking_code,
+      booking_amount:        safe.booking_amount,
+      booking_amount_tampil: formatRupiahOcr(safe.booking_amount),
+      expected_amount:       safe.expected_amount ?? null,
+      expected_amount_tampil: safe.expected_amount != null ? formatRupiahOcr(safe.expected_amount) : null,
+      amount_diff:           safe.amount_diff,
+      amount_diff_tampil:    safe.amount_diff != null ? formatRupiahOcr(safe.amount_diff) : null,
+      match_reason:          safe.match_reason ?? null,
+      destination_ok:        safe.destination_ok ?? null,
+      summary,
     },
   };
 }
@@ -101,9 +121,9 @@ export const getPaymentProofResult: ToolHandler = async (
     // OCR runs fire-and-forget in the production webhook, in PARALLEL with the
     // autoreply queue that eventually invokes this tool. If we read once and
     // the Vision LLM hasn't finished, we'd return "pending" and the agent would
-    // never reach match.status="matched" → invoice never marked LUNAS on this
-    // turn. So poll (bounded) until the OCR metadata lands. Budget stays under
-    // the 15s per-tool timeout in the executor.
+    // not be able to quote the match summary. Payment status is not changed
+    // here — staff confirms. Poll (bounded) until the OCR metadata lands.
+    // Budget stays under the 15s per-tool timeout in the executor.
     const POLL_DEADLINE_MS = 4_000;
     const POLL_INTERVAL_MS = 1_000;
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
