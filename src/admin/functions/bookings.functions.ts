@@ -567,7 +567,7 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
       console.warn("[createMultiRoomBooking] Notifikasi invoice gagal (non-fatal):", err),
     );
 
-    // Alert ke manager (WhatsApp + Telegram) — sama seperti booking via web/admin calendar
+    // Alert ke manager (WhatsApp) — sama seperti booking via web/admin calendar
     const { runDeferred } = await import("@/lib/cf-context");
     runDeferred("createMultiRoomBooking.notifyNewBooking", async () => {
       const { notifyNewBooking } = await import("@/services/manager-notifier.service");

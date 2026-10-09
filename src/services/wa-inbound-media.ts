@@ -356,7 +356,7 @@ type NoticeDb = {
 /**
  * Satu baris `notification_logs` (event payment_proof) + push staf bila RPC-nya ada.
  * Pemanggilan kedua untuk message id yang sama tidak menambah baris.
- * `fanOut` opsional memakai notifier yang sudah ada (WA/Telegram), juga sekali.
+ * `fanOut` opsional memakai notifier yang sudah ada (WhatsApp), juga sekali.
  */
 export async function claimPaymentProofStaffNotice(
   db: NoticeDb,

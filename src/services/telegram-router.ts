@@ -365,9 +365,9 @@ async function handleLinkingCommand(args: HandlerArgs & {
 
   await sendMessage(botToken, chatId,
     `✅ Terhubung sebagai ${m.name} (${m.role}).\n\n` +
-    `Mulai sekarang Anda akan menerima notifikasi booking, bukti transfer, ` +
-    `dan komplain di sini. Anda juga bisa langsung bertanya — tanya occupancy, ` +
-    `minta status booking, atau balas pesan tamu lewat saya.`);
+    `Anda bisa langsung bertanya di sini — tanya occupancy, ` +
+    `minta status booking, atau balas pesan tamu lewat saya. ` +
+    `Notifikasi operasional (booking, bukti transfer, komplain) dikirim lewat WhatsApp dan aplikasi, bukan Telegram.`);
 }
 
 // ─── Agent group channel handling ───────────────────────────────────────────
@@ -419,7 +419,7 @@ async function handleAgentChannelRegister(args: HandlerArgs & {
   }
   await sendMessage(botToken, chatId,
     `✅ ${threadId ? `Topic ini` : `Grup ini`} ter-bind ke agent "${key}". ` +
-    `Notif yang relevan akan masuk ke ${threadId ? "topic" : "grup"} ini, dan pesan di sini akan dijawab oleh agent tersebut.`,
+    `Pesan di sini akan dijawab oleh agent tersebut.`,
     replyOpts);
 }
 
