@@ -1,8 +1,8 @@
 /**
  * Conversation Monitor Service
  *
- * Mengawasi percakapan WhatsApp tamu secara aktif dan mengirim alert
- * ke super admin via Telegram ketika mendeteksi masalah:
+ * Mengawasi percakapan WhatsApp tamu secara aktif dan mencatat alert
+ * di dashboard ketika mendeteksi masalah:
  *
  *  1. REPETITIVE   — Tamu mengirim pesan berulang / keluar dari konteks
  *                    (AI sudah membalas tapi tamu terus mengirim ulang pertanyaan serupa)
@@ -11,26 +11,14 @@
  *  4. FALLBACK_LOOP— AI gagal membalas (fallback message) >2x berturut-turut
  *  5. KEYWORD      — Kata sensitif / keluhan keras terdeteksi
  *
- * Alert dikirim ke:
- *  a. super_admin yang punya telegram_chat_id (DM langsung)
- *  b. Kanal manajerial (telegram_agent_channels) sesuai jenis masalah:
- *       escalation / keyword → customer-care + manager
- *       fallback_loop        → customer-care + manager
- *       repetitive           → customer-care
- *       unresponsive         → manager
- *       manual               → manager
- * Alert juga disimpan di tabel conversation_alerts untuk dashboard admin.
+ * Alert disimpan di tabel conversation_alerts untuk dashboard admin.
+ * Tidak dikirim lewat Telegram.
  *
  * Fire-and-forget — semua fungsi exported tidak pernah throw,
  * hanya log warning agar tidak memblokir pipeline utama.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  sendMessage as tgSendMessage,
-  editMessageText as tgEditMessage,
-  type TgResult,
-} from "./telegram.service";
 
 type Db = SupabaseClient<any, any, any>;
 
@@ -133,42 +121,7 @@ function bigramSimilarity(a: string, b: string): number {
   return (2 * common) / (ba.size + bb.size);
 }
 
-/** Format timestamp WIB. */
-function fmtWIB(date = new Date()): string {
-  return date.toLocaleString("id-ID", {
-    timeZone: "Asia/Jakarta",
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-}
-
 // ─── DB Helpers ──────────────────────────────────────────────────────────────
-
-async function getTelegramBotToken(db: Db): Promise<string | null> {
-  const { data } = await db
-    .from("properties")
-    .select("telegram_bot_token")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  return (data?.telegram_bot_token as string | null) ?? null;
-}
-
-async function getSuperAdmins(
-  db: Db,
-): Promise<Array<{ id: string; name: string; telegram_chat_id: string }>> {
-  const { data, error } = await db
-    .from("property_managers")
-    .select("id, name, telegram_chat_id")
-    .eq("role", "super_admin")
-    .eq("is_active", true)
-    .not("telegram_chat_id", "is", null);
-  if (error) {
-    console.warn("[ConvMonitor] getSuperAdmins error:", error.message);
-    return [];
-  }
-  return (data ?? []) as Array<{ id: string; name: string; telegram_chat_id: string }>;
-}
 
 /** Cek apakah sudah ada alert OPEN untuk (thread_id, trigger_type) ini. */
 async function hasOpenAlert(
@@ -226,111 +179,6 @@ async function insertAlert(
   return (data as any).id as string;
 }
 
-/** Update telegram_message_id setelah pesan berhasil dikirim. */
-async function patchTelegramMessageId(
-  db: Db,
-  alertId: string,
-  tgMsgId: string,
-): Promise<void> {
-  await db
-    .from("conversation_alerts")
-    .update({ telegram_message_id: tgMsgId })
-    .eq("id", alertId);
-}
-
-// ─── Telegram Alert Formatter ─────────────────────────────────────────────────
-
-const SEVERITY_EMOJI: Record<string, string> = {
-  low: "🔵",
-  medium: "🟡",
-  high: "🟠",
-  critical: "🔴",
-};
-
-const TRIGGER_LABEL: Record<string, string> = {
-  repetitive: "⟳ Percakapan Berulang / Off-Context",
-  escalation: "🚨 Permintaan Eskalasi",
-  unresponsive: "⏰ Tidak Dibalas (10 Menit)",
-  fallback_loop: "🤖 AI Gagal Berulang",
-  keyword: "⚠️ Kata Sensitif Terdeteksi",
-  manual: "📌 Alert Manual",
-  needs_human: "🙋 Summary AI: Tamu Butuh Human",
-};
-
-function buildTelegramMessage(opts: {
-  guestName: string | null;
-  phone: string;
-  triggerType: string;
-  triggerDetail: string;
-  lastMessage: string;
-  aiStatus: "auto" | "human";
-  severity: "low" | "medium" | "high" | "critical";
-  alertId: string;
-}): string {
-  const sev = SEVERITY_EMOJI[opts.severity] ?? "⚠️";
-  const label = TRIGGER_LABEL[opts.triggerType] ?? opts.triggerType;
-  const aiLabel = opts.aiStatus === "human" ? "👤 Human Takeover" : "🤖 AI Auto";
-  const last = opts.lastMessage.length > 280
-    ? opts.lastMessage.slice(0, 277) + "…"
-    : opts.lastMessage;
-
-  return (
-    `${sev} PENGAWASAN PERCAKAPAN — ${label}\n\n` +
-    `👤 Tamu: ${opts.guestName ?? "Tidak dikenal"}\n` +
-    `📱 No HP: ${opts.phone}\n` +
-    `⚠️ Detail: ${opts.triggerDetail}\n\n` +
-    `💬 Pesan Terakhir:\n"${last}"\n\n` +
-    `🤖 Status AI: ${aiLabel}\n` +
-    `⏱️ Waktu: ${fmtWIB()}\n\n` +
-    `🆔 Alert ID: ${opts.alertId.slice(0, 8)}\n` +
-    `Balas /handled_${opts.alertId.slice(0, 8)} untuk tandai selesai.`
-  );
-}
-
-/** Kirim alert ke semua super admin via Telegram. */
-async function fanOutTelegramAlert(
-  db: Db,
-  message: string,
-): Promise<string | null> {
-  const [token, admins] = await Promise.all([
-    getTelegramBotToken(db),
-    getSuperAdmins(db),
-  ]);
-
-  if (!token) {
-    console.warn("[ConvMonitor] No Telegram bot token found");
-    return null;
-  }
-  if (admins.length === 0) {
-    console.warn("[ConvMonitor] No active super admin with telegram_chat_id");
-    return null;
-  }
-
-  let lastMsgId: string | null = null;
-
-  await Promise.all(
-    admins.map(async (admin) => {
-      const result: TgResult = await tgSendMessage(
-        token,
-        admin.telegram_chat_id,
-        message,
-      );
-      if (result.ok && (result.result as any)?.message_id) {
-        lastMsgId = String((result.result as any).message_id);
-        console.info(
-          `[ConvMonitor] Alert terkirim ke ${admin.name} (${admin.telegram_chat_id})`,
-        );
-      } else {
-        console.warn(
-          `[ConvMonitor] Gagal kirim ke ${admin.name}: ${result.error}`,
-        );
-      }
-    }),
-  );
-
-  return lastMsgId;
-}
-
 // ─── Core Alert Dispatcher ────────────────────────────────────────────────────
 
 interface AlertOptions {
@@ -382,78 +230,6 @@ async function dispatchAlert(opts: AlertOptions): Promise<void> {
   });
 
   if (!alertId) return;
-
-  // 2. Bangun pesan Telegram
-  const message = buildTelegramMessage({
-    guestName: opts.guestName,
-    phone: opts.phone,
-    triggerType: opts.triggerType,
-    triggerDetail: opts.triggerDetail,
-    lastMessage: opts.lastMessage,
-    aiStatus: opts.aiStatus,
-    severity: opts.severity,
-    alertId,
-  });
-
-  // 3. Kirim ke super admin (DM langsung) + kanal manajerial (paralel)
-  const agentTargets = resolveAgentChannels(opts.triggerType);
-
-  const [tgMsgId] = await Promise.all([
-    // a. super admin DM
-    fanOutTelegramAlert(db, message),
-    // b. kanal agent manajerial
-    fanOutToManagerialChannels(db, agentTargets, message, alertId),
-  ]);
-
-  // 4. Patch telegram_message_id (dari DM super admin) jika berhasil
-  if (tgMsgId) {
-    await patchTelegramMessageId(db, alertId, tgMsgId);
-  }
-}
-
-/**
- * Petakan trigger type ke daftar agent channel key yang harus menerima alert.
- * Urutan: lebih spesifik → lebih umum.
- */
-function resolveAgentChannels(triggerType: string): string[] {
-  switch (triggerType) {
-    case "keyword":
-    case "escalation":
-      return ["customer-care", "manager"];
-    case "fallback_loop":
-      return ["customer-care", "manager"];
-    case "repetitive":
-      return ["customer-care"];
-    case "unresponsive":
-      return ["manager"];
-    case "manual":
-      return ["manager"];
-    default:
-      return ["manager"];
-  }
-}
-
-/**
- * Kirim alert ke kanal agent di Telegram (telegram_agent_channels).
- * Menggunakan fanOutToAgentChannels dari manager-notifier lewat dynamic import
- * untuk menghindari circular dependency.
- */
-async function fanOutToManagerialChannels(
-  db: Db,
-  agentKeys: string[],
-  message: string,
-  alertId: string,
-): Promise<void> {
-  if (agentKeys.length === 0) return;
-  try {
-    const { fanOutAgentChannelsForMonitor } = await import(
-      "./manager-notifier.service"
-    );
-    await fanOutAgentChannelsForMonitor(db, agentKeys, message, alertId);
-  } catch (e) {
-    // Jika managerial channel belum dikonfigurasi, tidak fatal
-    console.warn("[ConvMonitor] fanOutManagerialChannels error (non-fatal):", e);
-  }
 }
 
 // ─── Exported Detection Functions ────────────────────────────────────────────
@@ -669,7 +445,7 @@ export async function checkUnresponsiveThreads(db: Db): Promise<void> {
 }
 
 /**
- * Tandai alert sebagai handled dan edit pesan Telegram jika bisa.
+ * Tandai alert sebagai handled di dashboard.
  */
 export async function resolveAlert(
   db: Db,
@@ -678,12 +454,6 @@ export async function resolveAlert(
   notes?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { data: alert } = await db
-      .from("conversation_alerts")
-      .select("telegram_message_id, phone, trigger_type")
-      .eq("id", alertId)
-      .maybeSingle();
-
     await db
       .from("conversation_alerts")
       .update({
@@ -693,26 +463,6 @@ export async function resolveAlert(
         notes: notes ?? null,
       })
       .eq("id", alertId);
-
-    // Edit pesan Telegram jika ada message_id
-    if ((alert as any)?.telegram_message_id) {
-      const token = await getTelegramBotToken(db);
-      const admins = await getSuperAdmins(db);
-      if (token && admins.length > 0) {
-        // Best-effort edit untuk setiap admin
-        for (const admin of admins) {
-          await tgEditMessage(
-            token,
-            admin.telegram_chat_id,
-            parseInt((alert as any).telegram_message_id, 10),
-            `✅ Alert diselesaikan oleh ${resolvedBy} pada ${fmtWIB()}\n\n` +
-              `📱 No HP: ${(alert as any)?.phone ?? ""}\n` +
-              `🏷️ Tipe: ${TRIGGER_LABEL[(alert as any)?.trigger_type ?? ""] ?? ""}\n` +
-              (notes ? `📝 Catatan: ${notes}` : ""),
-          ).catch(() => {/* ignore TG edit errors */});
-        }
-      }
-    }
 
     return { ok: true };
   } catch (e) {
@@ -767,23 +517,6 @@ export async function triggerManualAlert(
     });
 
     if (!alertId) return { ok: false, error: "Failed to insert alert" };
-
-    const message = buildTelegramMessage({
-      guestName: opts.guestName,
-      phone: opts.phone,
-      triggerType: "manual",
-      triggerDetail: opts.note,
-      lastMessage: lastMsg,
-      aiStatus,
-      severity: "high",
-      alertId,
-    });
-
-    const [tgMsgId] = await Promise.all([
-      fanOutTelegramAlert(db, message),
-      fanOutToManagerialChannels(db, resolveAgentChannels("manual"), message, alertId),
-    ]);
-    if (tgMsgId) await patchTelegramMessageId(db, alertId, tgMsgId);
 
     return { ok: true, alertId };
   } catch (e) {

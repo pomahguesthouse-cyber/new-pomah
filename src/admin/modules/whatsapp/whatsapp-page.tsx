@@ -1061,7 +1061,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     onSuccess: () => {
       setManualAlertNote("");
       qc.invalidateQueries({ queryKey: ["conv-alerts"] });
-      toast.success("Alert manual berhasil dikirim ke super admin via Telegram!");
+      toast.success("Alert manual tercatat untuk super admin di monitor percakapan.");
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -1558,14 +1558,14 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                 clearing={clearSummaryMut.isPending}
               />
 
-              {/* ── MANUAL ALERT TO TELEGRAM ───────────────────────── */}
+              {/* ── MANUAL ALERT (dashboard monitor) ───────────────── */}
               <div className="rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
                 <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
                   <ShieldAlert className="h-3 w-3 text-rose-500" />
                   Eskalasi ke Super Admin
                 </p>
                 <p className="mt-1 text-[11px] text-[#64748B]">
-                  Kirim alert langsung ke super admin via Telegram jika percakapan ini butuh perhatian segera.
+                  Catat alert di monitor percakapan jika chat ini butuh perhatian segera.
                 </p>
                 <textarea
                   className="mt-2 w-full resize-none rounded-md border border-[#E2E8F0] bg-[#F8FAFC] p-2 text-xs text-[#0F172A] placeholder:text-[#64748B] focus:outline-none focus:ring-1 focus:ring-rose-400"
@@ -1586,7 +1586,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                   }}
                 >
                   <Bell className="h-3.5 w-3.5" />
-                  {manualAlertMut.isPending ? "Mengirim…" : "Kirim Alert ke Telegram"}
+                  {manualAlertMut.isPending ? "Menyimpan…" : "Catat Alert"}
                 </Button>
               </div>
             </div>

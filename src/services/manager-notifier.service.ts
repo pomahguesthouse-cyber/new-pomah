@@ -19,8 +19,6 @@ import { fmtDateID } from "@/lib/date";
 import { findNotificationThreadId } from "./notification-thread-resolver";
 import { isMetaConfigured } from "./whatsapp-meta.service";
 import { sendWhatsAppMessage } from "./whatsapp.service";
-import { sendMessage as tgSendMessage, sendPhoto as tgSendPhoto, type ReplyMarkup } from "./telegram.service";
-import { normalizeAssistantName } from "@/ai/agents/persona";
 
 type Db = SupabaseClient<any, any, any>;
 
@@ -29,150 +27,25 @@ interface ManagerContact {
   name: string;
   phone: string;
   role: string;
-  telegram_chat_id: string | null;
 }
 
-type Channel = "wa" | "telegram";
+type Channel = "wa";
 
-interface PropertyTokens {
-  waToken: string | null;
-  telegramToken: string | null;
+/** A notification_logs row left `pending` longer than this is treated as failed and retried. */
+export const PENDING_STALE_MS = 10 * 60 * 1000;
+
+/** Backoff before attempts 1..3. Tests may replace entries to avoid sleeping. */
+export const STAFF_NOTIFY_RETRY_DELAYS_MS = [0, 1000, 2000, 4000];
+
+export function isRetryablePendingLog(
+  row: { status?: string | null; created_at?: string | null } | null | undefined,
+  now = Date.now(),
+): boolean {
+  if (!row || row.status !== "pending") return false;
+  const created = Date.parse(row.created_at ?? "");
+  if (!Number.isFinite(created)) return true;
+  return now - created > PENDING_STALE_MS;
 }
-
-async function getPropertyTokens(db: Db): Promise<PropertyTokens> {
-  const { data } = await db
-    .from("properties")
-    .select("wpp_token, telegram_bot_token")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  return {
-    waToken: (data?.wpp_token as string | null) ?? null,
-    telegramToken: (data?.telegram_bot_token as string | null) ?? null,
-  };
-}
-
-/* ---------------- Agent persona + channel resolution ---------------- */
-
-/** Default persona names (mirror src/routes/admin/ai-lab.tsx). */
-const DEFAULT_PERSONA: Record<string, string> = {
-  "front-office": "Rania",
-  pricing: "Julia",
-  "customer-care": "Dewi",
-  finance: "Santi",
-  content: "Rara",
-  manager: "Alexandria",
-};
-
-const AGENT_LABEL: Record<string, string> = {
-  "front-office": "Front Office",
-  pricing: "Pricing",
-  "customer-care": "Customer Care",
-  finance: "Finance",
-  content: "Content Manager",
-  manager: "Manager",
-};
-
-async function loadAgentPersonas(db: Db): Promise<Record<string, string>> {
-  const personas: Record<string, string> = { ...DEFAULT_PERSONA };
-  try {
-    const { data } = await db
-      .from("properties")
-      .select("ai_lab_config")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    const agents = ((data?.ai_lab_config as any)?.agents ?? {}) as Record<string, any>;
-    for (const key of Object.keys(personas)) {
-      const name = normalizeAssistantName(agents?.[key]?.managerName, "");
-      if (name) personas[key] = name;
-    }
-  } catch (e) {
-    console.warn("[ManagerNotifier] persona load failed:", e);
-  }
-  return personas;
-}
-
-function signature(agentKey: string, personas: Record<string, string>): string {
-  const name = personas[agentKey] ?? DEFAULT_PERSONA[agentKey] ?? "Tim";
-  const role = AGENT_LABEL[agentKey] ?? "Tim";
-  return `\n\n— ${name} (${role})`;
-}
-
-interface AgentChannelRow {
-  chat_id: string;
-  agent_key: string;
-  label: string | null;
-  message_thread_id: string | null;
-}
-
-async function loadAgentChannels(db: Db, agentKeys: string[]): Promise<AgentChannelRow[]> {
-  if (agentKeys.length === 0) return [];
-  const { data, error } = await db
-    .from("telegram_agent_channels")
-    .select("chat_id, agent_key, label, message_thread_id")
-    .in("agent_key", agentKeys)
-    .eq("is_active", true);
-  if (error) {
-    console.warn("[ManagerNotifier] agent channels load failed:", error.message);
-    return [];
-  }
-  return (data ?? []) as AgentChannelRow[];
-}
-
-/**
- * Send a notification to the Telegram group(s) bound to each agent key.
- * Each agent gets the message with their own persona signature so the
- * group sees who "spoke" — useful when several agents share one Telegram
- * workspace.
- */
-async function fanOutToAgentChannels(
-  db: Db,
-  agentKeys: string[],
-  base: {
-    eventType: SendOptions["eventType"];
-    message: string;
-    fileUrl?: string;
-    replyMarkup?: ReplyMarkup;
-    relatedId?: string | null;
-    dedupeKeyFor: (agentKey: string, chatId: string) => string;
-  },
-): Promise<void> {
-  const [channels, personas] = await Promise.all([loadAgentChannels(db, agentKeys), loadAgentPersonas(db)]);
-  if (channels.length === 0) return;
-
-  const tasks = await Promise.all(
-    channels.map(async (ch) => {
-      const messageWithSig = base.message + signature(ch.agent_key, personas);
-      const dedupSuffix = ch.message_thread_id ? `${ch.chat_id}:t${ch.message_thread_id}` : ch.chat_id;
-      // Resolve per-agent bot token; falls back to property-wide token.
-      const agentBotToken = await getAgentBotToken(db, ch.agent_key);
-      return sendWithRetry(db, null, {
-        eventType: base.eventType,
-        message: messageWithSig,
-        fileUrl: base.fileUrl,
-        relatedId: base.relatedId,
-        channel: "telegram",
-        dedupeKey: base.dedupeKeyFor(ch.agent_key, dedupSuffix),
-        replyMarkup: base.replyMarkup,
-        messageThreadId: ch.message_thread_id ?? undefined,
-        agentBotToken,
-        recipient: {
-          id: `agent:${ch.agent_key}:${ch.chat_id}${ch.message_thread_id ? ":t" + ch.message_thread_id : ""}`,
-          name: ch.label || `${AGENT_LABEL[ch.agent_key] ?? ch.agent_key} channel`,
-          phone: "",
-          role: "agent_channel",
-          telegram_chat_id: ch.chat_id,
-        },
-      });
-    }),
-  );
-  await Promise.all(tasks);
-}
-
-/* ------------------------------------------------------------------ */
-/* Helpers                                                            */
-/* ------------------------------------------------------------------ */
 
 async function getWaToken(db: Db): Promise<string | null> {
   const { data } = await db
@@ -184,15 +57,19 @@ async function getWaToken(db: Db): Promise<string | null> {
   return (data?.wpp_token as string | null) ?? null;
 }
 
+/* ------------------------------------------------------------------ */
+/* Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
 async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[]> {
-  let query = db.from("property_managers").select("id, name, phone, role, telegram_chat_id, is_active");
+  let query = db.from("property_managers").select("id, name, phone, role, is_active");
 
   if (role) query = query.eq("role", role);
   let { data, error } = await query;
 
   if (error && (error.code === "PGRST106" || String(error.message).includes("is_active"))) {
     console.warn("[ManagerNotifier] Failed with is_active, falling back");
-    let fallbackQuery = db.from("property_managers").select("id, name, phone, role, telegram_chat_id");
+    let fallbackQuery = db.from("property_managers").select("id, name, phone, role");
     if (role) fallbackQuery = fallbackQuery.eq("role", role);
     const fallback = await fallbackQuery;
     data = fallback.data as any;
@@ -230,28 +107,28 @@ interface SendOptions {
   relatedId?: string | null;
   /** Channel this delivery targets — affects log row + dedupe scoping. */
   channel: Channel;
-  /** Optional inline keyboard (Telegram-only; ignored for WA). */
-  replyMarkup?: ReplyMarkup;
-  /** Telegram Topic ID for supergroup forum threads. */
-  messageThreadId?: string;
-  /** Override Telegram bot token (per-agent bot). Falls back to
-   *  the property-wide token when null/undefined. */
-  agentBotToken?: string | null;
 }
 
+type WaDeliver = (
+  opts: SendOptions,
+  waToken: string | null,
+) => Promise<{ ok: boolean; error?: string }>;
+
 /**
- * Kirim pesan ke satu manager via satu channel (wa atau telegram), dengan
- * retry 3x backoff. `notification_logs` di-dedupe per (channel, dedupe_key)
- * sehingga dua channel untuk event yang sama berjalan independen — hanya
- * memblokir kalau channel + key persis sama (mis. webhook + agent untuk
- * payment proof yang sama).
+ * Kirim pesan WhatsApp ke satu manager, dengan retry 3x backoff.
+ * `notification_logs` di-dedupe per (channel, dedupe_key).
+ * Baris `pending` yang lebih tua dari 10 menit dianggap gagal dan dicoba lagi.
+ * Mengembalikan true hanya jika pengiriman kali ini benar-benar sukses.
  */
-async function sendWithRetry(db: Db, waToken: string | null, opts: SendOptions): Promise<void> {
-  // Cegah duplikat per channel: jika (channel, dedupe_key) sudah ada
-  // dengan status sent, skip.
+export async function sendWithRetry(
+  db: Db,
+  waToken: string | null,
+  opts: SendOptions,
+  deliver: WaDeliver = dispatchByChannel,
+): Promise<boolean> {
   const { data: existing } = await db
     .from("notification_logs")
-    .select("id, status")
+    .select("id, status, created_at")
     .eq("dedupe_key", opts.dedupeKey)
     .eq("channel", opts.channel)
     .maybeSingle();
@@ -260,33 +137,30 @@ async function sendWithRetry(db: Db, waToken: string | null, opts: SendOptions):
     const status = (existing as any).status as string;
     if (status === "sent") {
       console.info(`[ManagerNotifier] Skip — sudah terkirim: ${opts.dedupeKey}`);
-      return;
+      return false;
+    }
+    if (status === "pending" && !isRetryablePendingLog(existing as any)) {
+      console.info(`[ManagerNotifier] Skip — sedang pending: ${opts.dedupeKey}`);
+      return false;
     }
     if (status === "pending") {
-      // Pengiriman sedang dalam proses (atau baru saja di-insert oleh cron
-      // menit sebelumnya dan belum selesai) — jangan kirim ganda.
-      console.info(`[ManagerNotifier] Skip — sedang pending: ${opts.dedupeKey}`);
-      return;
+      console.info(`[ManagerNotifier] Pending >10 menit, dicoba ulang: ${opts.dedupeKey}`);
     }
     if (status === "failed") {
-      // Sudah dicoba 3x dan gagal dalam window 30 menit ini (WhatsApp gateway down?).
+      // Sudah dicoba 3x dan gagal dalam window ini (WhatsApp gateway down?).
       // Biarkan window berikutnya yang retry agar tidak spam tiap menit.
       console.info(`[ManagerNotifier] Skip — gagal di window ini, tunggu window berikutnya: ${opts.dedupeKey}`);
-      return;
+      return false;
     }
   }
 
-  // Insert/upsert log row sebagai pending.
   let logId: string | null = (existing as any)?.id ?? null;
   if (!logId) {
     const { data: inserted, error: insErr } = await db
       .from("notification_logs")
       .insert({
         event_type: opts.eventType,
-        recipient_phone:
-          opts.channel === "telegram"
-            ? (opts.recipient.telegram_chat_id ?? opts.recipient.phone)
-            : opts.recipient.phone,
+        recipient_phone: opts.recipient.phone,
         recipient_role: opts.recipient.role,
         message: opts.message,
         attachment_url: opts.fileUrl ?? null,
@@ -299,7 +173,6 @@ async function sendWithRetry(db: Db, waToken: string | null, opts: SendOptions):
       .select("id")
       .single();
     if (insErr || !inserted) {
-      // Race condition pada unique key → ambil baris yang sudah ada.
       const { data: again } = await db
         .from("notification_logs")
         .select("id")
@@ -309,21 +182,21 @@ async function sendWithRetry(db: Db, waToken: string | null, opts: SendOptions):
       logId = (again as any)?.id ?? null;
       if (!logId) {
         console.error("[ManagerNotifier] Gagal insert log:", insErr?.message);
-        return;
+        return false;
       }
     } else {
       logId = inserted.id as string;
     }
   }
 
-  const delays = [0, 1000, 2000, 4000];
   let lastError = "";
 
   for (let attempt = 1; attempt <= 3; attempt++) {
-    if (delays[attempt - 1] > 0) {
-      await new Promise((r) => setTimeout(r, delays[attempt - 1]));
+    const delay = STAFF_NOTIFY_RETRY_DELAYS_MS[attempt - 1] ?? 0;
+    if (delay > 0) {
+      await new Promise((r) => setTimeout(r, delay));
     }
-    const result = await dispatchByChannel(opts, waToken);
+    const result = await deliver(opts, waToken);
 
     if (result.ok) {
       await db
@@ -336,7 +209,7 @@ async function sendWithRetry(db: Db, waToken: string | null, opts: SendOptions):
         })
         .eq("id", logId);
       console.info(`[ManagerNotifier] Terkirim ke ${opts.recipient.name} via ${opts.channel} (attempt ${attempt})`);
-      return;
+      return true;
     }
     lastError = result.error ?? "unknown error";
     console.warn(
@@ -345,66 +218,21 @@ async function sendWithRetry(db: Db, waToken: string | null, opts: SendOptions):
   }
 
   await db.from("notification_logs").update({ status: "failed", attempts: 3, error: lastError }).eq("id", logId);
+  return false;
 }
 
 async function dispatchByChannel(
   opts: SendOptions,
-  waToken: string | null,
+  _waToken: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (opts.channel === "wa") {
-    if (!isMetaConfigured()) return { ok: false, error: "WhatsApp Business belum terhubung" };
-    const r = await sendWhatsAppMessage("", opts.recipient.phone, opts.message, opts.fileUrl);
-    return { ok: r.ok, error: r.error ?? undefined };
-  }
-  // telegram
-  const tgToken = opts.agentBotToken ?? (await getTelegramTokenCached());
-  if (!tgToken) return { ok: false, error: "no telegram token" };
-  if (!opts.recipient.telegram_chat_id) return { ok: false, error: "no telegram chat_id" };
-  const sendOpts: any = {};
-  if (opts.replyMarkup) sendOpts.reply_markup = opts.replyMarkup;
-  if (opts.messageThreadId) sendOpts.message_thread_id = opts.messageThreadId;
-  if (opts.fileUrl) {
-    return tgSendPhoto(tgToken, opts.recipient.telegram_chat_id, opts.fileUrl, opts.message, sendOpts);
-  }
-  return tgSendMessage(tgToken, opts.recipient.telegram_chat_id, opts.message, sendOpts);
-}
-
-// Per-invocation cache so a notif that fans out to N managers doesn't
-// re-query the properties row N times.
-let cachedTelegramToken: { value: string | null; at: number } | null = null;
-const TG_TOKEN_TTL_MS = 60_000;
-async function getTelegramTokenCached(): Promise<string | null> {
-  const now = Date.now();
-  if (cachedTelegramToken && now - cachedTelegramToken.at < TG_TOKEN_TTL_MS) {
-    return cachedTelegramToken.value;
-  }
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const tokens = await getPropertyTokens(supabaseAdmin as any);
-  cachedTelegramToken = { value: tokens.telegramToken, at: now };
-  return tokens.telegramToken;
-}
-
-/** Per-agent bot token cache (so a notif fanning out to N agent channels
- *  doesn't N-query the bots table). Keyed by agent_key. */
-const cachedAgentBots = new Map<string, { token: string | null; at: number }>();
-async function getAgentBotToken(db: Db, agentKey: string): Promise<string | null> {
-  const cached = cachedAgentBots.get(agentKey);
-  if (cached && Date.now() - cached.at < TG_TOKEN_TTL_MS) return cached.token;
-  const { data } = await db
-    .from("telegram_agent_bots")
-    .select("bot_token, is_active")
-    .eq("agent_key", agentKey)
-    .maybeSingle();
-  const token = data?.is_active && data?.bot_token ? (data.bot_token as string) : null;
-  cachedAgentBots.set(agentKey, { token, at: Date.now() });
-  return token;
+  if (!isMetaConfigured()) return { ok: false, error: "WhatsApp Business belum terhubung" };
+  const r = await sendWhatsAppMessage("", opts.recipient.phone, opts.message, opts.fileUrl);
+  return { ok: r.ok, error: r.error ?? undefined };
 }
 
 /**
- * High-level fan-out: send the same notification to every active manager
- * via every channel they have configured (WA + Telegram in parallel).
- * `dedupeKey` should be unique per (event, manager) — the channel suffix
- * is added internally so the two channels for one manager don't collide.
+ * Fan-out WhatsApp ke setiap manager yang punya nomor.
+ * `dedupeKey` unik per (event, manager).
  */
 async function fanOut(
   db: Db,
@@ -412,39 +240,22 @@ async function fanOut(
   managers: ManagerContact[],
   base: Omit<SendOptions, "channel" | "recipient" | "dedupeKey"> & {
     dedupeKeyFor: (m: ManagerContact) => string;
-    telegramOnly?: Partial<Pick<SendOptions, "replyMarkup" | "fileUrl" | "message">>;
   },
 ): Promise<void> {
-  const tasks: Promise<void>[] = [];
+  const tasks: Promise<boolean>[] = [];
   for (const m of managers) {
-    const baseDedup = base.dedupeKeyFor(m);
-    if (m.phone) {
-      tasks.push(
-        sendWithRetry(db, waToken, {
-          eventType: base.eventType,
-          message: base.message,
-          fileUrl: base.fileUrl,
-          relatedId: base.relatedId,
-          recipient: m,
-          channel: "wa",
-          dedupeKey: baseDedup,
-        }),
-      );
-    }
-    if (m.telegram_chat_id) {
-      tasks.push(
-        sendWithRetry(db, waToken, {
-          eventType: base.eventType,
-          message: base.telegramOnly?.message ?? base.message,
-          fileUrl: base.telegramOnly?.fileUrl ?? base.fileUrl,
-          relatedId: base.relatedId,
-          recipient: m,
-          channel: "telegram",
-          dedupeKey: baseDedup,
-          replyMarkup: base.telegramOnly?.replyMarkup,
-        }),
-      );
-    }
+    if (!m.phone) continue;
+    tasks.push(
+      sendWithRetry(db, waToken, {
+        eventType: base.eventType,
+        message: base.message,
+        fileUrl: base.fileUrl,
+        relatedId: base.relatedId,
+        recipient: m,
+        channel: "wa",
+        dedupeKey: base.dedupeKeyFor(m),
+      }),
+    );
   }
   await Promise.all(tasks);
 }
@@ -524,29 +335,19 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
       `Booking Code:\n${b.reference_code ?? b.id}\n\n` +
       "Please review in Manager Dashboard.";
 
-    const { waToken } = await getPropertyTokens(db);
-    const allManagers = await getActiveManagers(db);
-    const managers = allManagers.filter((m) => !!m.phone || !!m.telegram_chat_id);
+    const waToken = await getWaToken(db);
+    const managers = (await getActiveManagers(db)).filter((m) => !!m.phone);
     if (managers.length === 0) {
-      console.info("[ManagerNotifier] Belum ada nomor WA / Telegram pengelola aktif untuk notifikasi booking baru");
+      console.info("[ManagerNotifier] Belum ada nomor WA pengelola aktif untuk notifikasi booking baru");
       return;
     }
 
-    await Promise.all([
-      fanOut(db, waToken, managers, {
-        eventType: "new_booking",
-        message,
-        relatedId: b.id,
-        dedupeKeyFor: (m) => `new_booking:${b.id}:${m.id}`,
-      }),
-      // Bookings concern Front Office (intake) and Manager (oversight) channels.
-      fanOutToAgentChannels(db, ["front-office", "manager"], {
-        eventType: "new_booking",
-        message,
-        relatedId: b.id,
-        dedupeKeyFor: (agent, chat) => `new_booking:${b.id}:agent:${agent}:${chat}`,
-      }),
-    ]);
+    await fanOut(db, waToken, managers, {
+      eventType: "new_booking",
+      message,
+      relatedId: b.id,
+      dedupeKeyFor: (m) => `new_booking:${b.id}:${m.id}`,
+    });
   } catch (e) {
     console.error("[ManagerNotifier] notifyNewBooking error:", e);
   }
@@ -592,27 +393,16 @@ export async function notifyBookingExpired(db: Db, bookingId: string): Promise<v
       "Batas waktu pembayaran (1 jam) terlewat tanpa pembayaran. Kamar otomatis kembali tersedia. " +
       "Follow up tamu bila masih berminat.";
 
-    const { waToken } = await getPropertyTokens(db);
-    const allManagers = await getActiveManagers(db);
-    const managers = allManagers.filter((m) => !!m.phone || !!m.telegram_chat_id);
-
-    await Promise.all([
-      managers.length > 0
-        ? fanOut(db, waToken, managers, {
-            eventType: "booking_expired",
-            message,
-            relatedId: b.id,
-            dedupeKeyFor: (m) => `booking_expired:${b.id}:${m.id}`,
-          })
-        : Promise.resolve(),
-      // Expired booking relevan untuk Front Office (follow up) & Manager.
-      fanOutToAgentChannels(db, ["front-office", "manager"], {
+    const waToken = await getWaToken(db);
+    const managers = (await getActiveManagers(db)).filter((m) => !!m.phone);
+    if (managers.length > 0) {
+      await fanOut(db, waToken, managers, {
         eventType: "booking_expired",
         message,
         relatedId: b.id,
-        dedupeKeyFor: (agent, chat) => `booking_expired:${b.id}:agent:${agent}:${chat}`,
-      }),
-    ]);
+        dedupeKeyFor: (m) => `booking_expired:${b.id}:${m.id}`,
+      });
+    }
   } catch (e) {
     console.warn("[ManagerNotifier] notifyBookingExpired error (non-fatal):", e);
   }
@@ -727,26 +517,18 @@ export async function notifyBookingUpdated(
       lines.join("\n") +
       `\n\nDiubah oleh: ${actor}`;
 
-    const { waToken } = await getPropertyTokens(db);
+    const waToken = await getWaToken(db);
     const managers = await getActiveManagers(db);
     if (managers.length === 0) return;
 
     const changeHash = shortHash(lines.join("|"));
 
-    await Promise.all([
-      fanOut(db, waToken, managers, {
-        eventType: "booking_updated",
-        message,
-        relatedId: b.id,
-        dedupeKeyFor: (m) => `booking_updated:${b.id}:${changeHash}:${m.id}`,
-      }),
-      fanOutToAgentChannels(db, ["front-office", "manager"], {
-        eventType: "booking_updated",
-        message,
-        relatedId: b.id,
-        dedupeKeyFor: (agent, chat) => `booking_updated:${b.id}:${changeHash}:agent:${agent}:${chat}`,
-      }),
-    ]);
+    await fanOut(db, waToken, managers, {
+      eventType: "booking_updated",
+      message,
+      relatedId: b.id,
+      dedupeKeyFor: (m) => `booking_updated:${b.id}:${changeHash}:${m.id}`,
+    });
   } catch (e) {
     console.error("[ManagerNotifier] notifyBookingUpdated error:", e);
   }
@@ -820,7 +602,7 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
     const ocr = input.ocrResult?.ocr;
     const match = input.ocrResult?.match;
 
-    // Hanya URL http(s) yang bisa diteruskan sebagai lampiran WA/Telegram.
+    // Hanya URL http(s) yang bisa diteruskan sebagai lampiran WhatsApp.
     // Data URI atau undefined → notif teks saja.
     const publicImageUrl =
       input.imageUrl && /^https?:\/\//i.test(input.imageUrl) ? input.imageUrl : undefined;
@@ -871,45 +653,20 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
         (input.chatUrl ? `\n\nChat: ${input.chatUrl}` : "");
     }
 
-    const { waToken } = await getPropertyTokens(db);
+    const waToken = await getWaToken(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     if (superAdmins.length === 0) {
       console.info("[ManagerNotifier] Tidak ada super admin aktif untuk payment proof");
       return;
     }
 
-    // Telegram gets inline approve/reject buttons when we know the booking
-    // code. WA can't render inline buttons, so it gets text + image only.
-    const tgMarkup = bookingCode
-      ? {
-          inline_keyboard: [
-            [
-              { text: "✅ Mark Paid", callback_data: `mark_paid:${bookingCode}` },
-              { text: "❌ Reject", callback_data: `reject_proof:${bookingCode}` },
-            ],
-          ],
-        }
-      : undefined;
-
-    await Promise.all([
-      fanOut(db, waToken, superAdmins, {
-        eventType: "payment_proof",
-        message,
-        fileUrl: publicImageUrl,
-        relatedId: bookingId,
-        dedupeKeyFor: (m) => `payment_proof:${input.messageId}:${m.id}`,
-        telegramOnly: tgMarkup ? { replyMarkup: tgMarkup } : undefined,
-      }),
-      // Payment proofs belong to Finance (verification) and Manager (oversight).
-      fanOutToAgentChannels(db, ["finance", "manager"], {
-        eventType: "payment_proof",
-        message,
-        fileUrl: publicImageUrl,
-        relatedId: bookingId,
-        replyMarkup: tgMarkup,
-        dedupeKeyFor: (agent, chat) => `payment_proof:${input.messageId}:agent:${agent}:${chat}`,
-      }),
-    ]);
+    await fanOut(db, waToken, superAdmins, {
+      eventType: "payment_proof",
+      message,
+      fileUrl: publicImageUrl,
+      relatedId: bookingId,
+      dedupeKeyFor: (m) => `payment_proof:${input.messageId}:${m.id}`,
+    });
   } catch (e) {
     console.error("[ManagerNotifier] notifyPaymentProof error:", e);
   }
@@ -942,25 +699,16 @@ export async function notifyComplaint(db: Db, complaintId: string): Promise<void
       `Time:\n${new Date(c.created_at).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}\n\n` +
       "Please follow up immediately.";
 
-    const { waToken } = await getPropertyTokens(db);
+    const waToken = await getWaToken(db);
     const managers = await getActiveManagers(db);
     if (managers.length === 0) return;
 
-    await Promise.all([
-      fanOut(db, waToken, managers, {
-        eventType: "complaint",
-        message,
-        relatedId: c.id,
-        dedupeKeyFor: (m) => `complaint:${c.id}:${m.id}`,
-      }),
-      // Complaints go to Customer Care (resolution) and Manager (escalation).
-      fanOutToAgentChannels(db, ["customer-care", "manager"], {
-        eventType: "complaint",
-        message,
-        relatedId: c.id,
-        dedupeKeyFor: (agent, chat) => `complaint:${c.id}:agent:${agent}:${chat}`,
-      }),
-    ]);
+    await fanOut(db, waToken, managers, {
+      eventType: "complaint",
+      message,
+      relatedId: c.id,
+      dedupeKeyFor: (m) => `complaint:${c.id}:${m.id}`,
+    });
   } catch (e) {
     console.error("[ManagerNotifier] notifyComplaint error:", e);
   }
@@ -987,7 +735,7 @@ export async function notifyBotLoop(
   },
 ): Promise<void> {
   try {
-    const { waToken } = await getPropertyTokens(db);
+    const waToken = await getWaToken(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     const targets = superAdmins.filter((m) => !!m.phone);
     if (targets.length === 0) return;
@@ -1043,7 +791,7 @@ export async function notifyZombieTimeout(
 ): Promise<void> {
   try {
     if (opts.count <= 0) return;
-    const { waToken } = await getPropertyTokens(db);
+    const waToken = await getWaToken(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     const targets = superAdmins.filter((m) => !!m.phone);
     if (targets.length === 0) return;
@@ -1130,12 +878,12 @@ export async function notifyBookingStuck(
     threadId: string | null;
     guestName?: string | null;
   },
-): Promise<void> {
+): Promise<boolean> {
   try {
-    const { waToken } = await getPropertyTokens(db);
+    const waToken = await getWaToken(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
-    const targets = superAdmins.filter((m) => !!m.phone || !!m.telegram_chat_id);
-    if (targets.length === 0) return;
+    const targets = superAdmins.filter((m) => !!m.phone);
+    if (targets.length === 0) return false;
 
     const wibTime = new Date().toLocaleString("id-ID", {
       timeZone: "Asia/Jakarta",
@@ -1164,71 +912,23 @@ export async function notifyBookingStuck(
     const episodeKey = Date.parse(opts.episodeStartAt) || 0;
     const dedupeBase = `booking_stuck:${opts.phone}:${opts.state}:${episodeKey}`;
 
-    await Promise.all(
-      targets.flatMap((admin) => {
-        const tasks: Promise<void>[] = [];
-        if (admin.phone) {
-          tasks.push(
-            sendWithRetry(db, waToken, {
-              eventType: "booking_stuck",
-              message,
-              relatedId: opts.threadId,
-              recipient: admin,
-              channel: "wa",
-              dedupeKey: `${dedupeBase}:wa:${admin.id}`,
-            }),
-          );
-        }
-        if (admin.telegram_chat_id) {
-          tasks.push(
-            sendWithRetry(db, waToken, {
-              eventType: "booking_stuck",
-              message,
-              relatedId: opts.threadId,
-              recipient: admin,
-              channel: "telegram",
-              dedupeKey: `${dedupeBase}:tg:${admin.id}`,
-            }),
-          );
-        }
-        return tasks;
-      }),
+    const results = await Promise.all(
+      targets.map((admin) =>
+        sendWithRetry(db, waToken, {
+          eventType: "booking_stuck",
+          message,
+          relatedId: opts.threadId,
+          recipient: admin,
+          channel: "wa",
+          dedupeKey: `${dedupeBase}:wa:${admin.id}`,
+        }),
+      ),
     );
+    return results.some(Boolean);
   } catch (e) {
     console.warn("[ManagerNotifier] notifyBookingStuck error (non-fatal):", e);
+    return false;
   }
-}
-
-/* ------------------------------------------------------------------ */
-/* 5. Conversation Monitor → Managerial Channels                      */
-/* ------------------------------------------------------------------ */
-
-/**
- * Publik wrapper untuk `fanOutToAgentChannels` yang dipakai oleh
- * conversation-monitor.service (dynamic import) agar tidak ada
- * circular dependency di bundler.
- *
- * Setiap alert percakapan dikirim ke kanal agent yang relevan dengan
- * tanda tangan agent (persona) sehingga grup Telegram tahu siapa yang
- * "berbicara".
- *
- * eventType "complaint" dipakai supaya sistem dedupe yang sudah ada
- * bekerja (kolom event_type di notification_logs), meski konteksnya
- * monitoring bukan complaint murni.
- */
-export async function fanOutAgentChannelsForMonitor(
-  db: Db,
-  agentKeys: string[],
-  message: string,
-  alertId: string,
-): Promise<void> {
-  if (agentKeys.length === 0) return;
-  await fanOutToAgentChannels(db, agentKeys, {
-    eventType: "complaint", // tipe terdekat yang sudah ada di enum
-    message,
-    relatedId: alertId,
-    dedupeKeyFor: (agentKey, chatId) => `conv_monitor:${alertId}:${agentKey}:${chatId}`,
-  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -1256,7 +956,7 @@ export async function notifyIncomingMessage(
   },
 ): Promise<void> {
   try {
-    const { waToken } = await getPropertyTokens(db);
+    const waToken = await getWaToken(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     const targets = superAdmins.filter((m) => !!m.phone);
     if (targets.length === 0) return;
@@ -1301,7 +1001,7 @@ export async function notifyIncomingMessage(
 /* ------------------------------------------------------------------ */
 
 /**
- * Catat kegagalan RPC dan kirim notifikasi ke super_admin (WA + Telegram)
+ * Catat kegagalan RPC dan kirim notifikasi ke super_admin (WhatsApp)
  * dengan jumlah kejadian per jam terakhir.
  *
  * - Setiap kegagalan dicatat ke tabel `rpc_failure_events` (untuk audit).
@@ -1338,7 +1038,7 @@ export async function notifyRpcFailure(
     const total = hourlyCount ?? 1;
 
     // 3. Resolve target super_admin.
-    const { waToken, telegramToken } = await getPropertyTokens(db);
+    const waToken = await getWaToken(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     if (superAdmins.length === 0) {
       console.info("[ManagerNotifier] notifyRpcFailure: no super_admin configured");
@@ -1380,17 +1080,6 @@ export async function notifyRpcFailure(
           }),
         );
       }
-      if (telegramToken && admin.telegram_chat_id) {
-        jobs.push(
-          sendWithRetry(db, null, {
-            eventType: "rpc_failure",
-            message,
-            recipient: admin,
-            channel: "telegram",
-            dedupeKey: `${dedupeBase}:tg:${admin.id}`,
-          }),
-        );
-      }
     }
     await Promise.all(jobs);
 
@@ -1429,7 +1118,7 @@ export async function notifyAiCreditLow(
   opts: { kind: string; status: number; errorMessage: string | null; source: string },
 ): Promise<void> {
   try {
-    const { waToken, telegramToken } = await getPropertyTokens(db);
+    const waToken = await getWaToken(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     if (superAdmins.length === 0) {
       console.info("[ManagerNotifier] notifyAiCreditLow: no super_admin configured");
@@ -1467,17 +1156,6 @@ export async function notifyAiCreditLow(
             recipient: admin,
             channel: "wa",
             dedupeKey: `${dedupeBase}:wa:${admin.id}`,
-          }),
-        );
-      }
-      if (telegramToken && admin.telegram_chat_id) {
-        jobs.push(
-          sendWithRetry(db, null, {
-            eventType: "ai_credit_low",
-            message,
-            recipient: admin,
-            channel: "telegram",
-            dedupeKey: `${dedupeBase}:tg:${admin.id}`,
           }),
         );
       }
@@ -1617,24 +1295,16 @@ export async function notifyBookingWriteFailed(db: Db, input: BookingWriteFailed
     }
 
     // Saluran staf yang sama dengan booking baru / kedaluwarsa. Bukan ke tamu.
-    const { waToken } = await getPropertyTokens(db);
-    const managers = (await getActiveManagers(db)).filter((m) => !!m.phone || !!m.telegram_chat_id);
-    await Promise.all([
-      managers.length > 0
-        ? fanOut(db, waToken, managers, {
-            eventType: "booking_write_failed",
-            message: notice.logMessage,
-            relatedId: threadId && THREAD_UUID_RE.test(threadId) ? threadId : null,
-            dedupeKeyFor: (m) => `${dedupeKey}:mgr:${m.id}`,
-          })
-        : Promise.resolve(),
-      fanOutToAgentChannels(db, ["front-office", "manager"], {
+    const waToken = await getWaToken(db);
+    const managers = (await getActiveManagers(db)).filter((m) => !!m.phone);
+    if (managers.length > 0) {
+      await fanOut(db, waToken, managers, {
         eventType: "booking_write_failed",
         message: notice.logMessage,
         relatedId: threadId && THREAD_UUID_RE.test(threadId) ? threadId : null,
-        dedupeKeyFor: (agent, chat) => `${dedupeKey}:agent:${agent}:${chat}`,
-      }),
-    ]);
+        dedupeKeyFor: (m) => `${dedupeKey}:mgr:${m.id}`,
+      });
+    }
   } catch (e) {
     console.warn("[ManagerNotifier] notifyBookingWriteFailed error (non-fatal):", e);
   }

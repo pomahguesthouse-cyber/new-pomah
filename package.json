@@ -62,6 +62,7 @@
     "test:native-oauth": "tsx scripts/test-native-oauth.ts",
     "test:booking-list-pdf": "tsx scripts/test-booking-list-pdf.ts",
     "test:booking-day-filter": "tsx scripts/test-booking-day-filter.ts",
+    "test:booking-stuck": "tsx scripts/test-booking-stuck-monitor.ts",
     "test:wa-push-sql": "tsx scripts/test-wa-push-sql.ts",
     "test:wa-memory-sql": "tsx scripts/test-wa-memory-sql.ts",
     "android:icons": "python3 scripts/generate-android-icons.py",

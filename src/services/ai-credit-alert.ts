@@ -3,7 +3,7 @@
  *
  * Mendeteksi saat kredit Lovable AI (cloud AI) hampir/sudah habis atau
  * diblokir kebijakan workspace, lalu mengirim notifikasi ke super admin
- * (WhatsApp + Telegram) lewat manager-notifier.
+ * (WhatsApp) lewat manager-notifier.
  *
  * Sinyal yang dipakai — status HTTP dari AI Gateway:
  *   402 → kredit tidak cukup untuk request (habis / hampir habis)

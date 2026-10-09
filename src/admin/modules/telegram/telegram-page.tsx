@@ -341,11 +341,12 @@ export function TelegramPage() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          Daftar group / topic Telegram tempat tiap agent kirim notifikasi (booking, bukti
-          transfer, komplain). Diisi otomatis ketika bot agent di-add ke group dan diaktifkan
-          dengan{" "}
+          Daftar group / topic tempat bot agent membalas percakapan staf. Diisi otomatis
+          ketika bot di-add ke group dan diaktifkan dengan{" "}
+          <code className="mx-1 px-1 bg-stone-100 rounded">/start</code>
+          {" "}atau{" "}
           <code className="mx-1 px-1 bg-stone-100 rounded">/start agent &lt;agent_key&gt;</code>
-          di group atau topic itu. Hapus row untuk unbind.
+          . Hapus row untuk unbind. Notifikasi operasional tidak dikirim ke Telegram.
         </p>
         {(channelsData?.channels ?? []).length === 0 ? (
           <div className="text-xs text-muted-foreground">Belum ada channel terdaftar.</div>
