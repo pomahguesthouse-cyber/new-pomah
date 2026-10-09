@@ -325,18 +325,22 @@ export function ChatSimulatorView() {
         const m = ocrResult.match;
         const nominal = o.nominal != null ? `Rp ${Number(o.nominal).toLocaleString("id-ID")}` : "-";
         const bank = o.bank_pengirim ?? "-";
-        const matchLabel = m.status === "matched"
-          ? `cocok dengan ${m.booking_code}`
-          : m.status === "unmatched"
-          ? `tidak cocok (booking ${m.booking_code}, selisih ${m.amount_diff})`
-          : m.status === "ambiguous"
-          ? `ambigu (booking ${m.booking_code})`
-          : m.status === "no_pending_booking"
-          ? "tidak ada booking pending"
-          : m.status;
+        const matchLabel =
+          (typeof m.summary === "string" && m.summary.trim()) ||
+          (m.status === "matched"
+            ? `cocok dengan ${m.booking_code}`
+            : m.status === "unmatched"
+            ? `tidak cocok (booking ${m.booking_code}, selisih ${m.amount_diff})`
+            : m.status === "ambiguous"
+            ? `ambigu (booking ${m.booking_code})`
+            : m.status === "no_pending_booking"
+            ? "tidak ada booking pending"
+            : m.status);
+        const destination =
+          m.destination_ok === false ? " Rekening tujuan perlu dicek staf." : "";
         systemMessages.push({
           direction: "system",
-          body: `📸 OCR: ${nominal} via ${bank} — ${matchLabel}`,
+          body: `📸 OCR: ${nominal} via ${bank} — ${matchLabel}${destination}`,
         });
       }
       if (meta.toolsUsed && meta.toolsUsed.length > 0) {

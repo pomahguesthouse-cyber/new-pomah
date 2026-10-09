@@ -10,12 +10,22 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { phoneVariants } from "@/lib/phone";
 import {
   chatCompletion,
   extractJsonObject,
   resolvePropertyAiConfig,
   type AiClientConfig,
 } from "@/services/ai-client.service";
+import {
+  candidateFromBookingRow,
+  candidateFromDraftRow,
+  matchProofToCandidates,
+  minimumCheckoutDate,
+  type PaymentMatchCandidate,
+  type PaymentMatchResult,
+  type PaymentProofOcrInput,
+} from "@/services/payment-proof-match";
 
 type Db = SupabaseClient<any, any, any>;
 
@@ -36,12 +46,7 @@ export interface OcrData {
   raw_text:         string;
 }
 
-export interface MatchResult {
-  status:         "matched" | "unmatched" | "ambiguous" | "no_pending_booking";
-  booking_code:   string | null;
-  booking_amount: number | null;
-  amount_diff:    number | null;
-}
+export type MatchResult = PaymentMatchResult;
 
 export interface PaymentProofResult {
   ok:      boolean;
@@ -165,139 +170,137 @@ async function callVisionLlm(
 
 // ─── Booking matcher ──────────────────────────────────────────────────────────
 
-const AMOUNT_TOLERANCE = 1000; // ± Rp 1.000
+const BOOKING_MATCH_SELECT =
+  "id, reference_code, total_amount, paid_amount, nights, check_in, check_out, status, payment_status, created_at, guest_id, room_types(name), booking_rooms(room_types(name))";
+const BOOKING_MATCH_SELECT_PLAIN =
+  "id, reference_code, total_amount, paid_amount, nights, check_in, check_out, status, payment_status, created_at, guest_id";
 
-/**
- * Build the list of candidate amounts to compare against the booking total.
- * Indonesian transfer receipts may show either the principal (nominal) OR
- * the debited total (nominal + biaya). The hotel always receives the
- * principal, but OCR may pick up either depending on which figure is most
- * prominent. We try every plausible variant so a Rp 200.000 booking still
- * matches a receipt showing nominal=200000/biaya=2500/total=202500.
- */
-function buildAmountCandidates(ocr: OcrData): number[] {
-  const cands = new Set<number>();
-  const push = (n: number | null | undefined) => {
-    if (typeof n === "number" && Number.isFinite(n) && n > 0) cands.add(n);
-  };
-  push(ocr.nominal);
-  push(ocr.total_dibayar);
-  if (ocr.nominal != null && ocr.biaya_admin != null) {
-    push(ocr.nominal - ocr.biaya_admin);
-    push(ocr.nominal + ocr.biaya_admin);
-  }
-  if (ocr.total_dibayar != null && ocr.biaya_admin != null) {
-    push(ocr.total_dibayar - ocr.biaya_admin);
-  }
-  return [...cands];
+function unavailableMatch(reason: string): MatchResult {
+  const match = matchProofToCandidates(null, []);
+  return { ...match, match_reason: reason };
 }
 
-async function findMatchingBooking(
-  db:       Db,
-  phone:    string,
-  ocr:      OcrData,
-): Promise<MatchResult> {
-  const noBooking: MatchResult = {
-    status: "no_pending_booking",
-    booking_code: null,
-    booking_amount: null,
-    amount_diff: null,
-  };
+async function selectRows(
+  query: PromiseLike<{ data: unknown; error: { message?: string } | null }>,
+): Promise<Record<string, unknown>[]> {
+  const { data, error } = await query;
+  if (error) throw new Error(error.message ?? "query failed");
+  return (Array.isArray(data) ? data : []) as Record<string, unknown>[];
+}
 
-  if (!phone) return noBooking;
-
-  // Find guest by phone
-  const { data: guest } = await db
-    .from("guests")
-    .select("id")
-    .eq("phone", phone)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!guest?.id) return noBooking;
-
-  // Find pending/confirmed bookings for this guest
-  const { data: bookings } = await db
-    .from("bookings")
-    .select("id, reference_code, total_amount, status")
-    .eq("guest_id", (guest as any).id)
-    .in("status", ["pending", "confirmed"])
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  if (!bookings || bookings.length === 0) return noBooking;
-
-  const candidates = buildAmountCandidates(ocr);
-
-  // If OCR didn't extract any usable amount, surface the most recent booking
-  // as ambiguous so the agent can ask the guest for the booking code.
-  if (candidates.length === 0) {
-    const latest = bookings[0] as any;
-    return {
-      status: "ambiguous",
-      booking_code: latest.reference_code ?? null,
-      booking_amount: Number(latest.total_amount) || null,
-      amount_diff: null,
-    };
-  }
-
-  // Try matching every booking against every amount candidate. Pick the
-  // pairing with the smallest abs(diff) within tolerance.
-  type Pair = { booking: any; amount: number; diff: number };
-  const allPairs: Pair[] = [];
-  for (const b of bookings) {
-    const amt = Number((b as any).total_amount);
-    if (!Number.isFinite(amt)) continue;
-    for (const c of candidates) {
-      allPairs.push({ booking: b, amount: c, diff: c - amt });
+async function loadGuestIds(db: Db, variants: string[]): Promise<string[]> {
+  const ids = new Set<string>();
+  const pulls = [
+    db.from("guests").select("id").in("phone", variants).limit(20),
+    db.from("guests").select("id").in("phone_normalized", variants).limit(20),
+  ];
+  for (const pull of pulls) {
+    try {
+      const rows = await selectRows(pull);
+      for (const row of rows) {
+        if (typeof row.id === "string" && row.id) ids.add(row.id);
+      }
+    } catch (e) {
+      console.warn("[PaymentProof] baca tamu gagal:", e instanceof Error ? e.message : e);
     }
   }
-  const within = allPairs
-    .filter((p) => Math.abs(p.diff) <= AMOUNT_TOLERANCE)
-    .sort((a, b) => Math.abs(a.diff) - Math.abs(b.diff));
+  return [...ids];
+}
 
-  // Distinct bookings that hit the tolerance — used to disambiguate.
-  const uniqueMatchedBookings = new Set(within.map((p) => (p.booking as any).id));
+async function loadBookingRows(db: Db, guestIds: string[], minCheckout: string): Promise<Record<string, unknown>[]> {
+  if (guestIds.length === 0) return [];
+  const run = (columns: string) =>
+    db
+      .from("bookings")
+      .select(columns)
+      .in("guest_id", guestIds)
+      .neq("status", "cancelled")
+      .gte("check_out", minCheckout)
+      .order("created_at", { ascending: false })
+      .limit(40);
+  try {
+    return await selectRows(run(BOOKING_MATCH_SELECT));
+  } catch (e) {
+    console.warn("[PaymentProof] baca kamar booking gagal, coba tanpa relasi:", e instanceof Error ? e.message : e);
+  }
+  return selectRows(run(BOOKING_MATCH_SELECT_PLAIN));
+}
 
-  if (uniqueMatchedBookings.size === 1) {
-    const m = within[0];
+async function loadDraftRows(db: Db, variants: string[], minCheckout: string, sinceIso: string): Promise<Record<string, unknown>[]> {
+  try {
+    return await selectRows(
+      db
+        .from("booking_drafts")
+        .select("id, phone, check_in, check_out, room_type, quoted_total, payload, status, booking_code, created_at")
+        .in("phone", variants)
+        .in("status", ["draft", "failed"])
+        .gte("check_out", minCheckout)
+        .gte("created_at", sinceIso)
+        .order("created_at", { ascending: false })
+        .limit(20),
+    );
+  } catch (e) {
+    console.warn("[PaymentProof] booking_drafts tidak dibaca:", e instanceof Error ? e.message : e);
+    return [];
+  }
+}
+
+/**
+ * Booking non-batal milik nomor ini (semua varian nomor) plus draft baru,
+ * yang masih punya sisa dan check-out >= kemarin (WIB). Tidak mengubah booking.
+ */
+export async function loadPaymentMatchCandidates(
+  db: Db,
+  phone: string,
+  now: Date = new Date(),
+): Promise<PaymentMatchCandidate[]> {
+  const variants = phoneVariants(phone);
+  if (variants.length === 0) return [];
+  const minCheckout = minimumCheckoutDate(now);
+  const sinceIso = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const guestIds = await loadGuestIds(db, variants);
+  const [bookingRows, draftRows] = await Promise.all([
+    loadBookingRows(db, guestIds, minCheckout),
+    loadDraftRows(db, variants, minCheckout, sinceIso),
+  ]);
+  const bookings = bookingRows
+    .map(candidateFromBookingRow)
+    .filter((candidate) => candidate.bookingCode);
+  const codes = new Set(bookings.map((candidate) => candidate.bookingCode.toUpperCase()));
+  const drafts = draftRows
+    .map(candidateFromDraftRow)
+    .filter((candidate) => !codes.has(candidate.bookingCode.toUpperCase()));
+  return [...bookings, ...drafts];
+}
+
+export async function matchPaymentProof(
+  db: Db,
+  phone: string,
+  ocr: PaymentProofOcrInput,
+  options?: { now?: Date; note?: string | null },
+): Promise<MatchResult> {
+  const now = options?.now ?? new Date();
+  if (!phone.trim()) {
+    return matchProofToCandidates(ocr, [], { now, note: options?.note });
+  }
+  try {
+    const candidates = await loadPaymentMatchCandidates(db, phone, now);
+    return matchProofToCandidates(ocr, candidates, { now, note: options?.note });
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    console.warn("[PaymentProof] pencocokan gagal (booking tidak diubah):", reason);
+    const empty = matchProofToCandidates(ocr, [], { now, note: options?.note });
     return {
-      status: "matched",
-      booking_code: (m.booking as any).reference_code ?? null,
-      booking_amount: Number((m.booking as any).total_amount) || null,
-      amount_diff: m.diff,
+      ...empty,
+      status: empty.status === "no_pending_booking" ? "unmatched" : empty.status,
+      match_reason: `Pencocokan gagal dibaca (${reason.slice(0, 120)}). Status pembayaran tidak diubah.`,
+      summary: empty.summary,
     };
   }
+}
 
-  if (uniqueMatchedBookings.size > 1) {
-    const m = within[0];
-    return {
-      status: "ambiguous",
-      booking_code: (m.booking as any).reference_code ?? null,
-      booking_amount: Number((m.booking as any).total_amount) || null,
-      amount_diff: m.diff,
-    };
-  }
-
-  // No tolerance hit — return the closest pair as unmatched so the agent
-  // can quote the actual diff to the guest.
-  const closest = allPairs.sort((a, b) => Math.abs(a.diff) - Math.abs(b.diff))[0];
-  if (!closest) {
-    const latest = bookings[0] as any;
-    return {
-      status: "unmatched",
-      booking_code: latest.reference_code ?? null,
-      booking_amount: Number(latest.total_amount) || null,
-      amount_diff: null,
-    };
-  }
-  return {
-    status: "unmatched",
-    booking_code: (closest.booking as any).reference_code ?? null,
-    booking_amount: Number((closest.booking as any).total_amount) || null,
-    amount_diff: closest.diff,
-  };
+async function findMatchingBooking(db: Db, phone: string, ocr: OcrData): Promise<MatchResult> {
+  return matchPaymentProof(db, phone, ocr);
 }
 
 async function persistOcrMetadata(
@@ -345,10 +348,7 @@ export async function analyzePaymentProof(
     return {
       ok: false,
       ocr: emptyOcr(),
-      match: {
-        status: "no_pending_booking",
-        booking_code: null, booking_amount: null, amount_diff: null,
-      },
+      match: unavailableMatch("OCR tidak dijalankan: LLM belum dikonfigurasi."),
       error: "LLM not configured",
     };
   }
@@ -394,10 +394,7 @@ export async function runOcrAndMatch(
     return {
       ok: false,
       ocr: emptyOcr(),
-      match: {
-        status: "no_pending_booking",
-        booking_code: null, booking_amount: null, amount_diff: null,
-      },
+      match: unavailableMatch("OCR tidak dijalankan: LLM belum dikonfigurasi."),
       error: "LLM not configured",
     };
   }

@@ -2917,12 +2917,10 @@ export async function processBookingState(
     }
     // Pre-Finance-Agent ownership, this state auto-flipped to COMPLETED on
     // any "bayar/sudah/transfer" keyword which bypassed OCR + status update.
-    // Now the Finance Agent owns the post-booking flow: hand the turn over
-    // so it can run get_payment_proof_result → update_payment_status →
-    // craft the LUNAS notification (or ask for clarification when the OCR
-    // didn't match). State stays at PAYMENT_PENDING until the agent is
-    // confident; the 15-minute auto-reset still applies if the guest goes
-    // silent.
+    // Finance Agent reads the OCR match and thanks the guest. It must NOT
+    // change payment status or amounts — staff confirms. State stays at
+    // PAYMENT_PENDING; the 15-minute auto-reset still applies if the guest
+    // goes silent.
     return { handled: false };
   }
 

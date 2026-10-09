@@ -1352,10 +1352,10 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
 
   // Payment-proof override: a guest who sends a transfer screenshot with NO
   // caption arrives as the attachment marker "[Lampiran image]", which carries
-  // no payment keywords and would misroute to Front Office — so the OCR →
-  // update_payment_status (mark invoice LUNAS) flow never runs. During the
-  // post-booking PAYMENT_PENDING window an incoming image is overwhelmingly a
-  // payment proof, so force it to the Finance Agent.
+  // no payment keywords and would misroute to Front Office — so the OCR match
+  // summary never reaches the guest. Payment status is not changed here.
+  // During the post-booking PAYMENT_PENDING window an incoming image is
+  // overwhelmingly a payment proof, so force it to the Finance Agent.
   const isAttachmentMarker = /\[\s*lampiran\b/i.test(lastUserMsg);
   if (
     isAttachmentMarker &&
