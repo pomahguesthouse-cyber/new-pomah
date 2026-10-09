@@ -294,60 +294,84 @@ export type MetaMediaBytesResult =
   | MetaMediaBytes
   | { ok: false; reason: string };
 
+/** Batas tiap panggilan gateway saat mengunduh media masuk. */
+export const META_MEDIA_FETCH_TIMEOUT_MS = 10_000;
+
+function isFetchTimeout(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const name = "name" in error ? String((error as { name: unknown }).name) : "";
+  if (name === "TimeoutError" || name === "AbortError") return true;
+  const message = "message" in error ? String((error as { message: unknown }).message) : "";
+  return /timeout|aborted/i.test(message);
+}
+
 /**
  * Unduh byte media masuk sekali (bukti transfer, dokumen, audio, video, stiker).
- * `reason` singkat: `expired` bila Meta sudah menghapus media, selain itu kode kegagalan.
+ * `reason` singkat: `expired` bila Meta sudah menghapus media, `timeout` bila
+ * gateway tidak menjawab, selain itu kode kegagalan.
  */
 export async function fetchMetaMediaBytes(
   mediaId: string,
   maxBytes = MAX_MEDIA_BYTES,
+  timeoutMs = META_MEDIA_FETCH_TIMEOUT_MS,
 ): Promise<MetaMediaBytesResult> {
   if (!mediaId) return { ok: false, reason: "empty_media_id" };
   const headers = gatewayHeaders();
   if (!headers) return { ok: false, reason: "not_configured" };
 
-  const metaRes = await fetch(`${GATEWAY_URL}/media/${encodeURIComponent(mediaId)}`, { headers });
-  if (!metaRes.ok) {
-    const body = (await metaRes.text()).slice(0, 200);
-    const reason = classifyMetaMediaLookupFailure(metaRes.status, body);
-    console.warn(`[WhatsAppMeta] media lookup [${metaRes.status}] ${reason}: ${body}`);
-    return { ok: false, reason };
-  }
-  const meta = (await metaRes.json()) as { url?: string; mime_type?: string; file_size?: number };
-  if (!meta.url) return { ok: false, reason: "no_url" };
-  if (typeof meta.file_size === "number" && meta.file_size > maxBytes) {
-    return { ok: false, reason: "too_large" };
-  }
-
-  const dl = await fetch(`${GATEWAY_URL}/media_download`, {
-    headers: { ...headers, "X-WhatsApp-Media-URL": meta.url },
-  });
-  if (!dl.ok || !dl.body) {
-    const reason = classifyMetaMediaLookupFailure(dl.status, "");
-    return { ok: false, reason: dl.ok ? "empty_body" : reason === "expired" ? reason : `download_${dl.status}` };
-  }
-  const reader = dl.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      await reader.cancel();
+  try {
+    const metaRes = await fetch(`${GATEWAY_URL}/media/${encodeURIComponent(mediaId)}`, {
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!metaRes.ok) {
+      const body = (await metaRes.text()).slice(0, 200);
+      const reason = classifyMetaMediaLookupFailure(metaRes.status, body);
+      console.warn(`[WhatsAppMeta] media lookup [${metaRes.status}] ${reason}: ${body}`);
+      return { ok: false, reason };
+    }
+    const meta = (await metaRes.json()) as { url?: string; mime_type?: string; file_size?: number };
+    if (!meta.url) return { ok: false, reason: "no_url" };
+    if (typeof meta.file_size === "number" && meta.file_size > maxBytes) {
       return { ok: false, reason: "too_large" };
     }
-    chunks.push(value);
+
+    const dl = await fetch(`${GATEWAY_URL}/media_download`, {
+      headers: { ...headers, "X-WhatsApp-Media-URL": meta.url },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!dl.ok || !dl.body) {
+      const reason = classifyMetaMediaLookupFailure(dl.status, "");
+      return { ok: false, reason: dl.ok ? "empty_body" : reason === "expired" ? reason : `download_${dl.status}` };
+    }
+    const reader = dl.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return { ok: false, reason: "too_large" };
+      }
+      chunks.push(value);
+    }
+    if (total === 0) return { ok: false, reason: "empty_body" };
+    const buf = new Uint8Array(total);
+    let off = 0;
+    for (const c of chunks) {
+      buf.set(c, off);
+      off += c.byteLength;
+    }
+    const mime = meta.mime_type ?? dl.headers.get("content-type") ?? "image/jpeg";
+    return { ok: true, bytes: buf, mime, size: total };
+  } catch (error) {
+    if (isFetchTimeout(error)) return { ok: false, reason: "timeout" };
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn("[WhatsAppMeta] media fetch failed:", message);
+    return { ok: false, reason: "fetch_failed" };
   }
-  if (total === 0) return { ok: false, reason: "empty_body" };
-  const buf = new Uint8Array(total);
-  let off = 0;
-  for (const c of chunks) {
-    buf.set(c, off);
-    off += c.byteLength;
-  }
-  const mime = meta.mime_type ?? dl.headers.get("content-type") ?? "image/jpeg";
-  return { ok: true, bytes: buf, mime, size: total };
 }
 
 /** Unduh media masuk sebagai data URI. Memakai byte yang sama dengan `fetchMetaMediaBytes`. */

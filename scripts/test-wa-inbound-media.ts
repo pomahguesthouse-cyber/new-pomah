@@ -8,6 +8,8 @@ import { pipelineIntentAgent } from "../src/ai/router/agent-router";
 import { intentHistoryDirections } from "../src/admin/functions/message-direction";
 import { getMessageAttachment } from "../src/admin/modules/whatsapp/message-attachment";
 import { withSignedWhatsAppMedia } from "../src/services/wa-signed-media";
+import { getWaitUntil, runDeferred } from "../src/lib/cf-context";
+import { fetchMetaMediaBytes } from "../src/services/whatsapp-meta.service";
 import {
   PAYMENT_PROOF_ACK_REPLY,
   PAYMENT_PROOF_PLACEHOLDER,
@@ -21,6 +23,8 @@ import {
   planPaymentProofGuestReply,
   processInboundMedia,
   replyClaimsProofMissing,
+  runInboundMediaJob,
+  selectInboundMediaSweep,
   type InboundMediaDeps,
   type InboundMediaJobInput,
   type PaymentProofStaffNotice,
@@ -406,6 +410,16 @@ function storageClient(failBucket = false) {
   );
   assert.equal(planPaymentProofGuestReply({ body: "halo kak", mediaType: "text" }), null);
   assert.equal(isPaymentProofCandidate({ mediaType: "sticker", mimeType: "image/webp" }), false);
+  assert.equal(
+    planPaymentProofGuestReply({
+      body: PAYMENT_PROOF_PLACEHOLDER,
+      mediaType: "image",
+      mimeType: "image/jpeg",
+      sentAt: new Date(Date.now() - 16 * 60_000).toISOString(),
+    }),
+    null,
+    "media lama yang dipulihkan tidak dibalas ke tamu",
+  );
 
   const autoreply = fs.readFileSync("src/services/wa-autoreply.service.ts", "utf8");
   const silenceAt = autoreply.indexOf("Staff replied recently");
@@ -512,6 +526,221 @@ function storageClient(failBucket = false) {
   assert.match(migration, /public = false|false,/);
   assert.match(migration, /wa-inbound staff select/);
   assert.match(migration, /APPLY MANUALLY/);
+}
+
+// ─── Segar: tepat satu notifikasi. Lama: simpan + OCR, tanpa notifikasi ─────
+
+{
+  const freshAt = new Date().toISOString();
+  const fresh = harness();
+  const first = await processInboundMedia(imageInput({ messageId: "msg-fresh", sentAt: freshAt }), fresh.deps);
+  const second = await processInboundMedia(imageInput({ messageId: "msg-fresh", sentAt: freshAt }), fresh.deps);
+  assert.equal(first.notified, true);
+  assert.equal(second.notified, true);
+  assert.equal(fresh.notices.length, 1, "media segar mengirim tepat satu notifikasi");
+  assert.equal(fresh.downloads(), 1);
+
+  const oldAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const old = harness();
+  const recovered = await processInboundMedia(
+    imageInput({ messageId: "msg-old", sentAt: oldAt }),
+    old.deps,
+  );
+  assert.equal(recovered.mediaDownloadStatus, "stored");
+  assert.equal(recovered.ocrStatus, "ok");
+  assert.equal(recovered.ocrAttempted, true);
+  assert.equal(recovered.notified, false);
+  assert.equal(old.notices.length, 0, "pemulihan media lama tidak menotifikasi staf");
+  assert.equal(old.meta.get("msg-old")?.payment_proof_notified, false);
+  const again = await processInboundMedia(imageInput({ messageId: "msg-old", sentAt: oldAt }), old.deps);
+  assert.equal(again.notified, false);
+  assert.equal(old.notices.length, 0);
+  assert.equal(old.downloads(), 1);
+}
+
+// ─── Sweeper: batas batch, tutup retry, pending ikut terpilih ───────────────
+
+{
+  const now = new Date("2026-10-09T12:00:00.000Z");
+  const eligible = Array.from({ length: 8 }, (_, index) => ({
+    id: `pending-${index}`,
+    sentAt: new Date(now.getTime() - index * 60_000).toISOString(),
+    metadata: {
+      meta_media_id: `media-${index}`,
+      media_download_status: index % 2 === 0 ? null : "pending",
+    },
+  }));
+  const rows = [
+    {
+      id: "capped",
+      sentAt: now.toISOString(),
+      metadata: { meta_media_id: "cap", media_download_status: "failed:timeout", media_attempts: 3 },
+    },
+    {
+      id: "retry",
+      sentAt: new Date(now.getTime() - 30_000).toISOString(),
+      metadata: { meta_media_id: "retry", media_download_status: "failed:expired", media_attempts: 2 },
+    },
+    {
+      id: "stored",
+      sentAt: now.toISOString(),
+      metadata: { meta_media_id: "done", storage_path: "a/b.jpg", media_download_status: "stored" },
+    },
+    {
+      id: "ancient",
+      sentAt: "2026-08-01T00:00:00.000Z",
+      metadata: { meta_media_id: "old", media_download_status: "pending" },
+    },
+    ...eligible,
+  ];
+  const selected = selectInboundMediaSweep(rows, now, { days: 30, limit: 5, maxAttempts: 3 });
+  assert.equal(selected.length, 5);
+  assert.equal(selected.some((row) => row.id === "capped"), false);
+  assert.equal(selected.some((row) => row.id === "stored"), false);
+  assert.equal(selected.some((row) => row.id === "ancient"), false);
+  assert.equal(selected[0]?.id, "retry");
+  assert.equal(selected.filter((row) => row.id.startsWith("pending-")).length, 4);
+
+  let runs = 0;
+  const report = await backfillInboundMediaMessages(selected, async () => {
+    runs += 1;
+    return { mediaDownloadStatus: "stored" };
+  });
+  assert.equal(runs, 5);
+  assert.equal(report.stored, 5);
+}
+
+// ─── fetch timeout → failed:timeout; import → failed:import ────────────────
+
+{
+  const h = harness({
+    download: async () => ({ ok: false, reason: "timeout" }),
+  });
+  const result = await processInboundMedia(imageInput({ messageId: "msg-timeout" }), h.deps);
+  assert.equal(result.mediaDownloadStatus, "failed:timeout");
+  assert.equal(h.meta.get("msg-timeout")?.media_download_status, "failed:timeout");
+  assert.equal(h.meta.get("msg-timeout")?.media_attempts, 1);
+  assert.equal(result.notified, false);
+
+  const prevFetch = globalThis.fetch;
+  const prevLovable = process.env.LOVABLE_API_KEY;
+  const prevWa = process.env.WHATSAPP_API_KEY;
+  process.env.LOVABLE_API_KEY = "test-lovable-key";
+  process.env.WHATSAPP_API_KEY = "test-wa-key";
+  globalThis.fetch = ((_url: unknown, init?: RequestInit) =>
+    new Promise((_resolve, reject) => {
+      const fail = () => {
+        const error = new Error("The operation was aborted due to timeout");
+        error.name = "TimeoutError";
+        reject(error);
+      };
+      const signal = init?.signal;
+      if (!signal) {
+        fail();
+        return;
+      }
+      if (signal.aborted) fail();
+      else signal.addEventListener("abort", fail, { once: true });
+    })) as typeof fetch;
+  try {
+    const fetched = await Promise.race([
+      fetchMetaMediaBytes("media-timeout", 1024, 40),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(() => reject(new Error("fetch timeout test hung")), 1000);
+      }),
+    ]);
+    assert.equal(fetched.ok, false);
+    if (!fetched.ok) assert.equal(fetched.reason, "timeout");
+  } finally {
+    globalThis.fetch = prevFetch;
+    if (prevLovable === undefined) delete process.env.LOVABLE_API_KEY;
+    else process.env.LOVABLE_API_KEY = prevLovable;
+    if (prevWa === undefined) delete process.env.WHATSAPP_API_KEY;
+    else process.env.WHATSAPP_API_KEY = prevWa;
+  }
+
+  const saved = new Map<string, Record<string, unknown>>();
+  const admin = {
+    from() {
+      const api: {
+        select: () => typeof api;
+        eq: () => typeof api;
+        limit: () => typeof api;
+        then: (onOk: (value: { data: unknown; error: null }) => unknown, onErr?: (error: unknown) => unknown) => Promise<unknown>;
+      } = {
+        select() {
+          return api;
+        },
+        eq() {
+          return api;
+        },
+        limit() {
+          return api;
+        },
+        then(onOk, onErr) {
+          return Promise.resolve({ data: [{ metadata: saved.get("msg-import") ?? {} }], error: null }).then(onOk, onErr);
+        },
+      };
+      return api;
+    },
+    async rpc(_fn: string, args: { p_message_id: string; p_metadata: Record<string, unknown> }) {
+      saved.set(args.p_message_id, { ...(saved.get(args.p_message_id) ?? {}), ...args.p_metadata });
+      return { error: null };
+    },
+  };
+  const imported = await runInboundMediaJob(
+    admin as never,
+    imageInput({ messageId: "msg-import" }),
+    async () => {
+      throw new Error("cannot load media module");
+    },
+  );
+  assert.equal(imported.mediaDownloadStatus, "failed:import");
+  assert.equal(saved.get("msg-import")?.media_download_status, "failed:import");
+  assert.equal(saved.get("msg-import")?.media_attempts, 1);
+  assert.equal(imported.notified, false);
+}
+
+// ─── waitUntil basi tidak dipakai; sweeper tidak membalas tamu ──────────────
+
+{
+  assert.equal(getWaitUntil(), undefined);
+  const lines: string[] = [];
+  const warn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    lines.push(args.map(String).join(" "));
+  };
+  let ran = false;
+  try {
+    await runDeferred("test-deferred", async () => {
+      ran = true;
+    });
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(ran, true);
+  assert.ok(lines.some((line) => /no waitUntil/i.test(line)));
+  const cf = fs.readFileSync("src/lib/cf-context.ts", "utf8");
+  assert.equal(cf.includes("__cfWaitUntil"), false);
+
+  const mediaSrc = fs.readFileSync("src/services/wa-inbound-media.ts", "utf8");
+  const sweep = mediaSrc.slice(mediaSrc.indexOf("export async function sweepPendingInboundMedia"));
+  assert.equal(sweep.includes("PAYMENT_PROOF_ACK_REPLY"), false);
+  assert.equal(sweep.includes("sendWhatsApp"), false);
+  assert.equal(sweep.includes("planPaymentProofGuestReply"), false);
+  assert.match(sweep, /sentAt: row\.sentAt/);
+
+  const safety = fs.readFileSync("src/routes/api.cron.wa-queue-safety-net.ts", "utf8");
+  const sweepAt = safety.indexOf("await sweepPendingInboundMedia");
+  const waitAt = safety.indexOf("const waitUntil = getWaitUntil");
+  assert.ok(sweepAt >= 0 && waitAt > sweepAt, "sweep ditunggu sebelum waitUntil");
+
+  const summary = fs.readFileSync("src/routes/api.cron.wa-summary-refresh.ts", "utf8");
+  assert.match(summary, /threadSummaryRefreshDue/);
+  assert.equal(summary.includes("getWaitUntil"), false);
+  assert.match(summary, /await refreshStaleThreadSummaries/);
+  const server = fs.readFileSync("src/server.ts", "utf8");
+  assert.match(server, /\/api\/cron\/wa-summary-refresh/);
 }
 
 console.log("test-wa-inbound-media: OK");

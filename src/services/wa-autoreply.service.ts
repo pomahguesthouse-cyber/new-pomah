@@ -2476,10 +2476,9 @@ export async function executeAutoreplyForPhone(
 
   // Fallback deterministik: kalau kolom `chat_summary` masih kosong (thread
   // baru, LLM belum tersedia, atau LLM path akan di-skip), tanam seed dari
-  // regex sederhana lewat waitUntil. Regex murni <5 ms — dan karena
-  // dijalankan di dalam runDeferred (waitUntil di CF), TIDAK menambah
-  // latency ke balasan tamu. Ini memastikan panel admin selalu punya
-  // ringkasan minimal walau LLM regen gagal/di-skip.
+  // regex sederhana. Regex murni <5 ms. Di produksi waitUntil sering tidak
+  // menahan janji ini; cron `/api/cron/wa-summary-refresh` (ditunggu, bukan
+  // waitUntil) yang merapikan thread dengan pesan baru.
   if (summaryTextMissing) {
     deferAfterReply("Autoreply.summarySeedFallback", async () => {
       try {

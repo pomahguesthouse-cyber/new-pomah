@@ -103,6 +103,28 @@ export function buildSeedSummary(args: {
   };
 }
 
+/** Jangan balapan dengan ringkasan yang baru saja ditulis. */
+export const SUMMARY_REFRESH_MARGIN_MS = 3 * 60 * 1000;
+
+/**
+ * Thread yang pesan terakhirnya lebih baru dari ringkasan, atau yang belum
+ * pernah diringkas. `chat_summary_updated_at` null ikut terpilih — filter
+ * `lt` di PostgREST tidak mengembalikan null, jadi cron harus memanggil ini.
+ */
+export function threadSummaryRefreshDue(
+  thread: { last_message_at?: string | null; chat_summary_updated_at?: string | null },
+  now: Date = new Date(),
+  marginMs: number = SUMMARY_REFRESH_MARGIN_MS,
+): boolean {
+  if (!thread.last_message_at) return false;
+  const last = Date.parse(thread.last_message_at);
+  if (!Number.isFinite(last)) return false;
+  const updated = thread.chat_summary_updated_at ? Date.parse(thread.chat_summary_updated_at) : Number.NaN;
+  if (!Number.isFinite(updated)) return last <= now.getTime() - marginMs;
+  if (last <= updated) return false;
+  return updated <= now.getTime() - marginMs;
+}
+
 export function summaryIsMissing(thread: Pick<WhatsAppThread, "chat_summary" | "chat_summary_json" | "chat_summary_updated_at"> | null | undefined): boolean {
   if (!thread) return false;
   return !thread.chat_summary_updated_at || !thread.chat_summary?.trim() || isEmptySummaryJson(thread.chat_summary_json);

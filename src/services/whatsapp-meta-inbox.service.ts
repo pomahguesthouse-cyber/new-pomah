@@ -7,17 +7,18 @@
  *
  * Jalur kritis (simpan pesan + queueUpsert) tetap sinkron di request webhook.
  * Ack 200 sebelum antrian ada menghilangkan redelivery gateway — itu celah
- * yang membuat pesan tersimpan tanpa balasan. Unduh media dan OCR bukti
- * transfer ditunda lewat waitUntil, setelah baris antrian berhasil ditulis.
+ * yang membuat pesan tersimpan tanpa balasan. Unduh media tidak lagi
+ * dititipkan ke waitUntil: status `pending` ditulis dulu, lalu job ditunggu
+ * dengan batas waktu. Kalau batas lewat, sweeper cron menit-an yang melanjutkan.
  */
 import { saveInboundMessage, saveMessageMetadata } from "@/repositories/message.repository";
 import { classifyMessageIntent } from "@/webhook/intent-classifier";
-import { runDeferred } from "@/lib/cf-context";
 import { queueUpsert, resolveQueueTiming } from "@/services/queue.service";
 import {
   isPaymentProofCandidate,
   PAYMENT_PROOF_PLACEHOLDER,
   runInboundMediaJob,
+  type InboundMediaJobInput,
   type InboundMediaRef,
 } from "@/services/wa-inbound-media";
 import {
@@ -57,6 +58,32 @@ interface MetaStatus {
 class DeferredError extends Error {}
 
 const MAX_ATTEMPTS = 12;
+
+/** Meta menerima webhook sampai ~20s. Sisakan waktu untuk simpan + antrian. */
+export const INBOUND_MEDIA_AWAIT_MS = 15_000;
+
+export interface MetaInboundMediaOptions {
+  runMedia?: (admin: Admin, input: InboundMediaJobInput) => Promise<unknown>;
+  mediaTimeoutMs?: number;
+}
+
+export async function awaitWithTimeout<T>(
+  work: Promise<T>,
+  timeoutMs: number,
+): Promise<{ timedOut: false; value: T } | { timedOut: true }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<{ timedOut: true }>((resolve) => {
+    timer = setTimeout(() => resolve({ timedOut: true }), timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      work.then((value) => ({ timedOut: false as const, value })),
+      timeout,
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function valueOf(payload: unknown): Record<string, unknown> {
   const v = (payload as { entry?: Array<{ changes?: Array<{ value?: unknown }> }> })?.entry?.[0]
@@ -108,6 +135,43 @@ function logFields(
   };
 }
 
+async function readInboundMessageRow(
+  admin: Admin,
+  messageId: string,
+): Promise<{ ok: boolean; metadata: Record<string, unknown>; sentAt: string | null }> {
+  try {
+    const res = await admin.from("whatsapp_messages").select("metadata, sent_at").eq("id", messageId).limit(1);
+    if (res?.error) {
+      console.warn("[MetaInbox] baca metadata media gagal:", res.error.message ?? res.error);
+      return { ok: false, metadata: {}, sentAt: null };
+    }
+    const data = res?.data;
+    const row = (Array.isArray(data) ? data[0] : data) as
+      | { metadata?: unknown; sent_at?: string | null }
+      | null
+      | undefined;
+    const metadata =
+      row?.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : {};
+    const sentAt = typeof row?.sent_at === "string" ? row.sent_at : null;
+    return { ok: true, metadata, sentAt };
+  } catch (error) {
+    console.warn(
+      "[MetaInbox] baca metadata media gagal:",
+      error instanceof Error ? error.message : error,
+    );
+    return { ok: false, metadata: {}, sentAt: null };
+  }
+}
+
+function mediaStatusLocked(metadata: Record<string, unknown>): boolean {
+  if (typeof metadata.storage_path === "string" && metadata.storage_path.trim()) return true;
+  const status = metadata.media_download_status;
+  if (status === "stored" || status === "pending") return true;
+  return typeof status === "string" && status.startsWith("failed:");
+}
+
 async function persistInboundMetadata(
   admin: Admin,
   messageId: string,
@@ -117,6 +181,9 @@ async function persistInboundMetadata(
 ) {
   const media = inboundMediaRef(m);
   const mimeType = media?.mimeType ?? null;
+  const existing = media ? await readInboundMessageRow(admin, messageId) : null;
+  // Gagal baca jangan menimpa status `stored` dengan `pending`.
+  const markPending = !!media && !!existing?.ok && !mediaStatusLocked(existing.metadata);
   await saveMessageMetadata(admin as never, {
     messageId,
     metadata: {
@@ -132,6 +199,7 @@ async function persistInboundMetadata(
         mimeType,
         body,
       }),
+      ...(markPending ? { media_download_status: "pending" } : {}),
       ...(skipReason
         ? { inbound_skip_reason: skipReason, inbound_skip_at: new Date().toISOString() }
         : {}),
@@ -151,28 +219,44 @@ function inboundMediaRef(m: MetaMessage): InboundMediaRef | null {
 }
 
 /**
- * Unduh + simpan + OCR di latar, setelah baris pesan/antrian tertulis.
- * Webhook tidak menunggu byte. Kegagalan unduh tidak menjatuhkan permintaan.
+ * Tulis `pending` sudah terjadi di metadata. Job di-await dengan batas waktu
+ * supaya runtime produksi benar-benar menjalankannya. Timeout membiarkan
+ * status `pending` untuk sweeper; kegagalan unduh tidak menjatuhkan webhook.
  */
-function scheduleInboundMedia(
+async function awaitInboundMedia(
   admin: Admin,
   phone: string,
   messageId: string,
   threadId: string | null,
   guestName: string | null,
   m: MetaMessage,
+  options?: MetaInboundMediaOptions,
 ) {
   const media = inboundMediaRef(m);
   if (!media) return;
-  void runDeferred("MetaInbox.media", async () => {
-    await runInboundMediaJob(admin as never, {
+  const row = await readInboundMessageRow(admin, messageId);
+  if (row.ok) {
+    if (typeof row.metadata.storage_path === "string" && row.metadata.storage_path.trim()) return;
+    if (row.metadata.media_download_status === "stored") return;
+  }
+  const sentAt = row.sentAt;
+  const run = options?.runMedia ?? ((db, input) => runInboundMediaJob(db as never, input));
+  const outcome = await awaitWithTimeout(
+    run(admin, {
       phone,
       guestName,
       messageId,
       threadId,
       media,
-    });
-  });
+      ...(sentAt ? { at: new Date(sentAt), sentAt } : {}),
+    }),
+    options?.mediaTimeoutMs ?? INBOUND_MEDIA_AWAIT_MS,
+  );
+  if (outcome.timedOut) {
+    console.warn(
+      `[MetaInbox.media] timeout ${options?.mediaTimeoutMs ?? INBOUND_MEDIA_AWAIT_MS}ms message=${messageId}; left pending for sweeper`,
+    );
+  }
 }
 
 export async function handleMetaInboundMessage(
@@ -180,6 +264,7 @@ export async function handleMetaInboundMessage(
   value: Record<string, unknown>,
   m: MetaMessage,
   isRetry: boolean,
+  options?: MetaInboundMediaOptions,
 ): Promise<MetaInboundHandleResult> {
   if (!m.from || !m.id) {
     logInboundSkip("MetaInbox", "missing_sender_or_id", { is_retry: isRetry, has_from: !!m.from, has_id: !!m.id });
@@ -219,7 +304,7 @@ export async function handleMetaInboundMessage(
   const finishSkipped = async (reason: InboundSkipReason): Promise<MetaInboundHandleResult> => {
     logInboundSkip("MetaInbox", reason, { ...logged(), duplicate: !!duplicate });
     await persistInboundMetadata(admin, messageId, m, body, reason);
-    scheduleInboundMedia(admin, phone, messageId, c.thread_id, name, m);
+    await awaitInboundMedia(admin, phone, messageId, c.thread_id, name, m, options);
     return { enqueued: false, recoveredDuplicate: false, skipReason: reason };
   };
 
@@ -254,7 +339,7 @@ export async function handleMetaInboundMessage(
   if (!entry) throw new Error("queueUpsert gagal: balasan belum dijadwalkan");
 
   await persistInboundMetadata(admin, messageId, m, body, null);
-  scheduleInboundMedia(admin, phone, messageId, c.thread_id, name, m);
+  await awaitInboundMedia(admin, phone, messageId, c.thread_id, name, m, options);
   return { enqueued: true, recoveredDuplicate, skipReason: null };
 }
 

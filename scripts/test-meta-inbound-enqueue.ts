@@ -16,6 +16,7 @@ import {
   formatInboundSkipNote,
 } from "../src/services/wa-inbound-enqueue";
 import { handleMetaInboundMessage } from "../src/services/whatsapp-meta-inbox.service";
+import { selectInboundMediaSweep } from "../src/services/wa-inbound-media";
 
 const PHONE = "6281234567890";
 const THREAD = "thread-1";
@@ -475,6 +476,92 @@ assert.match(recoverySrc, /stage: "recheck"/);
     assert.equal(result.skipReason, "missing_sender_or_id");
   });
   assert.ok(logs.some((line) => line.includes("missing_sender_or_id")));
+}
+
+function imageInbound(id: string) {
+  return {
+    value: { contacts: [{ profile: { name: "Tamu" } }] } as Record<string, unknown>,
+    message: {
+      id,
+      from: PHONE,
+      type: "image",
+      image: { id: "meta-media-1", mime_type: "image/jpeg", caption: "bukti transfer" },
+    },
+  };
+}
+
+// ─── Webhook menunggu job media dan menulis stored ───────────────────────────
+
+{
+  const { db, admin } = makeHarness();
+  const { value, message } = imageInbound("wamid.IMG");
+  let sawPending = false;
+  let finished = false;
+  await withLogs(async () => {
+    const result = await handleMetaInboundMessage(admin as never, value, message, false, {
+      runMedia: async (_db, input) => {
+        const row = db.messages.find((item) => item.id === input.messageId);
+        sawPending = row?.metadata?.media_download_status === "pending";
+        assert.equal(row?.metadata?.meta_media_id, "meta-media-1");
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        await admin.rpc("save_message_metadata", {
+          p_message_id: input.messageId,
+          p_metadata: {
+            media_download_status: "stored",
+            storage_path: "6281234567890/2026-10/img.jpg",
+            ocr_status: "ok",
+          },
+        });
+        finished = true;
+        return { mediaDownloadStatus: "stored" };
+      },
+    });
+    assert.equal(result.enqueued, true);
+  });
+  assert.equal(sawPending, true, "pending ditulis sebelum job berjalan");
+  assert.equal(finished, true, "webhook menunggu job media selesai");
+  const saved = messageOf(db, "wamid.IMG");
+  assert.equal(saved.metadata.media_download_status, "stored");
+  assert.equal(saved.metadata.storage_path, "6281234567890/2026-10/img.jpg");
+  assert.equal(saved.metadata.payment_proof_candidate, true);
+}
+
+// ─── Timeout meninggalkan pending; sweeper kemudian menyimpan ───────────────
+
+{
+  const { db, admin } = makeHarness();
+  const { value, message } = imageInbound("wamid.SLOW");
+  await withLogs(async () => {
+    const result = await handleMetaInboundMessage(admin as never, value, message, false, {
+      mediaTimeoutMs: 40,
+      runMedia: () => new Promise(() => {}),
+    });
+    assert.equal(result.enqueued, true);
+  });
+  const pending = messageOf(db, "wamid.SLOW");
+  assert.equal(pending.metadata.media_download_status, "pending");
+  assert.equal(pending.metadata.storage_path, undefined);
+
+  const now = new Date();
+  const selected = selectInboundMediaSweep(
+    [{ id: pending.id, sentAt: pending.sent_at, metadata: pending.metadata }],
+    now,
+    { days: 30, limit: 5, maxAttempts: 3 },
+  );
+  assert.equal(selected.length, 1);
+
+  await admin.rpc("save_message_metadata", {
+    p_message_id: selected[0].id,
+    p_metadata: {
+      media_download_status: "stored",
+      storage_path: "6281234567890/2026-10/slow.jpg",
+      ocr_status: "ok",
+      payment_proof_notified: false,
+    },
+  });
+  assert.equal(pending.metadata.media_download_status, "stored");
+  assert.equal(pending.metadata.storage_path, "6281234567890/2026-10/slow.jpg");
+  assert.equal(pending.metadata.payment_proof_notified, false);
 }
 
 console.log("test-meta-inbound-enqueue: ok");

@@ -17,6 +17,15 @@ export const PAYMENT_PROOF_PLACEHOLDER = "[Tamu mengirim lampiran bukti transfer
 export const PAYMENT_PROOF_ACK_REPLY =
   "Terima kasih Kak, bukti transfernya sudah kami terima dan sedang kami cek. Kami kabari setelah terverifikasi ya 🙏";
 
+/** Notifikasi staf + balasan tamu hanya untuk media yang baru masuk. */
+export const PAYMENT_PROOF_FRESH_MS = 15 * 60 * 1000;
+
+export const INBOUND_MEDIA_SWEEP_DAYS = 30;
+export const INBOUND_MEDIA_SWEEP_BATCH = 5;
+export const INBOUND_MEDIA_MAX_ATTEMPTS = 3;
+/** Sisakan waktu di bawah timeout pg_net 30s pada cron safety-net. */
+export const INBOUND_MEDIA_SWEEP_DEADLINE_MS = 22_000;
+
 const MISSING_PROOF_CLAIM =
   /bukti[\s\S]{0,48}(belum|tidak|gagal)[\s\S]{0,48}(terdeteksi|terbaca)/i;
 
@@ -237,15 +246,56 @@ export function replyClaimsProofMissing(text: string): boolean {
  * Balasan tamu saat turn terakhir adalah kandidat bukti transfer.
  * `staffSilenceActive` menahan balasan — staf yang baru membalas tidak ditimpa bot.
  */
+/**
+ * Media yang `sent_at`-nya masih di dalam jendela (default 15 menit) boleh
+ * dinotifikasi. Tanpa `sentAt` dianggap segar (jalur webhook yang baru saja
+ * menyimpan pesan). Pemulihan sweeper/backfill selalu mengisi `sentAt`.
+ */
+export function isFreshPaymentProof(
+  sentAt: string | Date | null | undefined,
+  now: Date = new Date(),
+  windowMs: number = PAYMENT_PROOF_FRESH_MS,
+): boolean {
+  if (sentAt == null || sentAt === "") return true;
+  const sent = sentAt instanceof Date ? sentAt.getTime() : Date.parse(sentAt);
+  if (!Number.isFinite(sent)) return true;
+  return now.getTime() - sent <= windowMs;
+}
+
+export function mediaAttemptCount(metadata: Record<string, unknown> | null | undefined): number {
+  const raw = Number(metadata?.media_attempts ?? 0);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return Math.floor(raw);
+}
+
+/**
+ * Baris yang boleh diunduh ulang: belum ada status, masih `pending`, atau
+ * `failed:*` dengan percobaan di bawah batas. `stored` tidak diulang.
+ */
+export function inboundMediaStatusEligible(
+  metadata: Record<string, unknown> | null | undefined,
+  maxAttempts: number = INBOUND_MEDIA_MAX_ATTEMPTS,
+): boolean {
+  const status = metadata?.media_download_status;
+  if (status == null || status === "" || status === "pending") return true;
+  if (typeof status === "string" && status.startsWith("failed:")) {
+    return mediaAttemptCount(metadata) < maxAttempts;
+  }
+  return false;
+}
+
 export function planPaymentProofGuestReply(input: {
   body?: string | null;
   mediaType?: string | null;
   mimeType?: string | null;
   paymentProofCandidate?: boolean | null;
   staffSilenceActive?: boolean;
+  sentAt?: string | Date | null;
+  now?: Date;
 }): string | null {
   if (input.staffSilenceActive) return null;
   if (!isPaymentProofCandidate(input)) return null;
+  if (!isFreshPaymentProof(input.sentAt, input.now)) return null;
   return PAYMENT_PROOF_ACK_REPLY;
 }
 
@@ -451,7 +501,11 @@ export interface InboundMediaJobInput {
   messageId: string;
   threadId?: string | null;
   media: InboundMediaRef;
+  /** Waktu untuk folder bulan di storage. */
   at?: Date;
+  /** `whatsapp_messages.sent_at`. Menentukan notifikasi segar vs pemulihan diam. */
+  sentAt?: string | Date | null;
+  now?: Date;
 }
 
 export interface InboundMediaDeps {
@@ -502,8 +556,9 @@ export async function processInboundMedia(
     ...patch,
   });
 
+  let existing: Record<string, unknown> | null = null;
   try {
-    const existing = asRecord(await deps.readMetadata?.(input.messageId));
+    existing = asRecord(await deps.readMetadata?.(input.messageId));
     if (
       existing?.media_download_status === "stored" &&
       typeof existing.storage_path === "string" &&
@@ -527,6 +582,7 @@ export async function processInboundMedia(
       const ocrReason = fetched.reason || "download_failed";
       await deps.saveMetadata(input.messageId, {
         media_download_status: status,
+        media_attempts: mediaAttemptCount(existing) + 1,
         ocr_status: "skipped",
         ocr_reason: ocrReason,
         storage_bucket: WA_INBOUND_BUCKET,
@@ -631,6 +687,7 @@ export async function processInboundMedia(
     try {
       await deps.saveMetadata(input.messageId, {
         media_download_status: mediaDownloadStatus(false, "job_failed"),
+        media_attempts: mediaAttemptCount(existing) + 1,
         ocr_status: "failed",
         ocr_reason: reason.slice(0, 180),
       });
@@ -652,6 +709,9 @@ async function maybeNotify(
   transfer: boolean,
   _ocr: PaymentProofResult | null,
 ): Promise<boolean> {
+  // Pemulihan sweeper/backfill untuk pesan lama: simpan + OCR, tanpa notifikasi
+  // staf dan tanpa balasan tamu. Job ini tidak mengirim pesan ke tamu.
+  if (!isFreshPaymentProof(input.sentAt, input.now ?? new Date())) return false;
   let awaiting = false;
   let bookingRef: string | null = null;
   let guestName = input.guestName ?? null;
@@ -699,6 +759,35 @@ export function needsInboundMediaBackfill(
   if (!Number.isFinite(sent)) return false;
   const windowMs = Math.max(1, days) * 24 * 60 * 60 * 1000;
   return sent >= now.getTime() - windowMs;
+}
+
+export interface InboundMediaSweepOptions {
+  now?: Date;
+  days?: number;
+  limit?: number;
+  maxAttempts?: number;
+}
+
+/**
+ * Pilih batch kecil. Urutan input dipertahankan (pemanggil mengirim terbaru
+ * dulu supaya bukti yang baru timeout masih sempat dinotifikasi).
+ */
+export function selectInboundMediaSweep<T extends { sentAt: string; metadata: Record<string, unknown> | null }>(
+  rows: T[],
+  now: Date,
+  options?: InboundMediaSweepOptions,
+): T[] {
+  const days = options?.days ?? INBOUND_MEDIA_SWEEP_DAYS;
+  const limit = options?.limit ?? INBOUND_MEDIA_SWEEP_BATCH;
+  const maxAttempts = options?.maxAttempts ?? INBOUND_MEDIA_MAX_ATTEMPTS;
+  const selected: T[] = [];
+  for (const row of rows) {
+    if (selected.length >= limit) break;
+    if (!needsInboundMediaBackfill(row, now, days)) continue;
+    if (!inboundMediaStatusEligible(row.metadata, maxAttempts)) continue;
+    selected.push(row);
+  }
+  return selected;
 }
 
 export interface BackfillReport {
@@ -769,17 +858,87 @@ async function uploadInboundBytes(
   }
 }
 
+export interface InboundMediaModules {
+  fetchMetaMediaBytes: (mediaId: string, maxBytes?: number) => Promise<MetaMediaFetchResult>;
+  analyzePaymentProof: (
+    admin: StorageAdmin,
+    dataUri: string,
+    phone: string,
+    messageId: string,
+  ) => Promise<PaymentProofResult>;
+  notifyPaymentProof: (admin: StorageAdmin, input: Record<string, unknown>) => Promise<void>;
+}
+
+async function loadInboundMediaModules(): Promise<InboundMediaModules> {
+  const { fetchMetaMediaBytes } = await import("./whatsapp-meta.service");
+  const { analyzePaymentProof } = await import("./payment-proof.service");
+  const { notifyPaymentProof } = await import("./manager-notifier.service");
+  return {
+    fetchMetaMediaBytes,
+    analyzePaymentProof: (admin, dataUri, phone, messageId) =>
+      analyzePaymentProof(admin as never, dataUri, phone, messageId),
+    notifyPaymentProof: (admin, notice) => notifyPaymentProof(admin as never, notice as never),
+  };
+}
+
+const emptyMediaResult = (status: string, reason: string): InboundMediaJobResult => ({
+  storagePath: null,
+  mediaDownloadStatus: status,
+  mediaSize: null,
+  ocrStatus: "failed",
+  ocrReason: reason.slice(0, 180),
+  ocrAttempted: false,
+  notified: false,
+});
+
+async function recordMediaImportFailure(
+  admin: StorageAdmin,
+  messageId: string,
+  reason: string,
+): Promise<void> {
+  let attempts = 1;
+  try {
+    const res = await admin.from("whatsapp_messages").select("metadata").eq("id", messageId).limit(1);
+    const data = res?.data;
+    const row = Array.isArray(data) ? data[0] : data;
+    attempts = mediaAttemptCount(asRecord(row?.metadata)) + 1;
+  } catch {
+    attempts = 1;
+  }
+  await saveMessageMetadata(admin as never, {
+    messageId,
+    metadata: {
+      media_download_status: mediaDownloadStatus(false, "import"),
+      media_attempts: attempts,
+      ocr_status: "failed",
+      ocr_reason: reason.slice(0, 180),
+      storage_bucket: WA_INBOUND_BUCKET,
+    },
+  });
+}
+
 /** Jalur produksi: Meta download + storage + OCR + satu notifikasi staf. Tidak melempar. */
 export async function runInboundMediaJob(
   admin: StorageAdmin,
   input: InboundMediaJobInput,
+  loadModules: () => Promise<InboundMediaModules> = loadInboundMediaModules,
 ): Promise<InboundMediaJobResult> {
-  const { fetchMetaMediaBytes } = await import("./whatsapp-meta.service");
-  const { analyzePaymentProof } = await import("./payment-proof.service");
-  const { notifyPaymentProof } = await import("./manager-notifier.service");
+  let modules: InboundMediaModules;
+  try {
+    modules = await loadModules();
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error("[wa-inbound] impor modul media gagal:", reason);
+    try {
+      await recordMediaImportFailure(admin, input.messageId, reason);
+    } catch (saveErr) {
+      console.warn("[wa-inbound] gagal mencatat failed:import:", saveErr);
+    }
+    return emptyMediaResult(mediaDownloadStatus(false, "import"), reason);
+  }
 
   return processInboundMedia(input, {
-    download: (mediaId) => fetchMetaMediaBytes(mediaId, WA_INBOUND_MAX_BYTES),
+    download: (mediaId) => modules.fetchMetaMediaBytes(mediaId, WA_INBOUND_MAX_BYTES),
     upload: (path, bytes, mime) => uploadInboundBytes(admin, path, bytes, mime),
     readMetadata: async (messageId) => {
       const { data } = await admin
@@ -790,12 +949,11 @@ export async function runInboundMediaJob(
       return asRecord(data?.metadata);
     },
     saveMetadata: (messageId, patch) => saveMessageMetadata(admin as never, { messageId, metadata: patch }),
-    analyze: (dataUri, phone, messageId) =>
-      analyzePaymentProof(admin as never, dataUri, phone, messageId),
+    analyze: (dataUri, phone, messageId) => modules.analyzePaymentProof(admin, dataUri, phone, messageId),
     loadPaymentContext: (phone) => loadAwaitingPaymentContext(admin, phone),
     claimNotice: (notice) =>
       claimPaymentProofStaffNotice(admin, notice, async () => {
-        await notifyPaymentProof(admin as never, {
+        await modules.notifyPaymentProof(admin, {
           threadId: notice.threadId,
           phone: notice.phone,
           guestName: notice.guestName,
@@ -804,4 +962,118 @@ export async function runInboundMediaJob(
         });
       }),
   });
+}
+
+export interface InboundMediaSweepReport {
+  scanned: number;
+  stored: number;
+  failed: number;
+}
+
+type SweepMessageRow = {
+  id: string;
+  sent_at?: string | null;
+  thread_id?: string | null;
+  metadata?: unknown;
+  whatsapp_threads?: { phone?: string | null; canonical_phone?: string | null; display_name?: string | null } | null;
+};
+
+function mapSweepRow(row: SweepMessageRow): BackfillCandidate & {
+  phone: string;
+  threadId: string | null;
+  guestName: string | null;
+  mediaId: string;
+  mediaType: string | null;
+  mimeType: string | null;
+  fileName: string | null;
+} | null {
+  const metadata = asRecord(row.metadata);
+  const sentAt = typeof row.sent_at === "string" ? row.sent_at : "";
+  if (!row.id || !sentAt) return null;
+  const thread = row.whatsapp_threads ?? {};
+  return {
+    id: row.id,
+    sentAt,
+    metadata,
+    phone: String(thread.phone ?? thread.canonical_phone ?? ""),
+    threadId: row.thread_id ?? null,
+    guestName: typeof thread.display_name === "string" ? thread.display_name : null,
+    mediaId: typeof metadata?.meta_media_id === "string" ? metadata.meta_media_id : "",
+    mediaType: typeof metadata?.media_type === "string" ? metadata.media_type : null,
+    mimeType: typeof metadata?.mime_type === "string" ? metadata.mime_type : null,
+    fileName: typeof metadata?.file_name === "string" ? metadata.file_name : null,
+  };
+}
+
+/**
+ * Unduh media masuk yang tertinggal. Ditunggu langsung oleh cron menit-an,
+ * bukan `waitUntil`. Pesan lebih tua dari jendela segar disimpan dan di-OCR
+ * tanpa notifikasi staf dan tanpa balasan tamu.
+ */
+export async function sweepPendingInboundMedia(
+  admin: StorageAdmin,
+  options?: InboundMediaSweepOptions & {
+    deadlineMs?: number;
+    run?: typeof runInboundMediaJob;
+  },
+): Promise<InboundMediaSweepReport> {
+  const now = options?.now ?? new Date();
+  const days = options?.days ?? INBOUND_MEDIA_SWEEP_DAYS;
+  const limit = options?.limit ?? INBOUND_MEDIA_SWEEP_BATCH;
+  const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+  const fetchCap = Math.max(limit * 8, limit);
+  const report: InboundMediaSweepReport = { scanned: 0, stored: 0, failed: 0 };
+
+  const { data, error } = await admin
+    .from("whatsapp_messages")
+    .select("id, thread_id, sent_at, metadata, whatsapp_threads(phone, canonical_phone, display_name)")
+    .eq("direction", "in")
+    .gte("sent_at", since)
+    .not("metadata->>meta_media_id", "is", null)
+    .order("sent_at", { ascending: false })
+    .limit(fetchCap);
+  if (error || !data) {
+    console.warn("[wa-inbound] sweep query gagal:", error?.message ?? error);
+    return report;
+  }
+
+  const mapped = (data as SweepMessageRow[])
+    .map((row) => mapSweepRow(row))
+    .filter((row): row is NonNullable<typeof row> => row != null);
+  const batch = selectInboundMediaSweep(mapped, now, { ...options, now, days, limit });
+  const deadline = Date.now() + (options?.deadlineMs ?? INBOUND_MEDIA_SWEEP_DEADLINE_MS);
+  const run = options?.run ?? runInboundMediaJob;
+
+  for (const row of batch) {
+    if (Date.now() > deadline) break;
+    report.scanned += 1;
+    try {
+      const result = await run(admin, {
+        phone: row.phone,
+        guestName: row.guestName,
+        messageId: row.id,
+        threadId: row.threadId,
+        media: {
+          mediaId: row.mediaId,
+          mediaType: row.mediaType,
+          mimeType: row.mimeType,
+          fileName: row.fileName,
+        },
+        at: new Date(row.sentAt),
+        sentAt: row.sentAt,
+        now,
+      });
+      if (result.mediaDownloadStatus === "stored") report.stored += 1;
+      else report.failed += 1;
+    } catch (e) {
+      report.failed += 1;
+      console.warn("[wa-inbound] sweep baris gagal:", row.id, e instanceof Error ? e.message : e);
+    }
+  }
+  if (report.scanned > 0) {
+    console.info(
+      `[wa-inbound] sweep scanned=${report.scanned} stored=${report.stored} failed=${report.failed}`,
+    );
+  }
+  return report;
 }

@@ -22,8 +22,22 @@ import { getWaitUntil } from "@/lib/cf-context";
  * Pada cadence 1 menit, keterlambatan terburuk untuk kasus tepi ini ±60 detik
  * — jauh di dalam toleransi, karena jalur normal (webhook → antrian → drain)
  * tidak bergantung padanya sama sekali.
+ *
+ * Sweep media masuk (bukti transfer yang belum punya storage_path) juga jalan
+ * di sini, ditunggu langsung. Bukan di tick 2 detik, dan bukan lewat waitUntil.
  */
 async function handle(_request: Request): Promise<Response> {
+  // Media masuk ditunggu di sini, bukan lewat waitUntil. pg_net memberi 30s;
+  // sweep sendiri berhenti lebih awal supaya request ini sempat membalas.
+  let media = { scanned: 0, stored: 0, failed: 0 };
+  try {
+    const { sweepPendingInboundMedia } = await import("@/services/wa-inbound-media");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    media = await sweepPendingInboundMedia(supabaseAdmin as never);
+  } catch (e) {
+    console.warn("[Cron.safetyNet] inbound media sweep failed:", e);
+  }
+
   const runWork = async () => {
     try {
       const { recovered } = await recoverUnqueuedInboundMessages({
@@ -47,14 +61,14 @@ async function handle(_request: Request): Promise<Response> {
   const waitUntil = getWaitUntil();
   if (waitUntil) {
     waitUntil(runWork());
-    return new Response(JSON.stringify({ accepted: true }), {
+    return new Response(JSON.stringify({ accepted: true, media }), {
       status: 202,
       headers: { "Content-Type": "application/json" },
     });
   }
 
   await runWork();
-  return new Response(JSON.stringify({ accepted: true }), {
+  return new Response(JSON.stringify({ accepted: true, media }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
