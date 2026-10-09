@@ -1,4 +1,5 @@
 import type { ExportRow } from "@/admin/lib/booking-export";
+import { dayFilterScopeLabel, type BookingDayChip } from "@/admin/lib/booking-day-filter";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"] as const;
 
@@ -32,6 +33,10 @@ export type BookingListFilterInput = {
   search?: string | null;
   from?: string | null;
   to?: string | null;
+  /** Active quick-date chip. `all` and empty keep the previous header. */
+  day?: BookingDayChip | null;
+  /** WIB calendar date printed with the chip (today, or tomorrow for Besok). */
+  on?: string | null;
 };
 
 /** Rupiah with Indonesian thousands separators, independent of ICU currency symbols. */
@@ -89,6 +94,10 @@ export function labelBookingSource(source?: string | null): string {
 
 export function describeBookingListFilters(filters: BookingListFilterInput): string {
   const parts: string[] = [];
+  if (filters.day && filters.day !== "all" && filters.on) {
+    const scope = dayFilterScopeLabel(filters.day);
+    if (scope) parts.push(`Filter: ${scope} – ${formatDateId(filters.on)}`);
+  }
   parts.push(
     filters.status && filters.status !== "all" ? `Status: ${labelBookingStatus(filters.status)}` : "Status: semua",
   );

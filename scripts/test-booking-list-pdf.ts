@@ -35,6 +35,18 @@ assert.equal(
   "Status: Konfirmasi · Sumber: WhatsApp · Check-in: 1 Agu 2026 s/d 31 Agu 2026 · Cari: Déwi",
 );
 assert.equal(describeBookingListFilters({}), "Status: semua · Sumber: semua");
+assert.equal(
+  describeBookingListFilters({ day: "checkin", on: "2026-10-09" }),
+  "Filter: Hari ini (Check-in) – 9 Okt 2026 · Status: semua · Sumber: semua",
+);
+assert.equal(
+  describeBookingListFilters({ day: "tomorrow", on: "2026-10-10", status: "confirmed" }),
+  "Filter: Besok – 10 Okt 2026 · Status: Konfirmasi · Sumber: semua",
+);
+assert.equal(
+  describeBookingListFilters({ day: "all", on: "2026-10-09" }),
+  "Status: semua · Sumber: semua",
+);
 
 const parsedRooms = bookingRoomColumns({ rooms: "Kamar Keluarga (12); Deluxe (5)" });
 assert.deepEqual(parsedRooms, { types: "Kamar Keluarga, Deluxe", numbers: "12, 5" });
@@ -133,7 +145,13 @@ const pdf = await renderToBuffer(
   React.createElement(BookingListDocument, {
     rows,
     propertyName: "Pomah Guesthouse",
-    filterSummary: describeBookingListFilters({ status: "confirmed", source: "whatsapp", search: "Déwi" }),
+    filterSummary: describeBookingListFilters({
+      status: "confirmed",
+      source: "whatsapp",
+      search: "Déwi",
+      day: "checkin",
+      on: "2026-10-09",
+    }),
     generatedAt: printedAt,
   }),
 );
@@ -171,6 +189,8 @@ if (fs.existsSync("/usr/bin/pdftotext") && fs.existsSync("/usr/bin/pdfinfo")) {
     "Halaman 1 / 2",
     "Halaman 2 / 2",
     "Dicetak 8 Okt 2026, 13.18 WIB",
+    "Hari ini (Check-in)",
+    "9 Okt 2026",
   ]) {
     assert.ok(text.includes(needle), `missing ${needle}`);
   }
@@ -181,6 +201,8 @@ assert.match(bookingsSrc, /downloadBookingListPdf/);
 assert.match(bookingsSrc, /describeBookingListFilters/);
 assert.match(bookingsSrc, /collectPages/);
 assert.match(bookingsSrc, /\.range\(from, to\)/);
+assert.match(bookingsSrc, /dayFilterHeaderDate/);
+assert.equal((bookingsSrc.match(/buildDayClauses\(args\.when/g) ?? []).length, 2);
 assert.doesNotMatch(bookingsSrc, /openBlankPrintWindow|openPrintView|window\.print\(/);
 
 const calendarSrc = fs.readFileSync(new URL("../src/routes/admin/calendar.tsx", import.meta.url), "utf8");
