@@ -43,7 +43,7 @@ export function runWithCfContext<T>(ctx: CfRequestContext, fn: () => T): T {
  * (local dev, or a continuation that lost the request context).
  */
 export function getWaitUntil(): WaitUntil | undefined {
-  return storage.getStore()?.waitUntil;
+  return storage?.getStore()?.waitUntil;
 }
 
 /**
