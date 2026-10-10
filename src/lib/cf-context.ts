@@ -34,6 +34,7 @@ try {
 
 /** Run `fn` with the given Worker context bound for the duration of the request. */
 export function runWithCfContext<T>(ctx: CfRequestContext, fn: () => T): T {
+  if (!storage) return fn();
   return storage.run(ctx, fn);
 }
 
