@@ -21,6 +21,8 @@ import {
   type LandingBrief,
   type LandmarkRow,
 } from "@/admin/modules/seo/landing-briefs.functions";
+import { FIXTURE_BRIEFS, FIXTURE_LANDMARKS } from "@/admin/modules/seo/builder-fixture";
+import { isPbFixtureRequest } from "@/admin/modules/seo/builder-layout";
 
 type BriefDraft = {
   id?: string;
@@ -78,27 +80,33 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
-export function LandingBriefsAdmin({ onGenerated }: { onGenerated?: () => void }) {
-  const [tab, setTab] = useState<"brief" | "landmark">("brief");
+export function LandingBriefsAdmin({
+  onGenerated,
+  initialTab = "brief",
+}: {
+  onGenerated?: () => void;
+  initialTab?: "brief" | "landmark";
+}) {
+  const [tab, setTab] = useState<"brief" | "landmark">(initialTab);
   return (
-    <div className="flex h-[70vh] min-h-0 flex-col">
-      <div className="flex gap-2 border-b border-stone-200 px-1 pb-2">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 gap-2 border-b border-stone-200 px-1 pb-2">
         <button
           type="button"
-          className={`rounded px-3 py-1 text-xs font-semibold ${tab === "brief" ? "bg-teal-700 text-white" : "bg-stone-100"}`}
+          className={`min-h-10 flex-1 rounded px-3 text-sm font-semibold ${tab === "brief" ? "bg-teal-700 text-white" : "bg-stone-100"}`}
           onClick={() => setTab("brief")}
         >
           Brief keyword
         </button>
         <button
           type="button"
-          className={`rounded px-3 py-1 text-xs font-semibold ${tab === "landmark" ? "bg-teal-700 text-white" : "bg-stone-100"}`}
+          className={`min-h-10 flex-1 rounded px-3 text-sm font-semibold ${tab === "landmark" ? "bg-teal-700 text-white" : "bg-stone-100"}`}
           onClick={() => setTab("landmark")}
         >
           Landmark
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto pt-3">
+      <div className="min-h-0 flex-1 overflow-hidden pt-3">
         {tab === "brief" ? <BriefTab onGenerated={onGenerated} /> : <LandmarkTab />}
       </div>
     </div>
@@ -106,17 +114,24 @@ export function LandingBriefsAdmin({ onGenerated }: { onGenerated?: () => void }
 }
 
 function BriefTab({ onGenerated }: { onGenerated?: () => void }) {
+  const fixture = isPbFixtureRequest();
   const listFn = useServerFn(listLandingBriefs);
   const saveFn = useServerFn(saveLandingBrief);
   const deleteFn = useServerFn(deleteLandingBrief);
   const generateFn = useServerFn(generateLandingFromBrief);
   const landmarkFn = useServerFn(listSeoLandmarks);
-  const query = useQuery({ queryKey: ["landing-briefs"], queryFn: () => listFn() });
-  const landmarks = useQuery({ queryKey: ["seo-landmarks-admin"], queryFn: () => landmarkFn() });
-  const [draft, setDraft] = useState<BriefDraft>(emptyBrief);
+  const query = useQuery({ queryKey: ["landing-briefs"], queryFn: () => listFn(), enabled: !fixture });
+  const landmarks = useQuery({ queryKey: ["seo-landmarks-admin"], queryFn: () => landmarkFn(), enabled: !fixture });
+  const [draft, setDraft] = useState<BriefDraft>(() =>
+    fixture && FIXTURE_BRIEFS[0] ? fromRow(FIXTURE_BRIEFS[0]) : emptyBrief(),
+  );
   const [busy, setBusy] = useState(false);
 
   const save = async (status: LandingBrief["status"]) => {
+    if (fixture) {
+      toast.success("Pratinjau: brief tidak disimpan");
+      return;
+    }
     const slug = draft.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
     if (!draft.primary_keyword.trim() || !slug) {
       toast.error("Keyword utama dan slug wajib diisi.");
@@ -153,6 +168,10 @@ function BriefTab({ onGenerated }: { onGenerated?: () => void }) {
   };
 
   const generate = async () => {
+    if (fixture) {
+      toast.success("Pratinjau: generate tidak dijalankan");
+      return;
+    }
     if (!draft.id || draft.status !== "approved") {
       toast.error("Setujui brief dulu sebelum generate.");
       return;
@@ -171,12 +190,13 @@ function BriefTab({ onGenerated }: { onGenerated?: () => void }) {
     }
   };
 
-  const briefs = query.data?.briefs ?? [];
-  const landmarkRows = landmarks.data?.landmarks ?? [];
+  const briefs = fixture ? FIXTURE_BRIEFS : (query.data?.briefs ?? []);
+  const landmarkRows = fixture ? FIXTURE_LANDMARKS : (landmarks.data?.landmarks ?? []);
   return (
-    <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-      <div className="space-y-2">
-        <Button type="button" size="sm" variant="outline" className="w-full" onClick={() => setDraft(emptyBrief())}>
+    <div className="flex h-full min-h-0 flex-col">
+    <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto min-[800px]:grid-cols-[minmax(0,200px)_minmax(0,1fr)] min-[800px]:overflow-hidden">
+      <div className="max-h-48 space-y-2 overflow-y-auto min-[800px]:max-h-full">
+        <Button type="button" size="sm" variant="outline" className="h-10 w-full" onClick={() => setDraft(emptyBrief())}>
           Brief baru
         </Button>
         {query.data?.missing ? (
@@ -187,21 +207,21 @@ function BriefTab({ onGenerated }: { onGenerated?: () => void }) {
             key={row.id}
             type="button"
             onClick={() => setDraft(fromRow(row))}
-            className="block w-full rounded-md border border-stone-200 px-2 py-1.5 text-left text-xs hover:bg-stone-50"
+            className="block min-h-10 w-full rounded-lg border border-stone-200 px-3 py-2 text-left text-sm hover:bg-stone-50"
           >
             <span className="block break-words font-medium">{row.primary_keyword}</span>
             <span className="text-stone-500">{row.status}</span>
           </button>
         ))}
       </div>
-      <div className="space-y-3">
+      <div className="min-w-0 space-y-3 min-[800px]:overflow-y-auto">
         <Field label="Keyword utama">
           <Input value={draft.primary_keyword} onChange={(e) => setDraft({ ...draft, primary_keyword: e.target.value })} />
         </Field>
         <Field label="Keyword sekunder" hint="Pisahkan dengan koma.">
           <Input value={draft.secondary_keywords} onChange={(e) => setDraft({ ...draft, secondary_keywords: e.target.value })} />
         </Field>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 min-[480px]:grid-cols-2">
           <Field label="Intent">
             <Input value={draft.intent} onChange={(e) => setDraft({ ...draft, intent: e.target.value })} placeholder="menginap keluarga" />
           </Field>
@@ -235,10 +255,10 @@ function BriefTab({ onGenerated }: { onGenerated?: () => void }) {
         <Field label="Landmark">
           <div className="max-h-36 space-y-1 overflow-y-auto">
             {landmarkRows.map((row) => (
-              <label key={row.id} className="flex items-center gap-2 text-xs">
+              <label key={row.id} className="flex min-h-10 items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  className="accent-teal-700"
+                  className="size-5 shrink-0 accent-teal-700"
                   checked={draft.landmark_ids.includes(row.id)}
                   onChange={() => {
                     const has = draft.landmark_ids.includes(row.id);
@@ -261,10 +281,10 @@ function BriefTab({ onGenerated }: { onGenerated?: () => void }) {
         <Field label="Artikel /explore">
           <div className="max-h-36 space-y-1 overflow-y-auto">
             {CITY_GUIDE_ARTICLES.map((article) => (
-              <label key={article.canonicalSlug} className="flex items-center gap-2 text-xs">
+              <label key={article.canonicalSlug} className="flex min-h-10 items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  className="accent-teal-700"
+                  className="size-5 shrink-0 accent-teal-700"
                   checked={draft.explore_slugs.includes(article.canonicalSlug)}
                   onChange={() => {
                     const has = draft.explore_slugs.includes(article.canonicalSlug);
@@ -282,14 +302,16 @@ function BriefTab({ onGenerated }: { onGenerated?: () => void }) {
           </div>
         </Field>
         <p className="text-[11px] text-stone-500">Status: {draft.status}. Generate hanya jalan setelah brief disetujui.</p>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => save("draft")}>
+      </div>
+    </div>
+        <div className="flex shrink-0 flex-wrap gap-2 border-t border-stone-200 bg-white py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <Button type="button" size="sm" variant="outline" className="h-10" disabled={busy} onClick={() => save("draft")}>
             Simpan draf
           </Button>
-          <Button type="button" size="sm" disabled={busy} onClick={() => save("approved")}>
+          <Button type="button" size="sm" className="h-10" disabled={busy} onClick={() => save("approved")}>
             Setujui
           </Button>
-          <Button type="button" size="sm" className="bg-teal-700 text-white" disabled={busy || draft.status !== "approved"} onClick={generate}>
+          <Button type="button" size="sm" className="h-10 bg-teal-700 text-white" disabled={busy || draft.status !== "approved"} onClick={generate}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Generate"}
           </Button>
           {draft.id ? (
@@ -297,9 +319,14 @@ function BriefTab({ onGenerated }: { onGenerated?: () => void }) {
               type="button"
               size="sm"
               variant="ghost"
+              className="h-10"
               disabled={busy}
               onClick={async () => {
                 if (!draft.id) return;
+                if (fixture) {
+                  toast.success("Pratinjau: brief tidak dihapus");
+                  return;
+                }
                 setBusy(true);
                 try {
                   await deleteFn({ data: { id: draft.id } });
@@ -316,20 +343,25 @@ function BriefTab({ onGenerated }: { onGenerated?: () => void }) {
             </Button>
           ) : null}
         </div>
-      </div>
     </div>
   );
 }
 
 function LandmarkTab() {
+  const fixture = isPbFixtureRequest();
   const listFn = useServerFn(listSeoLandmarks);
   const saveFn = useServerFn(saveSeoLandmark);
   const deleteFn = useServerFn(deleteSeoLandmark);
-  const query = useQuery({ queryKey: ["seo-landmarks-admin"], queryFn: () => listFn() });
+  const query = useQuery({ queryKey: ["seo-landmarks-admin"], queryFn: () => listFn(), enabled: !fixture });
   const [row, setRow] = useState<Partial<LandmarkRow>>({ name: "", category: "kampus", verified: false, sort_order: 0 });
   const [busy, setBusy] = useState(false);
+  const landmarks = fixture ? FIXTURE_LANDMARKS : (query.data?.landmarks ?? []);
 
   const save = async () => {
+    if (fixture) {
+      toast.success("Pratinjau: landmark tidak disimpan");
+      return;
+    }
     if (!row.name?.trim()) {
       toast.error("Nama landmark wajib diisi.");
       return;
@@ -361,14 +393,15 @@ function LandmarkTab() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col">
+    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
       {query.data?.missing ? (
         <p className="text-[11px] text-amber-800">Tabel landmark belum ada. Jalankan migrasi SQL setelah deploy.</p>
       ) : null}
       <p className="text-[11px] text-stone-600">
         Centang verified hanya setelah jarak jalan dan waktu tempuh dicek. Angka yang belum diverifikasi tidak boleh masuk halaman publik.
       </p>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 min-[480px]:grid-cols-2">
         <Field label="Nama">
           <Input value={row.name ?? ""} onChange={(e) => setRow({ ...row, name: e.target.value })} />
         </Field>
@@ -401,23 +434,25 @@ function LandmarkTab() {
         <span className="text-xs font-medium">Sudah diverifikasi</span>
         <Switch checked={row.verified === true} onCheckedChange={(verified) => setRow({ ...row, verified })} />
       </div>
-      <Button type="button" size="sm" disabled={busy} onClick={save}>
-        Simpan landmark
-      </Button>
       <ul className="space-y-2">
-        {(query.data?.landmarks ?? []).map((item) => (
-          <li key={item.id} className="flex items-start justify-between gap-2 rounded-md border px-3 py-2 text-xs">
-            <button type="button" className="min-w-0 text-left" onClick={() => setRow(item)}>
+        {landmarks.map((item) => (
+          <li key={item.id} className="flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+            <button type="button" className="min-h-10 min-w-0 flex-1 text-left" onClick={() => setRow(item)}>
               <span className="block break-words font-medium">{item.name}</span>
               <span className={item.verified ? "text-emerald-700" : "text-amber-700"}>
                 {item.verified ? "terverifikasi" : "belum diverifikasi"}
                 {item.road_distance_km != null ? ` · ${item.road_distance_km} km` : ""}
+                {item.category ? ` · ${item.category}` : ""}
               </span>
             </button>
             <button
               type="button"
-              className="text-red-600"
+              className="inline-flex min-h-10 shrink-0 items-center px-3 text-sm text-red-600"
               onClick={async () => {
+                if (fixture) {
+                  toast.success("Pratinjau: landmark tidak dihapus");
+                  return;
+                }
                 await deleteFn({ data: { id: item.id } });
                 await query.refetch();
               }}
@@ -427,6 +462,12 @@ function LandmarkTab() {
           </li>
         ))}
       </ul>
+    </div>
+      <div className="flex shrink-0 border-t border-stone-200 bg-white py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <Button type="button" size="sm" className="h-10" disabled={busy} onClick={save}>
+          Simpan landmark
+        </Button>
+      </div>
     </div>
   );
 }

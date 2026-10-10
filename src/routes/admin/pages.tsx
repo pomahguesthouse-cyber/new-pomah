@@ -69,6 +69,27 @@ import { GlobalSettingsEditor } from "@/admin/modules/global/global-editor";
 import { LpPageBuilder } from "@/admin/modules/seo/lp-page-builder";
 import { LandingBriefsAdmin } from "@/admin/modules/seo/landing-briefs-admin";
 import { LandingQualityPanel } from "@/admin/modules/seo/landing-quality-panel";
+import { FIXTURE_PAGES, FIXTURE_PREVIEW_HTML, FIXTURE_SECTIONS } from "@/admin/modules/seo/builder-fixture";
+import {
+  ScaledPreview,
+  builderDialogClass,
+  isPbFixtureRequest,
+  pbFixtureView,
+  useBuilderLayout,
+} from "@/admin/modules/seo/builder-layout";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -161,6 +182,8 @@ const SECTIONS: {
  * swaps to that section's controls.
  */
 function HomepageBuilder() {
+  const fixture = isPbFixtureRequest();
+  const layout = useBuilderLayout();
   const getFn = useServerFn(getHomepageConfig);
   const updateFn = useServerFn(updateHomepageConfig);
   const getPageSectionsFn = useServerFn(getPageBuilderSections);
@@ -170,14 +193,18 @@ function HomepageBuilder() {
     queryKey: ["homepage-config"],
     queryFn: () => getFn(),
     refetchOnWindowFocus: false,
+    enabled: !fixture,
   });
 
   // Landing pages — drive the "Site Menu" page list.
   const lpQuery = useQuery({
     queryKey: ["lp-list-builder"],
     queryFn: () => listSeoLandingPages(),
+    enabled: !fixture,
   });
-  const pages = (lpQuery.data as { pages?: SeoLandingPage[] } | undefined)?.pages ?? [];
+  const livePages = (lpQuery.data as { pages?: SeoLandingPage[] } | undefined)?.pages ?? [];
+  const pages = fixture ? FIXTURE_PAGES : livePages;
+  const homeLoading = fixture ? false : isLoading;
 
   const [section, setSection] = useState<SectionKey>("header");
   const [cfg, setCfg] = useState<HomepageConfig>(DEFAULT_HOMEPAGE_CONFIG);
@@ -188,14 +215,24 @@ function HomepageBuilder() {
   const [activeMode, setActiveMode] = useState<"desktop" | "mobile">("desktop");
 
   // Active page in the Site Menu: "home" or a landing-page id.
-  const [activePageId, setActivePageId] = useState<string>("home");
+  const [activePageId, setActivePageId] = useState<string>(() => {
+    if (!isPbFixtureRequest()) return "home";
+    return new URLSearchParams(window.location.search).get("page") === "lp" ? "fixture-lp" : "home";
+  });
+  const [panel, setPanel] = useState<"menu" | "edit" | null>(() => {
+    const view = pbFixtureView();
+    if (view === "menu" || view === "pages") return "menu";
+    if (view === "edit") return "edit";
+    if (typeof window !== "undefined" && window.innerWidth < 768) return null;
+    return "edit";
+  });
   const [activeMenuTab, setActiveMenuTab] = useState<"PAGES" | "GLOBAL">("PAGES");
   const activeLp = activePageId === "home" ? null : (pages.find((p) => p.id === activePageId) ?? null);
 
   const pageSectionsQuery = useQuery({
     queryKey: ["page-builder-sections", activeLp?.id],
     queryFn: () => getPageSectionsFn({ data: { pageId: activeLp?.id ?? "" } }),
-    enabled: Boolean(activeLp?.id),
+    enabled: Boolean(activeLp?.id) && !fixture,
     refetchOnWindowFocus: false,
   });
 
@@ -204,10 +241,11 @@ function HomepageBuilder() {
   const [renameTarget, setRenameTarget] = useState<SeoLandingPage | null>(null);
 
   // Sections of the active landing page (edited in the right panel).
-  const [lpSections, setLpSections] = useState<LPSectionsData>([]);
+  const [lpSections, setLpSections] = useState<LPSectionsData>(() => (isPbFixtureRequest() ? FIXTURE_SECTIONS : []));
   useEffect(() => {
+    if (fixture) return;
     if (activeLp && pageSectionsQuery.data) setLpSections(pageSectionsQuery.data.sections as LPSectionsData);
-  }, [activeLp, pageSectionsQuery.data]);
+  }, [activeLp, pageSectionsQuery.data, fixture]);
 
   useEffect(() => {
     if (activeLp?.homepage_config) setPageCfg(mergeHomepageConfig(activeLp.homepage_config));
@@ -218,8 +256,14 @@ function HomepageBuilder() {
   }, [activePageId]);
 
   // "Site Pages and Menu" modal (Wix-style).
-  const [pagesOpen, setPagesOpen] = useState(false);
-  const [briefsOpen, setBriefsOpen] = useState(false);
+  const [pagesOpen, setPagesOpen] = useState(() => {
+    const view = pbFixtureView();
+    return view === "publish" || view === "pages";
+  });
+  const [briefsOpen, setBriefsOpen] = useState(() => {
+    const view = pbFixtureView();
+    return view === "brief" || view === "landmark";
+  });
   const openPageSettings = (id: string) => {
     setActivePageId(id);
     setPagesOpen(true);
@@ -384,217 +428,349 @@ function HomepageBuilder() {
   const editingCfg = activeLp?.homepage_config ? pageCfg : cfg;
   const setEditingCfg = activeLp?.homepage_config ? setPageCfg : setCfg;
 
-  return (
-    <div className="flex h-full flex-col bg-stone-100">
-      {/* ── Top bar ── */}
-      <header className="flex items-center justify-between gap-4 border-b border-border bg-card px-5 py-3">
-        <div className="flex items-center gap-3">
-          <Button asChild variant="outline" size="sm" className="gap-1.5">
-            <Link to="/admin">
-              <ArrowLeft className="h-4 w-4" />
-              Keluar
-            </Link>
+  const renderEditor = () =>
+    activeLp && !activeLp.homepage_config ? (
+      <>
+        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+          <p className="min-w-0 truncate text-sm font-semibold">Edit — {activeLp.title}</p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-10 shrink-0 gap-1.5 text-xs"
+            onClick={() => openPageSettings(activeLp.id)}
+          >
+            <Settings2 className="h-3.5 w-3.5" /> SEO
           </Button>
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Homepage Builder</p>
-            <h1 className="text-lg font-semibold tracking-tight">Page Builder</h1>
-          </div>
-          {/* Page selector — opens the "Site Pages and Menu" modal */}
-          <div className="ml-4 flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">Page:</span>
-            <button
-              type="button"
-              onClick={() => {
-                setPagesOpen(true);
-              }}
-              className="flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted"
-            >
-              {activeName}
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
-          </div>
-
-          {/* View Mode Toggle (Desktop / Mobile) */}
-          <div className="ml-4 flex items-center rounded-md border border-input bg-background p-0.5">
-            <button
-              type="button"
-              onClick={() => setActiveMode("desktop")}
-              className={cn(
-                "rounded-sm px-3 py-1.5 text-xs font-medium transition",
-                activeMode === "desktop"
-                  ? "bg-stone-200 text-stone-900 shadow-sm"
-                  : "text-muted-foreground hover:bg-stone-100 hover:text-foreground",
-              )}
-            >
-              Desktop
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveMode("mobile")}
-              className={cn(
-                "rounded-sm px-3 py-1.5 text-xs font-medium transition",
-                activeMode === "mobile"
-                  ? "bg-stone-200 text-stone-900 shadow-sm"
-                  : "text-muted-foreground hover:bg-stone-100 hover:text-foreground",
-              )}
-            >
-              Mobile
-            </button>
-          </div>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => setBriefsOpen(true)}>
-          Brief keyword
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <LpPageBuilder
+            sections={lpSections}
+            onChange={setLpSections}
+            activeMode={activeMode}
+            setActiveMode={setActiveMode}
+          />
+        </div>
+      </>
+    ) : (
+      <>
+        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-sm font-semibold">Edit — {active.label}</p>
+            {activeMenuTab === "GLOBAL" && (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+                Global
+              </span>
+            )}
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-10 shrink-0 gap-1.5 text-xs"
+            onClick={() => openPageSettings(activePageId === "book" ? "book" : "home")}
+          >
+            <Settings2 className="h-3.5 w-3.5" /> SEO
+          </Button>
+        </div>
+        <SectionSlider sections={visibleSections} active={section} onSelect={(k) => setSection(k)} />
+        {sectionSupportsLayout(section) && (
+          <SectionLayoutControls section={section} cfg={editingCfg} setCfg={setEditingCfg} />
+        )}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {homeLoading ? (
+            <p className="p-6 text-sm text-muted-foreground">Memuat…</p>
+          ) : section === "header" ? (
+            <HeaderTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          ) : section === "hero" ? (
+            <HeroTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          ) : section === "bookingHero" ? (
+            <HeroTab cfg={editingCfg} setCfg={setEditingCfg} isBooking activeMode={activeMode} />
+          ) : section === "datepicker" ? (
+            <DatePickerTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          ) : section === "badges" ? (
+            <BadgesTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          ) : section === "story" ? (
+            <StoryTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          ) : section === "reviews" ? (
+            <ReviewsTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          ) : section === "facilities" ? (
+            <FacilitiesTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          ) : section === "lokasi" ? (
+            <LokasiTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          ) : section === "news" ? (
+            <NewsTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          ) : section === "cta" ? (
+            <CtaTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          ) : section === "order" ? (
+            <OrderTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          ) : (
+            <CarouselTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+          )}
+        </div>
+      </>
+    );
+
+  const overlay = layout === "overlay";
+  const modeToggle = (
+    <div className={cn("flex items-center rounded-md border border-input bg-background p-0.5", overlay && "w-full")}>
+      <button
+        type="button"
+        onClick={() => setActiveMode("desktop")}
+        className={cn(
+          "min-h-10 rounded-sm px-3 text-xs font-medium transition",
+          overlay && "flex-1",
+          activeMode === "desktop"
+            ? "bg-stone-200 text-stone-900 shadow-sm"
+            : "text-muted-foreground hover:bg-stone-100 hover:text-foreground",
+        )}
+      >
+        Desktop
+      </button>
+      <button
+        type="button"
+        onClick={() => setActiveMode("mobile")}
+        className={cn(
+          "min-h-10 rounded-sm px-3 text-xs font-medium transition",
+          overlay && "flex-1",
+          activeMode === "mobile"
+            ? "bg-stone-200 text-stone-900 shadow-sm"
+            : "text-muted-foreground hover:bg-stone-100 hover:text-foreground",
+        )}
+      >
+        Mobile
+      </button>
+    </div>
+  );
+
+  return (
+    <div
+      className={cn(
+        "pb-tap flex h-full min-h-0 w-full max-w-full flex-col overflow-hidden bg-stone-100 pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]",
+        layout !== "overlay" && "pb-[env(safe-area-inset-bottom)]",
+      )}
+    >
+      <header className="flex max-w-full flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
+        <Button asChild variant="outline" size="sm" className="h-10 shrink-0 gap-1.5 px-3">
+          <Link to="/admin" aria-label="Keluar">
+            <ArrowLeft className="h-4 w-4" />
+            <span className={overlay ? "sr-only" : undefined}>Keluar</span>
+          </Link>
         </Button>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Homepage Builder</p>
+          <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">Page Builder</h1>
+        </div>
+        {overlay ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="sm" className="h-10 w-10 shrink-0 px-0" aria-label="Menu lainnya">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem className="min-h-10" onClick={() => setPagesOpen(true)}>
+                Halaman: {activeName}
+              </DropdownMenuItem>
+              <DropdownMenuItem className="min-h-10" onClick={() => setBriefsOpen(true)}>
+                Brief keyword
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => setPagesOpen(true)}
+              className="flex h-10 max-w-[12rem] min-w-0 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted"
+            >
+              <span className="truncate">{activeName}</span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </button>
+            {modeToggle}
+            <Button type="button" variant="outline" size="sm" className="h-10 shrink-0" onClick={() => setBriefsOpen(true)}>
+              Brief keyword
+            </Button>
+          </>
+        )}
         <Button
-          className="gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
-          disabled={saving || isLoading}
+          className="h-10 shrink-0 gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
+          disabled={saving || homeLoading}
           onClick={save}
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           {saving ? "Menyimpan…" : "Simpan"}
         </Button>
+        {overlay ? <div className="w-full min-w-0">{modeToggle}</div> : null}
       </header>
 
       <Dialog open={briefsOpen} onOpenChange={setBriefsOpen}>
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden">
-          <DialogHeader>
+        <DialogContent className={builderDialogClass + " max-w-3xl"}>
+          <DialogHeader className="shrink-0 space-y-1 px-4 pb-2 pt-4 pr-12 text-left">
             <DialogTitle>Brief keyword</DialogTitle>
             <DialogDescription>
               Setujui brief sebelum generate. Halaman yang dihasilkan tetap unpublished dan noindex.
             </DialogDescription>
           </DialogHeader>
-          <LandingBriefsAdmin onGenerated={() => lpQuery.refetch()} />
+          <div className="min-h-0 flex-1 overflow-hidden px-4">
+            <LandingBriefsAdmin
+              onGenerated={() => lpQuery.refetch()}
+              initialTab={pbFixtureView() === "landmark" ? "landmark" : "brief"}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* ── Left: Site Menu ── */}
-        <SiteMenu
-          activeMenuTab={activeMenuTab}
-          onMenuTabChange={setActiveMenuTab}
-          pages={pages}
-          activePageId={activePageId}
-          onSelect={setActivePageId}
-          onAdd={handleAddPage}
-          onDelete={handleDeletePage}
-          onDuplicate={handleDuplicatePage}
-          onDuplicateSystem={handleDuplicateSystemPage}
-          onRename={(p) => setRenameTarget(p)}
-          onSeo={(id) => openPageSettings(id)}
-          duplicatingId={duplicating}
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        {layout === "triple" ? (
+          <SiteMenu
+            activeMenuTab={activeMenuTab}
+            onMenuTabChange={setActiveMenuTab}
+            pages={pages}
+            activePageId={activePageId}
+            onSelect={(id) => {
+              setActivePageId(id);
+              setPanel("edit");
+            }}
+            onAdd={handleAddPage}
+            onDelete={handleDeletePage}
+            onDuplicate={handleDuplicatePage}
+            onDuplicateSystem={handleDuplicateSystemPage}
+            onRename={(p) => setRenameTarget(p)}
+            onSeo={(id) => openPageSettings(id)}
+            duplicatingId={duplicating}
+          />
+        ) : null}
+
+        <ScaledPreview
+          mode={activeMode}
+          title="Preview"
+          frameKey={`${previewKey}-${fixture ? "fixture" : previewSrc}-${activeMode}`}
+          iframeRef={iframeRef}
+          src={fixture ? undefined : previewSrc}
+          srcDoc={fixture ? FIXTURE_PREVIEW_HTML : undefined}
         />
 
-        {/* ── Centre: live preview ── */}
-        <div className="flex flex-1 items-center justify-center overflow-auto p-6 bg-stone-100">
-          <div
-            className={cn(
-              "transition-all duration-300 overflow-hidden shadow-xl border border-border bg-white relative",
-              activeMode === "mobile"
-                ? "w-[390px] h-[800px] border-[12px] border-stone-850 rounded-[36px]"
-                : "w-full max-w-5xl rounded-xl",
-            )}
-          >
-            {activeMode === "mobile" && (
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-32 h-6 bg-stone-850 rounded-full z-50 flex items-center justify-center">
-                <div className="w-12 h-1 bg-stone-700 rounded-full" />
-              </div>
-            )}
-            <iframe
-              ref={iframeRef}
-              key={`${previewKey}-${previewSrc}-${activeMode}`}
-              title="Preview"
-              src={previewSrc}
-              className={cn(
-                "w-full transition-all duration-300",
-                activeMode === "mobile" ? "h-[776px] pt-4" : "h-[calc(100vh-9rem)]",
-              )}
-            />
-          </div>
-        </div>
-
-        {/* ── Right: contextual editor ── */}
-        <aside className="flex w-[400px] shrink-0 flex-col border-l border-border bg-card">
-          {activeLp && !activeLp.homepage_config ? (
-            <>
-              <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                <p className="truncate text-sm font-semibold">Edit — {activeLp.title}</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 gap-1.5 text-xs"
-                  onClick={() => openPageSettings(activeLp.id)}
-                >
-                  <Settings2 className="h-3.5 w-3.5" /> SEO
-                </Button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-3">
-                <LpPageBuilder
-                  sections={lpSections}
-                  onChange={setLpSections}
-                  activeMode={activeMode}
-                  setActiveMode={setActiveMode}
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold">Edit — {active.label}</p>
-                  {activeMenuTab === "GLOBAL" && (
-                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
-                      Global
-                    </span>
-                  )}
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 gap-1.5 text-xs"
-                  onClick={() => openPageSettings(activePageId === "book" ? "book" : "home")}
-                >
-                  <Settings2 className="h-3.5 w-3.5" /> SEO
-                </Button>
-              </div>
-              <SectionSlider sections={visibleSections} active={section} onSelect={(k) => setSection(k)} />
-              {sectionSupportsLayout(section) && (
-                <SectionLayoutControls section={section} cfg={editingCfg} setCfg={setEditingCfg} />
-              )}
-              <div className="flex-1 overflow-y-auto">
-                {isLoading ? (
-                  <p className="p-6 text-sm text-muted-foreground">Memuat…</p>
-                ) : section === "header" ? (
-                  <HeaderTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
-                ) : section === "hero" ? (
-                  <HeroTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
-                ) : section === "bookingHero" ? (
-                  <HeroTab cfg={editingCfg} setCfg={setEditingCfg} isBooking activeMode={activeMode} />
-                ) : section === "datepicker" ? (
-                  <DatePickerTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
-                ) : section === "badges" ? (
-                  <BadgesTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
-                ) : section === "story" ? (
-                  <StoryTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
-                ) : section === "reviews" ? (
-                  <ReviewsTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
-                ) : section === "facilities" ? (
-                  <FacilitiesTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
-                ) : section === "lokasi" ? (
-                  <LokasiTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
-                ) : section === "news" ? (
-                  <NewsTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
-                ) : section === "cta" ? (
-                  <CtaTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
-                ) : section === "order" ? (
-                  <OrderTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
-                ) : (
-                  <CarouselTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+        {layout !== "overlay" ? (
+        <aside
+          className={cn(
+            "flex min-h-0 min-w-0 shrink-0 flex-col border-l border-border bg-card",
+            layout === "triple" ? "w-[400px]" : "w-[min(22rem,42vw)]",
+          )}
+        >
+          {layout === "split" ? (
+            <div className="grid shrink-0 grid-cols-2 border-b border-border">
+              <button
+                type="button"
+                className={cn(
+                  "min-h-11 text-sm font-medium",
+                  panel === "menu" ? "border-b-2 border-teal-700 text-teal-800" : "text-muted-foreground",
                 )}
-              </div>
-            </>
+                onClick={() => setPanel("menu")}
+              >
+                Halaman
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "min-h-11 text-sm font-medium",
+                  panel !== "menu" ? "border-b-2 border-teal-700 text-teal-800" : "text-muted-foreground",
+                )}
+                onClick={() => setPanel("edit")}
+              >
+                Edit
+              </button>
+            </div>
+          ) : null}
+          {layout === "split" && panel === "menu" ? (
+            <SiteMenu
+              className="min-h-0 w-full flex-1 border-0"
+              activeMenuTab={activeMenuTab}
+              onMenuTabChange={setActiveMenuTab}
+              pages={pages}
+              activePageId={activePageId}
+              onSelect={(id) => {
+                setActivePageId(id);
+                setPanel("edit");
+              }}
+              onAdd={handleAddPage}
+              onDelete={handleDeletePage}
+              onDuplicate={handleDuplicatePage}
+              onDuplicateSystem={handleDuplicateSystemPage}
+              onRename={(p) => setRenameTarget(p)}
+              onSeo={(id) => openPageSettings(id)}
+              duplicatingId={duplicating}
+            />
+          ) : (
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{renderEditor()}</div>
           )}
         </aside>
+        ) : null}
       </div>
+
+      {overlay ? (
+        <>
+          <nav className="grid shrink-0 grid-cols-2 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
+            <button
+              type="button"
+              className={cn(
+                "inline-flex min-h-11 items-center justify-center gap-2 text-sm font-medium",
+                panel === "menu" && "text-teal-800",
+              )}
+              onClick={() => setPanel("menu")}
+            >
+              <FileText className="h-4 w-4" /> Halaman
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex min-h-11 items-center justify-center gap-2 text-sm font-medium",
+                panel === "edit" && "text-teal-800",
+              )}
+              onClick={() => setPanel("edit")}
+            >
+              <Settings2 className="h-4 w-4" /> Edit
+            </button>
+          </nav>
+          <Sheet open={panel === "menu"} onOpenChange={(open) => { if (!open) setPanel(null); }}>
+            <SheetContent side="left" className="pb-tap flex h-dvh max-h-dvh w-[min(100vw,22rem)] max-w-[100vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-[22rem]">
+              <SheetHeader className="sr-only">
+                <SheetTitle>Halaman</SheetTitle>
+                <SheetDescription>Daftar halaman situs</SheetDescription>
+              </SheetHeader>
+              <div className="min-h-0 flex-1 overflow-hidden pt-12">
+                <SiteMenu
+                  className="h-full w-full border-0"
+                  activeMenuTab={activeMenuTab}
+                  onMenuTabChange={setActiveMenuTab}
+                  pages={pages}
+                  activePageId={activePageId}
+                  onSelect={(id) => {
+                    setActivePageId(id);
+                    setPanel("edit");
+                  }}
+                  onAdd={handleAddPage}
+                  onDelete={handleDeletePage}
+                  onDuplicate={handleDuplicatePage}
+                  onDuplicateSystem={handleDuplicateSystemPage}
+                  onRename={(p) => setRenameTarget(p)}
+                  onSeo={(id) => openPageSettings(id)}
+                  duplicatingId={duplicating}
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
+          <Sheet open={panel === "edit"} onOpenChange={(open) => { if (!open) setPanel(null); }}>
+            <SheetContent side="right" className="pb-tap flex h-dvh max-h-dvh w-screen max-w-[100vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
+              <SheetHeader className="sr-only">
+                <SheetTitle>Edit</SheetTitle>
+                <SheetDescription>Properti section</SheetDescription>
+              </SheetHeader>
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden pt-12">
+                {renderEditor()}
+              </div>
+            </SheetContent>
+          </Sheet>
+        </>
+      ) : null}
 
       {/* "Site Pages and Menu" modal (Wix-style) */}
       <SitePagesModal
@@ -620,6 +796,7 @@ function HomepageBuilder() {
         homeCfg={cfg}
         propertyId={data?.id ?? null}
         duplicatingId={duplicating}
+        focusSettings={pbFixtureView() === "publish"}
       />
 
       {/* Rename Dialog */}
@@ -903,7 +1080,7 @@ function SectionSlider({
         type="button"
         aria-label="Geser kiri"
         onClick={() => scroll(-1)}
-        className="z-10 flex h-9 w-7 items-center justify-center text-muted-foreground hover:text-foreground"
+        className="z-10 inline-flex size-10 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
@@ -920,7 +1097,7 @@ function SectionSlider({
             onClick={() => onSelect(s.key)}
             title={s.label}
             className={cn(
-              "shrink-0 flex w-[64px] flex-col items-center gap-1 rounded-md py-2 px-1 transition",
+              "flex min-h-11 w-[4.5rem] shrink-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-1 transition",
               active === s.key
                 ? "bg-teal-50 text-teal-900"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -935,7 +1112,7 @@ function SectionSlider({
         type="button"
         aria-label="Geser kanan"
         onClick={() => scroll(1)}
-        className="z-10 flex h-9 w-7 items-center justify-center text-muted-foreground hover:text-foreground"
+        className="z-10 inline-flex size-10 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
       >
         <ChevronRight className="h-4 w-4" />
       </button>
@@ -988,7 +1165,7 @@ function SectionLayoutControls({
       title={label}
       onClick={() => update({ textAlign: val })}
       className={cn(
-        "flex h-8 w-8 items-center justify-center rounded-md border transition",
+        "flex size-10 items-center justify-center rounded-md border transition",
         layout.textAlign === val
           ? "border-teal-600 bg-teal-50 text-teal-800"
           : "border-border text-muted-foreground hover:bg-muted",
@@ -2093,12 +2270,12 @@ function RenamePageDialog({
         if (!o) onClose();
       }}
     >
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className={builderDialogClass + " max-w-md"}>
+        <DialogHeader className="shrink-0 px-4 pt-4 pr-12 text-left">
           <DialogTitle>Rename Halaman</DialogTitle>
           <DialogDescription>Ubah judul dan slug URL halaman ini.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-2">
           <div className="space-y-1.5">
             <Label className="text-xs">Judul Halaman</Label>
             <Input
@@ -2121,11 +2298,12 @@ function RenamePageDialog({
             <p className="text-[10px] text-muted-foreground">/lp/{slug}</p>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>
+        <DialogFooter className="shrink-0 gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:space-x-0">
+          <Button variant="outline" className="h-10" onClick={onClose} disabled={saving}>
             Batal
           </Button>
           <Button
+            className="h-10"
             onClick={async () => {
               if (!title.trim() || !slug.trim()) return;
               setSaving(true);
@@ -2161,6 +2339,7 @@ function SiteMenu({
   onRename,
   onSeo,
   duplicatingId,
+  className,
 }: {
   activeMenuTab: "PAGES" | "GLOBAL";
   onMenuTabChange: (tab: "PAGES" | "GLOBAL") => void;
@@ -2174,23 +2353,26 @@ function SiteMenu({
   onRename: (p: SeoLandingPage) => void;
   onSeo: (id: string) => void;
   duplicatingId: string | null;
+  className?: string;
 }) {
   const [search, setSearch] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const filtered = pages.filter((p) => p.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-card">
-      <div className="flex p-2 bg-stone-100 border-b border-border">
+    <aside className={cn("flex h-full w-64 shrink-0 flex-col border-r border-border bg-card", className)}>
+      <div className="flex gap-1 border-b border-border bg-stone-100 p-2">
         <button
+          type="button"
           onClick={() => onMenuTabChange("GLOBAL")}
-          className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition ${activeMenuTab === "GLOBAL" ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"}`}
+          className={`min-h-10 flex-1 rounded-md text-xs font-semibold transition ${activeMenuTab === "GLOBAL" ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"}`}
         >
           GLOBAL
         </button>
         <button
+          type="button"
           onClick={() => onMenuTabChange("PAGES")}
-          className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition ${activeMenuTab === "PAGES" ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"}`}
+          className={`min-h-10 flex-1 rounded-md text-xs font-semibold transition ${activeMenuTab === "PAGES" ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"}`}
         >
           PAGES
         </button>
@@ -2202,7 +2384,7 @@ function SiteMenu({
           <button
             type="button"
             onClick={onAdd}
-            className="flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900"
+            className="inline-flex min-h-10 items-center gap-1 px-2 text-xs font-medium text-teal-700 hover:text-teal-900"
           >
             <Plus className="h-3.5 w-3.5" /> Add Page
           </button>
@@ -2217,7 +2399,7 @@ function SiteMenu({
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             <div
               className={cn(
-                "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                "group flex min-h-11 items-center gap-2 rounded-lg px-2 py-1 cursor-pointer transition",
                 activePageId === "global-header" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
               )}
               onClick={() => onSelect("global-header")}
@@ -2227,7 +2409,7 @@ function SiteMenu({
             </div>
             <div
               className={cn(
-                "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                "group flex min-h-11 items-center gap-2 rounded-lg px-2 py-1 cursor-pointer transition",
                 activePageId === "global-footer" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
               )}
               onClick={() => onSelect("global-footer")}
@@ -2237,7 +2419,7 @@ function SiteMenu({
             </div>
             <div
               className={cn(
-                "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                "group flex min-h-11 items-center gap-2 rounded-lg px-2 py-1 cursor-pointer transition",
                 activePageId === "global-whatsapp" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
               )}
               onClick={() => onSelect("global-whatsapp")}
@@ -2247,7 +2429,7 @@ function SiteMenu({
             </div>
             <div
               className={cn(
-                "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                "group flex min-h-11 items-center gap-2 rounded-lg px-2 py-1 cursor-pointer transition",
                 activePageId === "global-cookie" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
               )}
               onClick={() => onSelect("global-cookie")}
@@ -2268,7 +2450,7 @@ function SiteMenu({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Cari halaman…"
-                className="h-7 pl-7 text-xs"
+                className="h-10 pl-7 text-xs"
               />
             </div>
           </div>
@@ -2278,7 +2460,7 @@ function SiteMenu({
             <div className="relative">
               <div
                 className={cn(
-                  "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                  "group flex min-h-11 items-center gap-2 rounded-lg px-2 py-1 cursor-pointer transition",
                   activePageId === "home" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
                 )}
                 onClick={() => {
@@ -2296,7 +2478,7 @@ function SiteMenu({
                     e.stopPropagation();
                     setOpenMenuId(openMenuId === "home" ? null : "home");
                   }}
-                  className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition"
+                  className="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-stone-500 hover:bg-muted hover:text-stone-800"
                 >
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </button>
@@ -2304,7 +2486,7 @@ function SiteMenu({
               {/* Dropdown menu */}
               {openMenuId === "home" && (
                 <div
-                  className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
+                  className="absolute right-1 top-full z-50 mt-1 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
@@ -2313,7 +2495,7 @@ function SiteMenu({
                       setOpenMenuId(null);
                       onSeo("home");
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                    className="flex min-h-10 w-full items-center gap-2 px-3 text-sm text-stone-700 hover:bg-muted"
                   >
                     <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
                   </button>
@@ -2323,7 +2505,7 @@ function SiteMenu({
                       setOpenMenuId(null);
                       onDuplicateSystem("home");
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                    className="flex min-h-10 w-full items-center gap-2 px-3 text-sm text-stone-700 hover:bg-muted"
                     disabled={!!duplicatingId}
                   >
                     <Copy className="h-3.5 w-3.5" /> Duplicate
@@ -2336,7 +2518,7 @@ function SiteMenu({
             <div className="relative">
               <div
                 className={cn(
-                  "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                  "group flex min-h-11 items-center gap-2 rounded-lg px-2 py-1 cursor-pointer transition",
                   activePageId === "book" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
                 )}
                 onClick={() => {
@@ -2354,7 +2536,7 @@ function SiteMenu({
                     e.stopPropagation();
                     setOpenMenuId(openMenuId === "book" ? null : "book");
                   }}
-                  className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition"
+                  className="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-stone-500 hover:bg-muted hover:text-stone-800"
                 >
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </button>
@@ -2362,7 +2544,7 @@ function SiteMenu({
               {/* Dropdown menu */}
               {openMenuId === "book" && (
                 <div
-                  className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
+                  className="absolute right-1 top-full z-50 mt-1 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
@@ -2371,7 +2553,7 @@ function SiteMenu({
                       setOpenMenuId(null);
                       onSeo("book");
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                    className="flex min-h-10 w-full items-center gap-2 px-3 text-sm text-stone-700 hover:bg-muted"
                   >
                     <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
                   </button>
@@ -2381,7 +2563,7 @@ function SiteMenu({
                       setOpenMenuId(null);
                       onDuplicateSystem("book");
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                    className="flex min-h-10 w-full items-center gap-2 px-3 text-sm text-stone-700 hover:bg-muted"
                     disabled={!!duplicatingId}
                   >
                     <Copy className="h-3.5 w-3.5" /> Duplicate
@@ -2395,7 +2577,7 @@ function SiteMenu({
               <div key={p.id} className="relative">
                 <div
                   className={cn(
-                    "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                    "group flex min-h-11 items-center gap-2 rounded-lg px-2 py-1 cursor-pointer transition",
                     activePageId === p.id ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
                   )}
                   onClick={() => {
@@ -2413,7 +2595,7 @@ function SiteMenu({
                       e.stopPropagation();
                       setOpenMenuId(openMenuId === p.id ? null : p.id);
                     }}
-                    className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition"
+                    className="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-stone-500 hover:bg-muted hover:text-stone-800"
                   >
                     <MoreHorizontal className="h-3.5 w-3.5" />
                   </button>
@@ -2421,7 +2603,7 @@ function SiteMenu({
                 {/* Dropdown menu */}
                 {openMenuId === p.id && (
                   <div
-                    className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
+                    className="absolute right-1 top-full z-50 mt-1 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
@@ -2430,7 +2612,7 @@ function SiteMenu({
                         setOpenMenuId(null);
                         onSeo(p.id);
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                      className="flex min-h-10 w-full items-center gap-2 px-3 text-sm text-stone-700 hover:bg-muted"
                     >
                       <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
                     </button>
@@ -2440,7 +2622,7 @@ function SiteMenu({
                         setOpenMenuId(null);
                         onDuplicate(p);
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                      className="flex min-h-10 w-full items-center gap-2 px-3 text-sm text-stone-700 hover:bg-muted"
                       disabled={duplicatingId === p.id}
                     >
                       <Copy className="h-3.5 w-3.5" /> Duplicate
@@ -2451,7 +2633,7 @@ function SiteMenu({
                         setOpenMenuId(null);
                         onRename(p);
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                      className="flex min-h-10 w-full items-center gap-2 px-3 text-sm text-stone-700 hover:bg-muted"
                     >
                       <Pencil className="h-3.5 w-3.5" /> Rename
                     </button>
@@ -2462,7 +2644,7 @@ function SiteMenu({
                         setOpenMenuId(null);
                         onDelete(p);
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
+                      className="flex min-h-10 w-full items-center gap-2 px-3 text-sm text-red-600 hover:bg-red-50"
                     >
                       <Trash2 className="h-3.5 w-3.5" /> Delete
                     </button>
@@ -2651,20 +2833,20 @@ function PageSettingsPanel({
     <div className="flex h-full min-w-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
         <p className="truncate text-sm font-semibold">Page Settings ({pageTitle})</p>
-        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
+        <button type="button" onClick={onClose} aria-label="Tutup pengaturan" className="inline-flex size-10 items-center justify-center text-muted-foreground hover:text-foreground">
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-stone-200 px-3">
+      <div className="flex gap-1 overflow-x-auto border-b border-stone-200 px-2">
         {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
             className={cn(
-              "px-3 py-2.5 text-xs font-medium transition",
+              "min-h-10 shrink-0 px-3 text-xs font-medium transition",
               tab === t.key
                 ? "border-b-2 border-teal-600 text-teal-700"
                 : "text-muted-foreground hover:text-foreground",
@@ -2707,13 +2889,13 @@ function PageSettingsPanel({
             ) : (
               <>
                 <FieldRow label="URL halaman">
-                  <div className="flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm focus-within:ring-2 focus-within:ring-ring">
+                  <div className="flex min-w-0 flex-col gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm focus-within:ring-2 focus-within:ring-ring min-[480px]:flex-row min-[480px]:items-center">
                     <span className="shrink-0 text-muted-foreground">pomahguesthouse.com/lp/</span>
                     <input
                       value={slug}
                       onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                       placeholder="slug-halaman"
-                      className="min-w-0 flex-1 bg-transparent py-1 font-mono text-stone-800 focus:outline-none"
+                      className="min-h-10 min-w-0 flex-1 bg-transparent py-1 font-mono text-stone-800 focus:outline-none"
                     />
                   </div>
                   <p className="mt-0.5 text-[10px] text-muted-foreground">
@@ -2923,8 +3105,8 @@ function PageSettingsPanel({
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-stone-200 px-5 py-3">
-        <Button size="sm" className="bg-teal-700 text-white hover:bg-teal-800" disabled={saving} onClick={handleSave}>
+      <div className="flex items-center justify-end gap-2 border-t border-stone-200 bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <Button size="sm" className="h-10 bg-teal-700 text-white hover:bg-teal-800" disabled={saving} onClick={handleSave}>
           {saving ? (
             <>
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -2966,6 +3148,7 @@ function SitePagesModal({
   homeCfg,
   propertyId,
   duplicatingId,
+  focusSettings = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -2983,9 +3166,15 @@ function SitePagesModal({
   homeCfg: HomepageConfig;
   propertyId: string | null;
   duplicatingId: string | null;
+  focusSettings?: boolean;
 }) {
   const [rail, setRail] = useState<SitePagesRail>("menu");
-  const activeLp = activePageId !== "home" ? (pages.find((p) => p.id === activePageId) ?? null) : null;
+  const [narrowPane, setNarrowPane] = useState<"list" | "settings">(focusSettings ? "settings" : "list");
+  const activeLp = activePageId !== "home" && activePageId !== "book" ? (pages.find((p) => p.id === activePageId) ?? null) : null;
+  const choose = (id: string) => {
+    onSelect(id);
+    setNarrowPane("settings");
+  };
 
   return (
     <Dialog
@@ -2994,15 +3183,21 @@ function SitePagesModal({
         if (!o) onClose();
       }}
     >
-      <DialogContent className="flex h-[80vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 border-b border-stone-200 px-5 py-4">
+      <DialogContent className={builderDialogClass + " h-[min(80dvh,90dvh)] max-w-5xl"}>
+        <DialogHeader className="shrink-0 border-b border-stone-200 px-4 py-3 pr-12 text-left">
           <DialogTitle className="text-base">Site Pages and Menu</DialogTitle>
           <DialogDescription className="sr-only">Kelola halaman situs, menu, dan pengaturan SEO.</DialogDescription>
         </DialogHeader>
 
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 flex-col min-[1100px]:flex-row">
+          <div
+            className={cn(
+              "flex min-h-0 min-w-0 flex-1 flex-col min-[1100px]:contents",
+              narrowPane === "settings" && "max-[1099px]:hidden",
+            )}
+          >
           {/* Left rail */}
-          <div className="w-40 shrink-0 space-y-1 border-r border-stone-200 bg-stone-50/60 p-3">
+          <div className="flex shrink-0 gap-1 border-b border-stone-200 bg-stone-50/60 p-2 min-[1100px]:w-40 min-[1100px]:flex-col min-[1100px]:border-b-0 min-[1100px]:border-r min-[1100px]:p-3">
             {(
               [
                 ["menu", "Site Menu"],
@@ -3014,7 +3209,7 @@ function SitePagesModal({
                 type="button"
                 onClick={() => setRail(key)}
                 className={cn(
-                  "w-full rounded-lg px-3 py-2 text-left text-xs font-medium transition",
+                  "min-h-10 w-full flex-1 rounded-lg px-3 py-2 text-left text-xs font-medium transition min-[1100px]:flex-none",
                   rail === key ? "bg-teal-50 text-teal-800" : "text-stone-600 hover:bg-stone-100",
                 )}
               >
@@ -3024,7 +3219,7 @@ function SitePagesModal({
           </div>
 
           {/* Page list */}
-          <div className="flex w-72 shrink-0 flex-col border-r border-stone-200">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col border-stone-200 min-[1100px]:w-72 min-[1100px]:flex-none min-[1100px]:border-r">
             {rail === "menu" ? (
               <>
                 <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
@@ -3032,7 +3227,7 @@ function SitePagesModal({
                   <button
                     type="button"
                     onClick={onAdd}
-                    className="flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900"
+                    className="inline-flex min-h-10 items-center gap-1 px-2 text-xs font-medium text-teal-700 hover:text-teal-900"
                   >
                     <Plus className="h-3.5 w-3.5" /> Add Page
                   </button>
@@ -3043,7 +3238,7 @@ function SitePagesModal({
                     icon={<Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />}
                     label="Home"
                     active={activePageId === "home"}
-                    onClick={() => onSelect("home")}
+                    onClick={() => choose("home")}
                     onDuplicate={() => onDuplicateSystem("home")}
                     duplicatingId={duplicatingId === "home"}
                   />
@@ -3052,7 +3247,7 @@ function SitePagesModal({
                     icon={<CalendarCheck className="h-3.5 w-3.5 shrink-0 text-stone-500" />}
                     label="Booking Page"
                     active={activePageId === "book"}
-                    onClick={() => onSelect("book")}
+                    onClick={() => choose("book")}
                     onDuplicate={() => onDuplicateSystem("book")}
                     duplicatingId={duplicatingId === "book"}
                   />
@@ -3063,7 +3258,7 @@ function SitePagesModal({
                       label={p.title}
                       active={activePageId === p.id}
                       published={p.published}
-                      onClick={() => onSelect(p.id)}
+                      onClick={() => choose(p.id)}
                       onDelete={() => onDelete(p)}
                       onDuplicate={() => onDuplicate(p)}
                       onRename={() => onRename(p)}
@@ -3080,7 +3275,21 @@ function SitePagesModal({
               </div>
             )}
           </div>
+          </div>
 
+          <div
+            className={cn(
+              "flex min-h-0 min-w-0 flex-1 flex-col",
+              narrowPane === "list" && "max-[1099px]:hidden",
+            )}
+          >
+            <button
+              type="button"
+              className="inline-flex min-h-10 items-center gap-1 border-b border-stone-200 px-3 text-sm font-medium min-[1100px]:hidden"
+              onClick={() => setNarrowPane("list")}
+            >
+              <ChevronLeft className="h-4 w-4" /> Daftar halaman
+            </button>
           {/* Page Settings */}
           {activeLp ? (
             <PageSettingsPanel target={{ kind: "lp", page: activeLp }} onSaved={onSaved} onClose={onClose} />
@@ -3097,6 +3306,7 @@ function SitePagesModal({
               onClose={onClose}
             />
           ) : null}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -3132,7 +3342,7 @@ function PageRow({
     <div className="relative">
       <div
         className={cn(
-          "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+          "group flex min-h-11 items-center gap-2 rounded-lg px-2 py-1 cursor-pointer transition",
           active ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
         )}
         onClick={() => {
@@ -3154,7 +3364,7 @@ function PageRow({
               e.stopPropagation();
               setMenuOpen((o) => !o);
             }}
-            className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-md text-stone-500 hover:bg-muted hover:text-stone-800"
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
@@ -3162,7 +3372,7 @@ function PageRow({
       </div>
       {menuOpen && hasActions && (
         <div
-          className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
+          className="absolute right-1 top-full z-50 mt-1 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
           onClick={(e) => e.stopPropagation()}
         >
           {onDuplicate && (
@@ -3173,7 +3383,7 @@ function PageRow({
                 onDuplicate();
               }}
               disabled={duplicatingId}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted disabled:opacity-50"
+                    className="flex min-h-10 w-full items-center gap-2 px-3 text-sm text-stone-700 hover:bg-muted disabled:opacity-50"
             >
               <Copy className="h-3.5 w-3.5" /> Duplicate
             </button>
@@ -3185,7 +3395,7 @@ function PageRow({
                 setMenuOpen(false);
                 onRename();
               }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+              className="flex min-h-10 w-full items-center gap-2 px-3 text-sm text-stone-700 hover:bg-muted"
             >
               <Pencil className="h-3.5 w-3.5" /> Rename
             </button>
@@ -3199,7 +3409,7 @@ function PageRow({
                   setMenuOpen(false);
                   onDelete();
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
+                className="flex min-h-10 w-full items-center gap-2 px-3 text-sm text-red-600 hover:bg-red-50"
               >
                 <Trash2 className="h-3.5 w-3.5" /> Delete
               </button>

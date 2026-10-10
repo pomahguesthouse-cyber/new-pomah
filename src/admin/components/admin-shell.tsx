@@ -14,7 +14,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const bare = BARE_ROUTES.some((r) => path === r || path.startsWith(r + "/"));
 
   if (bare) {
-    return <div className="h-screen overflow-hidden bg-background">{children}</div>;
+    return <div className="h-dvh max-h-dvh w-full overflow-hidden bg-background">{children}</div>;
   }
 
   const chat = path === "/admin/whatsapp" || path.startsWith("/admin/whatsapp/");

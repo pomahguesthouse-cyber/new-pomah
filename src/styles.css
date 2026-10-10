@@ -339,3 +339,9 @@ html.native-app [data-state="closed"].animate-out {
     text-align: center;
   }
 }
+
+/* Page Builder chrome on touch (Fold cover, Fold inner, Android WebView). */
+.pb-tap button:not([role="switch"]) {
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+}
