@@ -261,6 +261,58 @@ function guideType(category: string | null | undefined): string {
  * /lp/penginapan-dekat-unnes: LodgingBusiness + BreadcrumbList + the page FAQ.
  * Room prices come from the same public room rows the rest of the site renders.
  */
+/**
+ * Builder landing pages. WebPage + breadcrumb + the lodging entity.
+ * Organization and WebSite stay in the root graph, so they are not repeated.
+ * FAQPage is emitted separately via faqPageGraph.
+ */
+export function landingBuilderGraph(input: {
+  pageUrl: string;
+  name: string;
+  description?: string | null;
+  property?: SocialProperty | null;
+}) {
+  const name = input.name.trim() || POMAH_NAME;
+  const description = stripPublicHotWaterClaim((input.description ?? "").trim());
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": `${input.pageUrl}#webpage`,
+        url: input.pageUrl,
+        name,
+        ...(description ? { description } : {}),
+        isPartOf: { "@id": WEBSITE_ID },
+        about: { "@id": LODGING_ID },
+        breadcrumb: { "@id": `${input.pageUrl}#breadcrumb` },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${input.pageUrl}#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Beranda", item: `${CANONICAL_ORIGIN}/` },
+          { "@type": "ListItem", position: 2, name, item: input.pageUrl },
+        ],
+      },
+      {
+        "@type": "LodgingBusiness",
+        "@id": LODGING_ID,
+        name: POMAH_NAME,
+        url: `${CANONICAL_ORIGIN}/`,
+        telephone: schemaTelephone(input.property?.whatsapp_number),
+        email: input.property?.email || "info@pomahguesthouse.com",
+        address: postalAddress(),
+        geo: {
+          "@type": "GeoCoordinates",
+          latitude: POMAH_GEO.latitude,
+          longitude: POMAH_GEO.longitude,
+        },
+      },
+    ],
+  };
+}
+
 export function unnesLandingGraph(input: {
   rooms?: SchemaRoom[] | null;
   reviews?: SchemaReviews | null;

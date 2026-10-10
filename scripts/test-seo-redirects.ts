@@ -203,6 +203,22 @@ assert.match(
 );
 assert.match(location("https://www.pomahguesthouse.com/")?.reason ?? "", /host-canonical/);
 
+assert.equal(
+  location("https://pomahguesthouse.com/guesthouse-dekat-unnes")?.location,
+  "https://pomahguesthouse.com/lp/penginapan-dekat-unnes",
+);
+assert.equal(
+  location("https://www.pomahguesthouse.com/guesthouse-dekat-unnes/")?.location,
+  "https://pomahguesthouse.com/lp/penginapan-dekat-unnes",
+);
+assert.equal(
+  location("https://pomahguesthouse.com/lp/slug-lama", {
+    requestUrl: "https://pomahguesthouse.com/lp/slug-lama",
+    landingRedirects: [{ from_slug: "slug-lama", to_slug: "slug-baru" }],
+  })?.location,
+  "https://pomahguesthouse.com/lp/slug-baru",
+);
+
 assert.equal(canonicalUrlForPath("/rooms/deluxe"), "https://pomahguesthouse.com/rooms/deluxe");
 assert.equal(canonicalUrlForPath("/"), "https://pomahguesthouse.com/");
 assert.doesNotMatch(canonicalUrlForPath("/explore"), /www/);

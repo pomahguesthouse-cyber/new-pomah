@@ -12,7 +12,7 @@ import {
   getPublicSiteData,
   checkRoomTypeAvailability,
 } from "@/public/functions/public.functions";
-import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
+import { getGoogleReviews, type GoogleReview, type GoogleReviewsResult } from "@/public/functions/google-reviews.functions";
 import { DatePickerID } from "@/public/components/lazy-public-widgets";
 import { publicCopy } from "@/public/lib/public-copy";
 import {
@@ -20,6 +20,7 @@ import {
   ensureResponsiveStyles,
   type SeoLandingPage,
   type LPSection,
+  type LPSplitSections,
   type LPHeroSection,
   type LPTextSection,
   type LPFeaturesSection,
@@ -33,20 +34,28 @@ import {
   type LPRoomSliderSection,
   type LPDatePickerSection,
 } from "@/admin/modules/seo/landing-page.functions";
-import { canonicalHeadTags, isUnoptimizedSharePng, shareOgImageTags } from "@/public/lib/public-seo";
+import { canonicalHeadTags, canonicalUrlForPath, isUnoptimizedSharePng, shareOgImageTags } from "@/public/lib/public-seo";
 import {
   APPROVED_LP,
   applyApprovedHomepageSeo,
   patchUnnesDistance,
   stripHotWaterFromPublicJson,
   stripPublicHotWaterClaim,
-  stripPublicHotWaterJsonText,
 } from "@/public/content/approved-seo";
 import { UnnesLanding } from "@/public/components/unnes-landing";
 import { rewritePublicHref } from "@/public/lib/public-href";
 import { buildStorageImageUrl, heroPreloadLinks } from "@/lib/storage-image";
 import { POMAH_NAP_LINE } from "@/public/lib/site-identity";
-import { mountCustomHead } from "@/public/lib/defer-analytics";
+import {
+  allLandingSections,
+  blockHeadingTag,
+  buildLandingHeadExtras,
+  demoteContentH1,
+  firstHeroImageUrl,
+  landingDocumentOutline,
+  landingNeedsGoogleReviews,
+  publicLandingSections,
+} from "@/public/lib/landing-page-seo";
 import { BrandLogo, PomahFooter } from "@/public/components/public-shell";
 import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 // NOTE: Home-page duplication via landing page (PomahHomeView) sementara
@@ -66,6 +75,74 @@ const isoAddDays = (iso: string, n: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+type LpRoomCard = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  base_rate: number | string;
+  capacity?: number | null;
+  size_sqm?: number | null;
+  hero_image_url?: string | null;
+};
+
+type LpRenderValue = {
+  rooms: LpRoomCard[];
+  reviews: GoogleReviewsResult | null;
+  h1SectionId: string | null;
+  eagerSectionId: string | null;
+  demoteHeadings: boolean;
+  demoteInlineHeadings: boolean;
+};
+
+const LpRenderCtx = createContext<LpRenderValue>({
+  rooms: [],
+  reviews: null,
+  h1SectionId: null,
+  eagerSectionId: null,
+  demoteHeadings: false,
+  demoteInlineHeadings: false,
+});
+
+function useBlockHeading(sectionId: string): "h1" | "h2" {
+  const ctx = useContext(LpRenderCtx);
+  return blockHeadingTag(sectionId, ctx.h1SectionId, ctx.demoteHeadings);
+}
+
+function useEagerMedia(sectionId: string): boolean {
+  const ctx = useContext(LpRenderCtx);
+  return !ctx.demoteHeadings && ctx.eagerSectionId === sectionId;
+}
+
+function LpSizedImage({
+  url,
+  alt,
+  eager,
+  width,
+  height,
+  className,
+}: {
+  url: string;
+  alt: string;
+  eager: boolean;
+  width: number;
+  height: number;
+  className: string;
+}) {
+  return (
+    <img
+      src={buildStorageImageUrl(url, { width, height, quality: 60 })}
+      alt={alt}
+      width={width}
+      height={height}
+      loading={eager ? "eager" : "lazy"}
+      fetchPriority={eager ? "high" : "low"}
+      decoding="async"
+      className={className}
+    />
+  );
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute("/lp/$slug")({
   head: ({ loaderData }: any) => {
@@ -75,9 +152,23 @@ export const Route = createFileRoute("/lp/$slug")({
     const title = approved ? APPROVED_LP.title : stripPublicHotWaterClaim(p.meta_title || p.title);
     const description = approved ? APPROVED_LP.meta : stripPublicHotWaterClaim(p.meta_description || "");
     const canonical = canonicalHeadTags(`/lp/${p.slug || ""}`);
+    const property = loaderData?.property as { homepage_config?: unknown; whatsapp_number?: string | null; email?: string | null } | undefined;
     const heroImage = approved
-      ? mergeHomepageConfig(loaderData?.property?.homepage_config).hero.slides?.[0]?.imageUrl
-      : "";
+      ? mergeHomepageConfig(property?.homepage_config).hero.slides?.[0]?.imageUrl
+      : firstHeroImageUrl(publicLandingSections(p.sections)) ?? "";
+    const extras = buildLandingHeadExtras({
+      approved,
+      pageUrl: canonicalUrlForPath(`/lp/${p.slug || ""}`),
+      name: title,
+      description,
+      sections: p.sections,
+      customHead: p.custom_head,
+      customRobots: p.custom_robots,
+      noindex: p.noindex,
+      jsonLdEnabled: p.json_ld_enabled,
+      customJsonLd: p.custom_json_ld,
+      property,
+    });
     return {
       meta: [
         { title },
@@ -90,12 +181,16 @@ export const Route = createFileRoute("/lp/$slug")({
           : p.og_image_url
             ? [{ property: "og:image", content: p.og_image_url }]
             : []),
+        ...extras.meta,
       ],
-      links: [...canonical.links, ...heroPreloadLinks(heroImage)],
+      links: [...canonical.links, ...heroPreloadLinks(heroImage), ...extras.links],
+      scripts: extras.scripts,
+      styles: extras.styles,
     };
   },
 
-  loader: async ({ params }: any) => {
+  loader: async ({ params, location }: any) => {
+    const builderPreview = new URLSearchParams(location?.searchStr ?? "").get("builder") === "1";
     const [result, siteData] = await Promise.all([
       getSeoLandingPageBySlug({ data: { slug: params.slug } }) as Promise<{
         page: SeoLandingPage | null;
@@ -121,45 +216,172 @@ export const Route = createFileRoute("/lp/$slug")({
           }
         : cleaned;
     const site = siteData as { property?: unknown; roomTypes?: unknown[] } | null;
-    return { page, property: site?.property, roomTypes: site?.roomTypes ?? [] };
+    const reviews = landingNeedsGoogleReviews(allLandingSections(page.sections))
+      ? await getGoogleReviews().catch(
+          (): GoogleReviewsResult => ({ rating: null, total: null, reviews: [], status: "ERROR" }),
+        )
+      : null;
+    return {
+      page,
+      property: site?.property,
+      roomTypes: site?.roomTypes ?? [],
+      reviews,
+      builderPreview,
+    };
   },
 
   component: LandingPage,
 });
 
+type LandingProperty = {
+  name?: string | null;
+  logo_url?: string | null;
+  homepage_config?: unknown;
+  whatsapp_number?: string | null;
+  email?: string | null;
+  instagram_url?: string | null;
+  tiktok_url?: string | null;
+  facebook_url?: string | null;
+  youtube_url?: string | null;
+};
+
+/**
+ * One indexed section tree.
+ *
+ * Responsive styles (font, spacing, visibility) already live on each section
+ * and apply through a media query, so the public HTML does not print a second
+ * copy. When the editor saved a different mobile tree, a narrow viewport
+ * replaces the desktop tree after hydration — it does not append it.
+ *
+ * The admin iframe (`?builder=1`) still receives both trees so the desktop
+ * and mobile preview widths keep working. The mobile copy's headings are
+ * demoted and the copy is aria-hidden / data-nosnippet.
+ */
+function BuilderSections({
+  page,
+  property,
+  rooms,
+  reviews,
+  builderPreview,
+}: {
+  page: SeoLandingPage;
+  property?: LandingProperty;
+  rooms: LpRoomCard[];
+  reviews: GoogleReviewsResult | null;
+  builderPreview: boolean;
+}) {
+  const sectionsData = page.sections;
+  const isSplit = Boolean(sectionsData && !Array.isArray(sectionsData) && (sectionsData as LPSplitSections).split);
+  const desktopSections: LPSection[] = isSplit
+    ? ((sectionsData as LPSplitSections).desktop ?? [])
+    : Array.isArray(sectionsData)
+      ? sectionsData
+      : [];
+  const mobileSections: LPSection[] = isSplit ? ((sectionsData as LPSplitSections).mobile ?? []) : desktopSections;
+  const canonicalSections = publicLandingSections<LPSection>(sectionsData);
+  const [liveSections, setLiveSections] = useState(canonicalSections);
+
+  useEffect(() => {
+    if (builderPreview || !isSplit) {
+      setLiveSections(canonicalSections);
+      return;
+    }
+    const desktop = desktopSections.length > 0 ? desktopSections : mobileSections;
+    const mobile = mobileSections.length > 0 ? mobileSections : desktop;
+    const query = window.matchMedia("(max-width: 767px)");
+    const apply = () => setLiveSections(query.matches ? mobile : desktop);
+    apply();
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
+  }, [builderPreview, isSplit, page.id]);
+
+  const nav = {
+    ctaUrl: page.hero_cta_url,
+    ctaText: page.hero_cta_text,
+    logoUrl: property?.logo_url,
+    brand: property?.name || "Pomah Guesthouse",
+  };
+
+  if (builderPreview && isSplit) {
+    return (
+      <>
+        <div className="hidden md:flex md:flex-col">
+          <LandingSectionTree sections={desktopSections} demote={false} page={page} nav={nav} rooms={rooms} reviews={reviews} />
+        </div>
+        <div className="flex flex-col md:hidden" aria-hidden="true" data-nosnippet="">
+          <LandingSectionTree sections={mobileSections} demote page={page} nav={nav} rooms={rooms} reviews={reviews} />
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <LandingSectionTree sections={liveSections} demote={false} page={page} nav={nav} rooms={rooms} reviews={reviews} />
+  );
+}
+
+function LandingSectionTree({
+  sections,
+  demote,
+  page,
+  nav,
+  rooms,
+  reviews,
+}: {
+  sections: LPSection[];
+  demote: boolean;
+  page: SeoLandingPage;
+  nav: { ctaUrl: string; ctaText: string; logoUrl?: string | null; brand: string };
+  rooms: LpRoomCard[];
+  reviews: GoogleReviewsResult | null;
+}) {
+  const outline = landingDocumentOutline(sections, page);
+  const hasHeader = sections.some((section) => section.type === "header");
+  return (
+    <LpRenderCtx.Provider
+      value={{
+        rooms,
+        reviews,
+        h1SectionId: demote ? null : outline.h1SectionId,
+        eagerSectionId: demote ? null : outline.eagerSectionId,
+        demoteHeadings: demote,
+        demoteInlineHeadings: demote || Boolean(outline.h1SectionId || outline.fallbackH1),
+      }}
+    >
+      {!hasHeader && (
+        <LPNav ctaUrl={nav.ctaUrl} ctaText={nav.ctaText} logoUrl={nav.logoUrl} brand={nav.brand} />
+      )}
+      {!demote && outline.fallbackH1 ? (
+        <div className="mx-auto max-w-3xl px-6 pt-16 text-center">
+          <h1 className="font-serif text-4xl font-bold leading-tight tracking-tight text-stone-900 sm:text-5xl">
+            {outline.fallbackH1}
+          </h1>
+        </div>
+      ) : null}
+      {sections.map((section) => (
+        <SectionWrapper key={section.id} section={section}>
+          <LPSectionRenderer section={section} />
+        </SectionWrapper>
+      ))}
+    </LpRenderCtx.Provider>
+  );
+}
+
 /* ─── Page root ─────────────────────────────────────────────────── */
 function LandingPage() {
-  const { page, property, roomTypes } = Route.useLoaderData() as {
+  const { page, property, roomTypes, reviews, builderPreview } = Route.useLoaderData() as {
     page: SeoLandingPage;
-    property?: {
-      name?: string | null;
-      logo_url?: string | null;
-      homepage_config?: unknown;
-      whatsapp_number?: string | null;
-      email?: string | null;
-      instagram_url?: string | null;
-      tiktok_url?: string | null;
-      facebook_url?: string | null;
-      youtube_url?: string | null;
-    };
-    roomTypes?: Array<{ name?: string | null; slug?: string | null; hero_image_url?: string | null }>;
+    property?: LandingProperty;
+    roomTypes?: LpRoomCard[];
+    reviews?: GoogleReviewsResult | null;
+    builderPreview?: boolean;
   };
   const whatsappNumber = String(property?.whatsapp_number || "6285190986169").replace(/\D/g, "");
   // Halaman hasil duplikasi Home sementara di-skip; fallback ke render section
   // standar di bawah agar build tidak gagal.
   // if (page.homepage_config && typeof page.homepage_config === "object") { ... }
 
-
-  const sectionsData = page.sections;
-  const isSplit = !!(sectionsData && !Array.isArray(sectionsData) && (sectionsData as any).split);
-
-  const desktopSections = isSplit ? ((sectionsData as any).desktop ?? []) : (Array.isArray(sectionsData) ? sectionsData : []);
-  const mobileSections = isSplit ? ((sectionsData as any).mobile ?? []) : (Array.isArray(sectionsData) ? sectionsData : []);
-
-  const hasSections = isSplit ? (desktopSections.length > 0 || mobileSections.length > 0) : (desktopSections.length > 0);
-  const hasDesktopHeader = desktopSections.some((s: any) => s.type === "header");
-  const hasMobileHeader = mobileSections.some((s: any) => s.type === "header");
-  const hasHeaderSection = isSplit ? (hasDesktopHeader || hasMobileHeader) : hasDesktopHeader;
+  const hasSections = publicLandingSections(page.sections).length > 0;
 
   // Shared booking dates (date picker → room slider).
   const [today, setToday] = useState("");
@@ -183,21 +405,6 @@ function LandingPage() {
     const d = new Date();
     setToday(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
   }, []);
-
-  // Advanced SEO — inject custom head markup + JSON-LD client-side.
-  // Google tag scripts wait until load or the first tap.
-  useEffect(() => {
-    const cleanups: Array<() => void> = [];
-    if (page.custom_head) cleanups.push(mountCustomHead(stripPublicHotWaterClaim(page.custom_head)));
-    if (page.slug !== APPROVED_LP.slug && page.json_ld_enabled && page.custom_json_ld?.trim()) {
-      const sc = document.createElement("script");
-      sc.type = "application/ld+json";
-      sc.textContent = stripPublicHotWaterJsonText(page.custom_json_ld);
-      document.head.appendChild(sc);
-      cleanups.push(() => sc.parentNode?.removeChild(sc));
-    }
-    return () => cleanups.forEach((cleanup) => cleanup());
-  }, [page.custom_head, page.custom_json_ld, page.json_ld_enabled, page.slug]);
 
   const homeCfg = mergeHomepageConfig(property?.homepage_config);
   const approved = page.slug === APPROVED_LP.slug;
@@ -225,35 +432,14 @@ function LandingPage() {
           />
         </>
       ) : hasSections ? (
-        isSplit ? (
-          <>
-            <div className="hidden md:flex md:flex-col space-y-0">
-              {!hasDesktopHeader && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} logoUrl={property?.logo_url} brand={property?.name || "Pomah Guesthouse"} />}
-              {desktopSections.map((s: any) => (
-                <SectionWrapper key={s.id} section={s}>
-                  <LPSectionRenderer section={s} />
-                </SectionWrapper>
-              ))}
-            </div>
-            <div className="flex flex-col md:hidden space-y-0">
-              {!hasMobileHeader && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} logoUrl={property?.logo_url} brand={property?.name || "Pomah Guesthouse"} />}
-              {mobileSections.map((s: any) => (
-                <SectionWrapper key={s.id} section={s}>
-                  <LPSectionRenderer section={s} />
-                </SectionWrapper>
-              ))}
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col space-y-0">
-            {!hasHeaderSection && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} logoUrl={property?.logo_url} brand={property?.name || "Pomah Guesthouse"} />}
-            {desktopSections.map((s: any) => (
-              <SectionWrapper key={s.id} section={s}>
-                <LPSectionRenderer section={s} />
-              </SectionWrapper>
-            ))}
-          </div>
-        )
+        <BuilderSections
+          key={page.id}
+          page={page}
+          property={property}
+          rooms={(roomTypes ?? []) as LpRoomCard[]}
+          reviews={reviews ?? null}
+          builderPreview={builderPreview === true}
+        />
       ) : (
         /* ── Legacy fallback for pages without sections ── */
         <>
@@ -280,7 +466,7 @@ function LandingPage() {
           {page.body_content && (
             <section className="mx-auto max-w-3xl px-6 py-16">
               <div className="prose prose-stone prose-headings:font-serif prose-a:text-amber-800 max-w-none"
-                dangerouslySetInnerHTML={{ __html: stripPublicHotWaterClaim(page.body_content).replace(/href=(["'])\/rooms\/?\1/g, 'href=$1/#rooms$1') }} />
+                dangerouslySetInnerHTML={{ __html: demoteContentH1(stripPublicHotWaterClaim(page.body_content)).replace(/href=(["'])\/rooms\/?\1/g, 'href=$1/#rooms$1') }} />
             </section>
           )}
 
@@ -443,6 +629,8 @@ const HERO_ANIM: Record<string, string> = {
 };
 
 function SliderSection({ s }: { s: LPSliderSection }) {
+  const HeadingTag = useBlockHeading(s.id);
+  const eagerSlide = useEagerMedia(s.id);
   const slides = s.slides.length
     ? s.slides
     : [{ imageUrl: "", videoUrl: "", heading: "Selamat Datang", subheading: "" }];
@@ -472,14 +660,21 @@ function SliderSection({ s }: { s: LPSliderSection }) {
           <video src={active.videoUrl} autoPlay muted loop playsInline
             className="absolute inset-0 h-full w-full object-cover" />
         ) : active.imageUrl ? (
-          <img src={buildStorageImageUrl(active.imageUrl, { width: 1200, quality: 60 })} width={1200} height={675} alt={active.heading || "Pomah Guesthouse"} loading="lazy"
-            className="absolute inset-0 h-full w-full object-cover" />
+          <LpSizedImage
+            url={active.imageUrl}
+            alt={active.heading || "Pomah Guesthouse"}
+            eager={eagerSlide && i === 0}
+            width={1200}
+            height={675}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900" />
         )}
         <div className="absolute inset-0 bg-black/35" />
         <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
-          <h1
+          {((active.heading ?? "").trim() || slides.find((slide) => (slide.heading ?? "").trim())?.heading) && (
+          <HeadingTag
             className={`max-w-3xl tracking-tight text-white drop-shadow ${
               s.fontFamily === "mono" ? "font-mono" : s.fontFamily === "sans" ? "font-sans" : "font-serif"
             }`}
@@ -490,8 +685,9 @@ function SliderSection({ s }: { s: LPSliderSection }) {
               fontWeight: s.fontStyle === "bold" ? 700 : 400,
             }}
           >
-            {active.heading}
-          </h1>
+            {(active.heading ?? "").trim() || slides.find((slide) => (slide.heading ?? "").trim())?.heading}
+          </HeadingTag>
+          )}
           {active.subheading && (
             <>
               <span className="my-4 h-px w-40 bg-white/70" />
@@ -549,14 +745,22 @@ function ButtonSection({ s }: { s: LPButtonSection }) {
 
 /* ─── Hero ──────────────────────────────────────────────────────── */
 function HeroSection({ s }: { s: LPHeroSection }) {
+  const HeadingTag = useBlockHeading(s.id);
+  const eager = useEagerMedia(s.id);
   const overlay = Math.min(80, Math.max(0, s.overlay ?? 40));
   return (
     <section className="relative overflow-hidden py-28 text-center text-white"
       style={{ minHeight: 480 }}>
       {/* Background */}
       {s.image_url ? (
-        <img src={s.image_url} alt={s.headline}
-          className="absolute inset-0 h-full w-full object-cover" />
+        <LpSizedImage
+          url={s.image_url}
+          alt={s.headline}
+          eager={eager}
+          width={1200}
+          height={675}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900" />
       )}
@@ -564,9 +768,11 @@ function HeroSection({ s }: { s: LPHeroSection }) {
 
       {/* Content */}
       <div className="relative mx-auto max-w-3xl px-6">
-        <h1 className="font-serif text-4xl font-bold leading-tight tracking-tight sm:text-5xl drop-shadow">
+        {s.headline?.trim() ? (
+        <HeadingTag className="font-serif text-4xl font-bold leading-tight tracking-tight sm:text-5xl drop-shadow">
           {s.headline}
-        </h1>
+        </HeadingTag>
+        ) : null}
         {s.subheadline && (
           <p className="mx-auto mt-6 max-w-xl text-lg text-white/90">{s.subheadline}</p>
         )}
@@ -584,6 +790,7 @@ function HeroSection({ s }: { s: LPHeroSection }) {
 /* ─── Text / Paragraf ───────────────────────────────────────────── */
 function TextSection({ s }: { s: LPTextSection }) {
   const center = s.align === "center";
+  const html = useContext(LpRenderCtx).demoteInlineHeadings ? demoteContentH1(s.content) : s.content;
   return (
     <section className="mx-auto max-w-3xl px-6 py-16">
       {s.title && (
@@ -593,7 +800,7 @@ function TextSection({ s }: { s: LPTextSection }) {
         </div>
       )}
       <div className={`prose prose-stone prose-headings:font-serif prose-a:text-amber-800 max-w-none ${center ? "text-center" : ""}`}
-        dangerouslySetInnerHTML={{ __html: s.content }} />
+        dangerouslySetInnerHTML={{ __html: html }} />
     </section>
   );
 }
@@ -642,8 +849,14 @@ function GallerySection({ s }: { s: LPGallerySection }) {
       <div className={`grid grid-cols-1 gap-3 ${gridCls}`}>
         {images.map((url, i) => (
           <div key={i} className="overflow-hidden rounded-2xl border border-stone-200 bg-amber-50 shadow-sm aspect-[4/3]">
-            <img src={url} alt={`${s.title ?? "Foto"} ${i + 1}`}
-              className="h-full w-full object-cover transition hover:scale-105" />
+            <LpSizedImage
+              url={url}
+              alt={`${s.title ?? "Foto"} ${i + 1}`}
+              eager={false}
+              width={960}
+              height={720}
+              className="h-full w-full object-cover transition hover:scale-105"
+            />
           </div>
         ))}
       </div>
@@ -710,12 +923,15 @@ function CtaBannerSection({ s }: { s: LPCtaBannerSection }) {
 function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
   const [i, setI] = useState(0);
   const useGoogle = (s.source ?? "manual") === "google";
+  const seeded = useContext(LpRenderCtx).reviews;
 
   const reviewsFn = useServerFn(getGoogleReviews);
   const { data: gr } = useQuery({
     queryKey: ["lp-google-reviews"],
     queryFn: () => reviewsFn(),
     enabled: useGoogle,
+    initialData: seeded ?? undefined,
+    staleTime: 10 * 60_000,
   });
 
   // Source: live Google reviews, with a graceful fallback to manual items.
@@ -731,7 +947,6 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
   }, [items.length]);
 
   if (items.length === 0) return null;
-  const cur = items[i % items.length];
   return (
     <section className="bg-stone-50 px-6 py-16">
       <div className="mx-auto max-w-3xl">
@@ -741,22 +956,26 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
             <span className="mt-3 h-1 w-16 rounded-full bg-amber-600" />
           </div>
         )}
-        <div className="rounded-2xl border border-stone-200 bg-white p-8 text-center shadow-sm">
-          <Quote className="mx-auto h-7 w-7 text-amber-600/40" />
-          <p className="mt-4 text-base leading-relaxed text-stone-600">&ldquo;{cur.text}&rdquo;</p>
-          {cur.name && <p className="mt-5 text-sm font-semibold text-stone-700">— {cur.name}</p>}
-        </div>
-        {cur.isGoogle && (
-          <div className="mt-2 flex items-center justify-end gap-1.5 text-xs text-stone-500 pr-2">
-            <span className="font-bold text-stone-700">G</span>
-            <span>Google</span>
-            <div className="flex gap-0.5">
-              {[0, 1, 2, 3, 4].map((star) => (
-                <Star key={star} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-              ))}
+        {items.map((item, d) => (
+          <div key={`${item.name}-${d}`} className={d === i % items.length ? "block" : "hidden"}>
+            <div className="rounded-2xl border border-stone-200 bg-white p-8 text-center shadow-sm">
+              <Quote className="mx-auto h-7 w-7 text-amber-600/40" />
+              <p className="mt-4 text-base leading-relaxed text-stone-600">&ldquo;{item.text}&rdquo;</p>
+              {item.name && <p className="mt-5 text-sm font-semibold text-stone-700">— {item.name}</p>}
             </div>
+            {item.isGoogle && (
+              <div className="mt-2 flex items-center justify-end gap-1.5 pr-2 text-xs text-stone-500">
+                <span className="font-bold text-stone-700">G</span>
+                <span>Google</span>
+                <div className="flex gap-0.5">
+                  {[0, 1, 2, 3, 4].map((star) => (
+                    <Star key={star} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        ))}
         {items.length > 1 && (
           <div className="mt-5 flex justify-center gap-2">
             {items.map((_: (typeof items)[number], d: number) => (
@@ -864,10 +1083,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
   const today = ctx?.today ?? "";
   const checkIn = ctx?.checkIn ?? "";
   const checkOut = ctx?.checkOut ?? "";
-
-  const siteFn = useServerFn(getPublicSiteData);
-  const { data: site } = useQuery({ queryKey: ["lp-site-data"], queryFn: () => siteFn() });
-  const rooms = (site?.roomTypes ?? []) as LPRoomType[];
+  const rooms = useContext(LpRenderCtx).rooms;
 
   // Default to today → tomorrow so cards always reflect availability.
   const usingFilter = !!checkIn && !!checkOut && checkIn < checkOut;
