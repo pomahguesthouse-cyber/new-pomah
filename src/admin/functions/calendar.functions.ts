@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { generateAndSendInvoiceNotification } from "@/services/invoice-notification.service";
+import { awaitInvoiceNotification } from "@/services/invoice-dispatch";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -278,14 +278,13 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
     }
     if (!bookingId) throw new Error("Booking gagal dibuat. Database tidak mengembalikan booking ID.");
 
-    // Kirim invoice + link konfirmasi ke tamu via WhatsApp secara otomatis
-    void generateAndSendInvoiceNotification({
+    // Tunggu kirim invoice di request ini. `void` terputus di Workers setelah
+    // response. Timeout ~9s; kegagalan invoice tidak membatalkan booking.
+    const invoice = await awaitInvoiceNotification({
       supabase,
       bookingId,
       skipWhatsApp: false,
-    }).catch((err) =>
-      console.warn("[createBookingFromAdmin] Notifikasi invoice gagal (non-fatal):", err),
-    );
+    });
 
     // Beritahu manager — pakai waitUntil agar tetap jalan setelah response dikirim.
     const { runDeferred } = await import("@/lib/cf-context");
@@ -294,7 +293,7 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
       await notifyNewBooking(supabase, bookingId);
     });
 
-    return { ok: true, bookingId };
+    return { ok: true, bookingId, invoice };
   });
 
 export const updateBookingFromAdmin = createServerFn({ method: "POST" })

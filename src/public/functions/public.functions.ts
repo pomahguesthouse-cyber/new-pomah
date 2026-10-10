@@ -354,6 +354,28 @@ export const getMediaAssetByName = createServerFn({ method: "GET" })
     return { url };
   });
 
+/**
+ * Kirim invoice di request booking publik. Selalu mengembalikan status;
+ * tidak pernah melempar, supaya booking yang sudah tersimpan tidak gagal.
+ */
+async function sendPublicBookingInvoice(bookingId: string, label: string) {
+  try {
+    const request = getRequest();
+    const origin = request ? new URL(request.url).origin : undefined;
+    const { awaitInvoiceNotification } = await import("@/services/invoice-dispatch");
+    return await awaitInvoiceNotification({
+      supabase: supabaseAdmin,
+      bookingId,
+      origin,
+    });
+  } catch (notificationErr) {
+    const reason =
+      notificationErr instanceof Error ? notificationErr.message : String(notificationErr);
+    console.error(`[${label}] Notification error:`, notificationErr);
+    return { status: "failed" as const, reason };
+  }
+}
+
 export const submitPublicBooking = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
@@ -457,22 +479,9 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
     );
     if (brErr) throw brErr;
 
-    // Try to generate and send the invoice PDF via WhatsApp
-    try {
-      const request = getRequest();
-      const origin = request ? new URL(request.url).origin : undefined;
-      void import("@/services/invoice-notification.service").then(({ generateAndSendInvoiceNotification }) =>
-        generateAndSendInvoiceNotification({
-          supabase: supabaseAdmin,
-          bookingId: booking.id,
-          origin,
-        })
-      ).catch((err) => {
-        console.error("[submitPublicBooking] Notification error:", err);
-      });
-    } catch (notificationErr) {
-      console.error("[submitPublicBooking] Notification trigger error:", notificationErr);
-    }
+    // Tunggu kirim invoice di request ini. Panggilan tanpa await terputus
+    // di Workers setelah response, jadi baris invoices tidak tertulis.
+    const invoice = await sendPublicBookingInvoice(booking.id, "submitPublicBooking");
 
     // Notif manager — pakai waitUntil agar tetap jalan setelah response dikirim.
     const { runDeferred } = await import("@/lib/cf-context");
@@ -486,6 +495,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       reference_code: booking.reference_code,
       total,
       nights,
+      invoice,
     };
   });
 
@@ -617,21 +627,7 @@ export const submitCartBooking = createServerFn({ method: "POST" })
     );
     if (brErr) throw brErr;
 
-    try {
-      const request = getRequest();
-      const origin = request ? new URL(request.url).origin : undefined;
-      void import("@/services/invoice-notification.service").then(({ generateAndSendInvoiceNotification }) =>
-        generateAndSendInvoiceNotification({
-          supabase: supabaseAdmin,
-          bookingId: booking.id,
-          origin,
-        })
-      ).catch((err) => {
-        console.error("[submitCartBooking] Notification error:", err);
-      });
-    } catch (notificationErr) {
-      console.error("[submitCartBooking] Notification trigger error:", notificationErr);
-    }
+    const invoice = await sendPublicBookingInvoice(booking.id, "submitCartBooking");
 
     // Notif manager — pakai waitUntil agar tetap jalan setelah response dikirim.
     const { runDeferred: runDeferredCart } = await import("@/lib/cf-context");
@@ -646,6 +642,7 @@ export const submitCartBooking = createServerFn({ method: "POST" })
       total: grandTotal,
       nights,
       rooms: totalRooms,
+      invoice,
     };
   });
 

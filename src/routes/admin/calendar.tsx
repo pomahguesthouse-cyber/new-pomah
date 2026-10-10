@@ -25,6 +25,9 @@ import {
   createBookingFromAdmin,
   updateBookingFromAdmin,
 } from "@/admin/functions/calendar.functions";
+import { resendInvoice } from "@/admin/functions/bookings.functions";
+import { toastBookingInvoice } from "@/admin/lib/invoice-toast";
+import type { BookingInvoiceOutcome } from "@/services/invoice-dispatch";
 import {
   downloadCsv,
   type ExportRow,
@@ -681,6 +684,7 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
 // Dialog-dialog (CreateBookingDialog, EditBookingDialog, Field) tetap sama seperti kode Bapak sebelumnya.
 function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
   const createFn = useServerFn(createBookingFromAdmin);
+  const resendFn = useServerFn(resendInvoice);
   const [form, setForm] = React.useState({
     guestName: "",
     checkIn: "",
@@ -699,9 +703,9 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
   }, [ctx]);
   return (
     <Dialog open={!!ctx} onOpenChange={(o) => !o && !saving && onClose()}>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle className="font-black text-xl tracking-tighter uppercase">
+          <DialogTitle className="break-words pr-6 font-black text-xl uppercase tracking-tighter">
             New Booking {ctx?.roomNumber}
           </DialogTitle>
         </DialogHeader>
@@ -740,21 +744,29 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
             />
           </Field>
         </div>
-        <DialogFooter>
-          <Button variant="outline" className="font-bold" onClick={onClose} disabled={saving}>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" className="w-full font-bold sm:w-auto" onClick={onClose} disabled={saving}>
             BATAL
           </Button>
           <Button
-            className="font-bold"
+            className="w-full font-bold sm:w-auto"
             disabled={saving}
             onClick={async () => {
               if (saving) return;
               setSaving(true);
               try {
-                await createFn({
+                const res = await createFn({
                   data: { ...form, roomId: ctx.roomId, status: "confirmed" },
                 });
                 toast.success("BOOKING BERHASIL!");
+                toastBookingInvoice(
+                  (res as { invoice?: BookingInvoiceOutcome }).invoice,
+                  {
+                    onResend: res.bookingId
+                      ? async () => resendFn({ data: { bookingId: res.bookingId } })
+                      : undefined,
+                  },
+                );
                 onSaved();
                 onClose();
               } catch (e) {
