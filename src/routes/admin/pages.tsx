@@ -6,7 +6,7 @@
  * library and a live preview. All settings persist into the property's
  * `homepage_config` JSONB document.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -67,6 +67,8 @@ import {
 } from "@/admin/modules/seo/landing-page.functions";
 import { GlobalSettingsEditor } from "@/admin/modules/global/global-editor";
 import { LpPageBuilder } from "@/admin/modules/seo/lp-page-builder";
+import { LandingBriefsAdmin } from "@/admin/modules/seo/landing-briefs-admin";
+import { LandingQualityPanel } from "@/admin/modules/seo/landing-quality-panel";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -217,6 +219,7 @@ function HomepageBuilder() {
 
   // "Site Pages and Menu" modal (Wix-style).
   const [pagesOpen, setPagesOpen] = useState(false);
+  const [briefsOpen, setBriefsOpen] = useState(false);
   const openPageSettings = (id: string) => {
     setActivePageId(id);
     setPagesOpen(true);
@@ -225,7 +228,7 @@ function HomepageBuilder() {
   const activeName =
     activePageId === "home" ? "Home" : activePageId === "book" ? "Booking Page" : (activeLp?.title ?? "Home");
   const previewSrc = activeLp
-    ? `/lp/${activeLp.slug}?builder=1`
+    ? `/lp/${activeLp.slug}?builder=1${activeLp.published ? "" : "&preview=1"}`
     : activePageId === "book"
       ? "/book?builder=1"
       : "/?builder=1";
@@ -439,6 +442,9 @@ function HomepageBuilder() {
             </button>
           </div>
         </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => setBriefsOpen(true)}>
+          Brief keyword
+        </Button>
         <Button
           className="gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
           disabled={saving || isLoading}
@@ -448,6 +454,18 @@ function HomepageBuilder() {
           {saving ? "Menyimpan…" : "Simpan"}
         </Button>
       </header>
+
+      <Dialog open={briefsOpen} onOpenChange={setBriefsOpen}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Brief keyword</DialogTitle>
+            <DialogDescription>
+              Setujui brief sebelum generate. Halaman yang dihasilkan tetap unpublished dan noindex.
+            </DialogDescription>
+          </DialogHeader>
+          <LandingBriefsAdmin onGenerated={() => lpQuery.refetch()} />
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-1 overflow-hidden">
         {/* ── Left: Site Menu ── */}
@@ -2511,6 +2529,12 @@ function PageSettingsPanel({
   const [jsonLdOn, setJsonLdOn] = useState(true);
   const [customJsonLd, setCustomJsonLd] = useState("");
   const [noindex, setNoindex] = useState(false);
+  const [qualityPass, setQualityPass] = useState(false);
+  const [qualityLoading, setQualityLoading] = useState(true);
+  const onQuality = useCallback((state: { pass: boolean; loading: boolean }) => {
+    setQualityPass(state.pass);
+    setQualityLoading(state.loading);
+  }, []);
 
   useEffect(() => {
     if (target.kind === "home" || target.kind === "book") {
@@ -2696,12 +2720,27 @@ function PageSettingsPanel({
                     Hanya huruf kecil, angka, dan tanda hubung. Mengubah URL dapat memengaruhi tautan lama.
                   </p>
                 </FieldRow>
+                <LandingQualityPanel pageId={target.page.id} onState={onQuality} />
                 <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
                   <div>
                     <p className="text-xs font-medium">Halaman dipublikasikan</p>
-                    <p className="text-[10px] text-muted-foreground">Terlihat publik. Matikan untuk menyembunyikan halaman.</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {qualityPass
+                        ? "Checklist lulus. Publikasikan, lalu matikan noindex bila halaman boleh diindeks."
+                        : "Tombol publikasi terkunci sampai checklist lulus."}
+                    </p>
                   </div>
-                  <Switch checked={indexable} onCheckedChange={setIndexable} />
+                  <Switch
+                    checked={indexable}
+                    disabled={!indexable && (qualityLoading || !qualityPass)}
+                    onCheckedChange={(value) => {
+                      if (value && !qualityPass) {
+                        toast.error("Quality gate belum lulus.");
+                        return;
+                      }
+                      setIndexable(value);
+                    }}
+                  />
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
                   <div>
@@ -2713,12 +2752,12 @@ function PageSettingsPanel({
                   <Switch checked={noindex} onCheckedChange={setNoindex} />
                 </div>
                 <a
-                  href={`/lp/${pageSlug}`}
+                  href={`/lp/${slug || pageSlug}${indexable ? "" : "?preview=1"}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:underline"
                 >
-                  <ExternalLink className="h-3.5 w-3.5" /> Buka halaman di tab baru
+                  <ExternalLink className="h-3.5 w-3.5" /> {indexable ? "Buka halaman di tab baru" : "Pratinjau draf (staf)"}
                 </a>
               </>
             )}

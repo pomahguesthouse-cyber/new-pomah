@@ -3,7 +3,7 @@
  * Serves SEO-optimised landing pages created in the AI SEO Control Room.
  * Design matches the main Pomah Guesthouse site.
  */
-import { Suspense, useState, useEffect, createContext, useContext, useMemo } from "react";
+import { Suspense, useState, useEffect, createContext, useContext, useMemo, type ReactNode } from "react";
 import { createFileRoute, notFound, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -33,6 +33,12 @@ import {
   type LPButtonSection,
   type LPRoomSliderSection,
   type LPDatePickerSection,
+  type LPLocationSection,
+  type LPFilteredRoomsSection,
+  type LPStartingPriceSection,
+  type LPRelatedExploreSection,
+  type LPFilteredReviewsSection,
+  previewSeoLandingPage,
 } from "@/admin/modules/seo/landing-page.functions";
 import { canonicalHeadTags, canonicalUrlForPath, isUnoptimizedSharePng, shareOgImageTags } from "@/public/lib/public-seo";
 import {
@@ -46,6 +52,14 @@ import { UnnesLanding } from "@/public/components/unnes-landing";
 import { rewritePublicHref } from "@/public/lib/public-href";
 import { buildStorageImageUrl, heroPreloadLinks } from "@/lib/storage-image";
 import { POMAH_NAP_LINE } from "@/public/lib/site-identity";
+import {
+  FilteredReviewsBlock,
+  FilteredRoomsBlock,
+  LocationBlock,
+  RelatedExploreBlock,
+  StartingPriceBlock,
+} from "@/public/components/lp-dynamic-blocks";
+import type { DynamicExplore, DynamicLandmark } from "@/public/lib/lp-dynamic";
 import {
   allLandingSections,
   blockHeadingTag,
@@ -89,6 +103,9 @@ type LpRoomCard = {
 type LpRenderValue = {
   rooms: LpRoomCard[];
   reviews: GoogleReviewsResult | null;
+  landmarks: DynamicLandmark[];
+  explorePlaces: DynamicExplore[];
+  showUnverifiedLandmarks: boolean;
   h1SectionId: string | null;
   eagerSectionId: string | null;
   demoteHeadings: boolean;
@@ -98,6 +115,9 @@ type LpRenderValue = {
 const LpRenderCtx = createContext<LpRenderValue>({
   rooms: [],
   reviews: null,
+  landmarks: [],
+  explorePlaces: [],
+  showUnverifiedLandmarks: false,
   h1SectionId: null,
   eagerSectionId: null,
   demoteHeadings: false,
@@ -147,7 +167,17 @@ function LpSizedImage({
 export const Route = createFileRoute("/lp/$slug")({
   head: ({ loaderData }: any) => {
     const p = loaderData?.page as SeoLandingPage | undefined;
-    if (!p) return {};
+    if (!p) {
+      if (loaderData?.preview) {
+        return {
+          meta: [
+            { title: "Pratinjau draf | Pomah Guesthouse" },
+            { name: "robots", content: "noindex, nofollow" },
+          ],
+        };
+      }
+      return {};
+    }
     const approved = p.slug === APPROVED_LP.slug;
     const title = approved ? APPROVED_LP.title : stripPublicHotWaterClaim(p.meta_title || p.title);
     const description = approved ? APPROVED_LP.meta : stripPublicHotWaterClaim(p.meta_description || "");
@@ -190,7 +220,21 @@ export const Route = createFileRoute("/lp/$slug")({
   },
 
   loader: async ({ params, location }: any) => {
-    const builderPreview = new URLSearchParams(location?.searchStr ?? "").get("builder") === "1";
+    const search = new URLSearchParams(location?.searchStr ?? "");
+    const builderPreview = search.get("builder") === "1";
+    const preview = search.get("preview") === "1";
+    if (preview) {
+      return {
+        page: null,
+        property: null,
+        roomTypes: [],
+        reviews: null,
+        landmarks: [],
+        explorePlaces: [],
+        builderPreview,
+        preview: true,
+      };
+    }
     const [result, siteData] = await Promise.all([
       getSeoLandingPageBySlug({ data: { slug: params.slug } }) as Promise<{
         page: SeoLandingPage | null;
@@ -216,17 +260,41 @@ export const Route = createFileRoute("/lp/$slug")({
           }
         : cleaned;
     const site = siteData as { property?: unknown; roomTypes?: unknown[] } | null;
-    const reviews = landingNeedsGoogleReviews(allLandingSections(page.sections))
+    const sectionList = allLandingSections(page.sections);
+    const reviews = landingNeedsGoogleReviews(sectionList)
       ? await getGoogleReviews().catch(
           (): GoogleReviewsResult => ({ rating: null, total: null, reviews: [], status: "ERROR" }),
         )
       : null;
+    const needsLandmarks = sectionList.some((section) => section.type === "location");
+    const needsExplore = sectionList.some((section) => section.type === "related_explore");
+    const [{ loadVerifiedLandmarks }, exploreModule] = await Promise.all([
+      needsLandmarks
+        ? import("@/public/lib/landing-catalog.server")
+        : Promise.resolve({ loadVerifiedLandmarks: async () => [] as DynamicLandmark[] }),
+      needsExplore
+        ? import("@/public/lib/city-guide.server")
+        : Promise.resolve(null),
+    ]);
+    const [landmarks, guidePlaces] = await Promise.all([
+      needsLandmarks ? loadVerifiedLandmarks().catch(() => [] as DynamicLandmark[]) : Promise.resolve([] as DynamicLandmark[]),
+      needsExplore && exploreModule
+        ? exploreModule.loadCityGuidePlaces().catch(() => [])
+        : Promise.resolve([]),
+    ]);
     return {
       page,
       property: site?.property,
       roomTypes: site?.roomTypes ?? [],
       reviews,
+      landmarks,
+      explorePlaces: (guidePlaces as Array<{ slug: string; name: string; category?: string }>).map((place) => ({
+        slug: place.slug,
+        name: place.name,
+        category: place.category ?? null,
+      })),
       builderPreview,
+      preview: false,
     };
   },
 
@@ -262,13 +330,19 @@ function BuilderSections({
   property,
   rooms,
   reviews,
+  landmarks,
+  explorePlaces,
   builderPreview,
+  showUnverifiedLandmarks,
 }: {
   page: SeoLandingPage;
   property?: LandingProperty;
   rooms: LpRoomCard[];
   reviews: GoogleReviewsResult | null;
+  landmarks: DynamicLandmark[];
+  explorePlaces: DynamicExplore[];
   builderPreview: boolean;
+  showUnverifiedLandmarks: boolean;
 }) {
   const sectionsData = page.sections;
   const isSplit = Boolean(sectionsData && !Array.isArray(sectionsData) && (sectionsData as LPSplitSections).split);
@@ -306,17 +380,17 @@ function BuilderSections({
     return (
       <>
         <div className="hidden md:flex md:flex-col">
-          <LandingSectionTree sections={desktopSections} demote={false} page={page} nav={nav} rooms={rooms} reviews={reviews} />
+          <LandingSectionTree sections={desktopSections} demote={false} page={page} nav={nav} rooms={rooms} reviews={reviews} landmarks={landmarks} explorePlaces={explorePlaces} showUnverifiedLandmarks={showUnverifiedLandmarks} />
         </div>
         <div className="flex flex-col md:hidden" aria-hidden="true" data-nosnippet="">
-          <LandingSectionTree sections={mobileSections} demote page={page} nav={nav} rooms={rooms} reviews={reviews} />
+          <LandingSectionTree sections={mobileSections} demote page={page} nav={nav} rooms={rooms} reviews={reviews} landmarks={landmarks} explorePlaces={explorePlaces} showUnverifiedLandmarks={showUnverifiedLandmarks} />
         </div>
       </>
     );
   }
 
   return (
-    <LandingSectionTree sections={liveSections} demote={false} page={page} nav={nav} rooms={rooms} reviews={reviews} />
+    <LandingSectionTree sections={liveSections} demote={false} page={page} nav={nav} rooms={rooms} reviews={reviews} landmarks={landmarks} explorePlaces={explorePlaces} showUnverifiedLandmarks={showUnverifiedLandmarks} />
   );
 }
 
@@ -327,6 +401,9 @@ function LandingSectionTree({
   nav,
   rooms,
   reviews,
+  landmarks,
+  explorePlaces,
+  showUnverifiedLandmarks,
 }: {
   sections: LPSection[];
   demote: boolean;
@@ -334,6 +411,9 @@ function LandingSectionTree({
   nav: { ctaUrl: string; ctaText: string; logoUrl?: string | null; brand: string };
   rooms: LpRoomCard[];
   reviews: GoogleReviewsResult | null;
+  landmarks: DynamicLandmark[];
+  explorePlaces: DynamicExplore[];
+  showUnverifiedLandmarks: boolean;
 }) {
   const outline = landingDocumentOutline(sections, page);
   const hasHeader = sections.some((section) => section.type === "header");
@@ -342,6 +422,9 @@ function LandingSectionTree({
       value={{
         rooms,
         reviews,
+        landmarks,
+        explorePlaces,
+        showUnverifiedLandmarks,
         h1SectionId: demote ? null : outline.h1SectionId,
         eagerSectionId: demote ? null : outline.eagerSectionId,
         demoteHeadings: demote,
@@ -368,14 +451,80 @@ function LandingSectionTree({
 }
 
 /* ─── Page root ─────────────────────────────────────────────────── */
+function PreviewNotice({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-4 py-16 text-stone-800">
+      <meta name="robots" content="noindex, nofollow" />
+      <h1 className="font-serif text-2xl font-semibold">{title}</h1>
+      <p className="mt-3 text-sm leading-relaxed text-stone-600">{children}</p>
+    </div>
+  );
+}
+
+function asLandmark(row: Record<string, unknown>): DynamicLandmark {
+  const num = (value: unknown) => {
+    if (value == null || value === "") return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
+  return {
+    id: String(row.id ?? ""),
+    name: String(row.name ?? ""),
+    category: row.category == null ? null : String(row.category),
+    lat: num(row.lat),
+    lng: num(row.lng),
+    road_distance_km: num(row.road_distance_km),
+    travel_minutes: num(row.travel_minutes),
+    verified: row.verified === true,
+  };
+}
+
 function LandingPage() {
-  const { page, property, roomTypes, reviews, builderPreview } = Route.useLoaderData() as {
-    page: SeoLandingPage;
+  const loader = Route.useLoaderData() as {
+    page: SeoLandingPage | null;
     property?: LandingProperty;
     roomTypes?: LpRoomCard[];
     reviews?: GoogleReviewsResult | null;
+    landmarks?: DynamicLandmark[];
+    explorePlaces?: DynamicExplore[];
     builderPreview?: boolean;
+    preview?: boolean;
   };
+  const { slug } = Route.useParams();
+  const previewFn = useServerFn(previewSeoLandingPage);
+  const previewQuery = useQuery({
+    queryKey: ["lp-preview", slug],
+    enabled: loader.preview === true,
+    queryFn: () => previewFn({ data: { slug } }),
+  });
+  if (loader.preview) {
+    if (previewQuery.isLoading) {
+      return <PreviewNotice title="Memuat pratinjau">Draf hanya tampil untuk staf yang sudah masuk.</PreviewNotice>;
+    }
+    if (previewQuery.isError || previewQuery.data?.forbidden || !previewQuery.data?.page) {
+      return (
+        <PreviewNotice title="Pratinjau khusus staf">
+          <a href={`/login?next=${encodeURIComponent(`/lp/${slug}?preview=1`)}`} className="font-semibold text-amber-800 underline">
+            Masuk sebagai staf
+          </a>{" "}
+          untuk melihat draf. Halaman ini tidak diindeks.
+        </PreviewNotice>
+      );
+    }
+  }
+  const previewData = previewQuery.data;
+  const previewPage = previewData?.page as SeoLandingPage | undefined;
+  const page = loader.preview ? previewPage ?? null : loader.page;
+  if (!page) return <PreviewNotice title="Halaman tidak ditemukan">Draf ini tidak ada.</PreviewNotice>;
+  const property = (loader.preview ? previewData?.property : loader.property) as LandingProperty | undefined;
+  const roomTypes = (loader.preview ? previewData?.roomTypes : loader.roomTypes) as LpRoomCard[] | undefined;
+  const reviews = (loader.preview ? previewData?.reviews : loader.reviews) as GoogleReviewsResult | null | undefined;
+  const landmarks = loader.preview
+    ? ((previewData?.landmarks ?? []) as Array<Record<string, unknown>>).map(asLandmark)
+    : (loader.landmarks ?? []);
+  const explorePlaces = (loader.preview ? previewData?.explorePlaces : loader.explorePlaces) as DynamicExplore[] | undefined;
+  const builderPreview = loader.builderPreview;
+  const showUnverifiedLandmarks = loader.preview === true;
   const whatsappNumber = String(property?.whatsapp_number || "6285190986169").replace(/\D/g, "");
   // Halaman hasil duplikasi Home sementara di-skip; fallback ke render section
   // standar di bawah agar build tidak gagal.
@@ -412,6 +561,7 @@ function LandingPage() {
   return (
     <BookingCtx.Provider value={{ checkIn, checkOut, today, setCheckIn, setCheckOut, checkInOpen, setCheckInOpen, checkOutOpen, setCheckOutOpen, handleCheckInChange }}>
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
+      {showUnverifiedLandmarks ? <meta name="robots" content="noindex, nofollow" /> : null}
       {approved ? (
         <>
           <LPNav
@@ -438,7 +588,10 @@ function LandingPage() {
           property={property}
           rooms={(roomTypes ?? []) as LpRoomCard[]}
           reviews={reviews ?? null}
+          landmarks={landmarks}
+          explorePlaces={explorePlaces ?? []}
           builderPreview={builderPreview === true}
+          showUnverifiedLandmarks={showUnverifiedLandmarks}
         />
       ) : (
         /* ── Legacy fallback for pages without sections ── */
@@ -571,6 +724,11 @@ function LPSectionRenderer({ section }: { section: LPSection }) {
     case "cta_banner":   return <CtaBannerSection     s={section} />;
     case "button":       return <ButtonSection        s={section} />;
     case "testimonials": return <TestimonialsSection  s={section} />;
+    case "location":     return <LocationBlockSection s={section} />;
+    case "filtered_rooms": return <FilteredRoomsBlockSection s={section} />;
+    case "starting_price": return <StartingPriceBlockSection s={section} />;
+    case "related_explore": return <RelatedExploreBlockSection s={section} />;
+    case "filtered_reviews": return <FilteredReviewsBlockSection s={section} />;
     default:             return null;
   }
 }
@@ -866,9 +1024,8 @@ function GallerySection({ s }: { s: LPGallerySection }) {
 
 /* ─── FAQ accordion ─────────────────────────────────────────────── */
 function FaqSection({ s }: { s: LPFaqSection }) {
-  const [open, setOpen] = useState<number | null>(null);
   return (
-    <section className="mx-auto max-w-3xl px-6 py-16">
+    <section className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
       {s.title && (
         <div className="mb-10 flex flex-col items-center text-center">
           <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800 md:text-4xl">{s.title}</h2>
@@ -877,21 +1034,63 @@ function FaqSection({ s }: { s: LPFaqSection }) {
       )}
       <div className="space-y-2">
         {(s.items ?? []).map((item, i) => (
-          <div key={i} className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
-            <button type="button" onClick={() => setOpen(open === i ? null : i)}
-              className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50">
-              <span className="font-medium text-stone-800">{item.question}</span>
-              <ChevronDown className={`h-4 w-4 shrink-0 text-amber-600 transition-transform ${open === i ? "rotate-180" : ""}`} />
-            </button>
-            {open === i && (
-              <div className="border-t border-stone-100 px-5 py-4 text-sm leading-relaxed text-stone-600">
-                {item.answer}
-              </div>
-            )}
-          </div>
+          <details key={i} className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+            <summary className="cursor-pointer list-none px-4 py-4 font-medium text-stone-800 sm:px-5">
+              {item.question}
+            </summary>
+            <div className="border-t border-stone-100 px-4 py-4 text-sm leading-relaxed text-stone-600 sm:px-5">
+              {item.answer}
+            </div>
+          </details>
         ))}
       </div>
     </section>
+  );
+}
+
+function LocationBlockSection({ s }: { s: LPLocationSection }) {
+  const ctx = useContext(LpRenderCtx);
+  return (
+    <LocationBlock
+      title={s.title}
+      landmarkIds={s.landmark_ids ?? []}
+      landmarks={ctx.landmarks}
+      showUnverified={ctx.showUnverifiedLandmarks}
+    />
+  );
+}
+
+function FilteredRoomsBlockSection({ s }: { s: LPFilteredRoomsSection }) {
+  const ctx = useContext(LpRenderCtx);
+  return (
+    <FilteredRoomsBlock
+      title={s.title}
+      rooms={ctx.rooms}
+      roomTypeIds={s.room_type_ids}
+      minCapacity={s.min_capacity}
+    />
+  );
+}
+
+function StartingPriceBlockSection({ s }: { s: LPStartingPriceSection }) {
+  const ctx = useContext(LpRenderCtx);
+  return <StartingPriceBlock title={s.title} rooms={ctx.rooms} />;
+}
+
+function RelatedExploreBlockSection({ s }: { s: LPRelatedExploreSection }) {
+  const ctx = useContext(LpRenderCtx);
+  return <RelatedExploreBlock title={s.title} places={ctx.explorePlaces} slugs={s.slugs} tag={s.tag} />;
+}
+
+function FilteredReviewsBlockSection({ s }: { s: LPFilteredReviewsSection }) {
+  const ctx = useContext(LpRenderCtx);
+  return (
+    <FilteredReviewsBlock
+      title={s.title}
+      reviews={ctx.reviews?.reviews ?? []}
+      keywords={s.keywords}
+      limit={s.limit}
+    />
   );
 }
 

@@ -86,6 +86,34 @@ export type LPDatePickerSection = {
   heading?: string;
   buttonLabel?: string;
 };
+/** Selected landmarks. Distances are filled from seo_landmarks at render time. */
+export type LPLocationSection = {
+  id: string; type: "location";
+  title?: string;
+  landmark_ids: string[];
+};
+export type LPFilteredRoomsSection = {
+  id: string; type: "filtered_rooms";
+  title?: string;
+  min_capacity?: number | null;
+  room_type_ids?: string[];
+};
+export type LPStartingPriceSection = {
+  id: string; type: "starting_price";
+  title?: string;
+};
+export type LPRelatedExploreSection = {
+  id: string; type: "related_explore";
+  title?: string;
+  slugs: string[];
+  tag?: string;
+};
+export type LPFilteredReviewsSection = {
+  id: string; type: "filtered_reviews";
+  title?: string;
+  keywords: string[];
+  limit?: number;
+};
 /** Mirrors the homepage hero slider exactly (HomepageConfig["hero"]). */
 export type LPSliderSection = {
   id: string; type: "slider";
@@ -140,6 +168,11 @@ export type LPSection = (
   | LPButtonSection
   | LPRoomSliderSection
   | LPDatePickerSection
+  | LPLocationSection
+  | LPFilteredRoomsSection
+  | LPStartingPriceSection
+  | LPRelatedExploreSection
+  | LPFilteredReviewsSection
 ) & {
   styles?: {
     desktop?: LPElementStyles;
@@ -301,7 +334,7 @@ function buildSection(row: PageSectionRow, element: PageElementRow | undefined, 
   } as LPSection;
 }
 
-async function loadPageSections(client: SupabaseClient, pageId: string): Promise<LPSectionsData | null> {
+export async function loadPageSections(client: SupabaseClient, pageId: string): Promise<LPSectionsData | null> {
   const { data: sectionData, error: sectionError } = await client
     .from("page_sections")
     .select("id, page_id, type, sort_order, desktop_config, mobile_config, is_mobile_custom")
@@ -328,7 +361,34 @@ async function loadPageSections(client: SupabaseClient, pageId: string): Promise
   };
 }
 
-async function replacePageSections(client: SupabaseClient, pageId: string, sections: LPSectionsData | null): Promise<void> {
+function relatedExploreSlugs(sections: LPSectionsData | null): string[] {
+  const list = Array.isArray(sections) ? sections : sections?.desktop ?? [];
+  const slugs = new Set<string>();
+  for (const section of list) {
+    if (section.type !== "related_explore") continue;
+    for (const slug of section.slugs ?? []) {
+      const clean = slug.trim().toLowerCase().replace(/^\/explore\//, "").replace(/^\/+/, "");
+      if (clean) slugs.add(clean);
+    }
+  }
+  return [...slugs];
+}
+
+async function syncRelatedExploreSlugs(
+  client: SupabaseClient,
+  pageId: string,
+  sections: LPSectionsData | null,
+): Promise<void> {
+  const { error } = await client
+    .from("seo_landing_pages")
+    .update({ related_explore_slugs: relatedExploreSlugs(sections) })
+    .eq("id", pageId);
+  if (error && !isMissingSchemaError(error)) {
+    console.warn("[lp] related explore slugs:", error.message);
+  }
+}
+
+export async function replacePageSections(client: SupabaseClient, pageId: string, sections: LPSectionsData | null): Promise<void> {
   const desktop = Array.isArray(sections) ? sections : sections?.desktop ?? [];
   const mobile = Array.isArray(sections) ? [] : sections?.mobile ?? [];
   const isSplit = !Array.isArray(sections) && sections?.split === true;
@@ -336,7 +396,10 @@ async function replacePageSections(client: SupabaseClient, pageId: string, secti
 
   const { error: deleteError } = await client.from("page_sections").delete().eq("page_id", pageId);
   if (deleteError) throw deleteError;
-  if (desktop.length === 0) return;
+  if (desktop.length === 0) {
+    await syncRelatedExploreSlugs(client, pageId, sections);
+    return;
+  }
 
   for (const [sortOrder, desktopSection] of desktop.entries()) {
     const mobileSection = mobileById.get(desktopSection.id) ?? mobile[sortOrder];
@@ -367,6 +430,7 @@ async function replacePageSections(client: SupabaseClient, pageId: string, secti
     });
     if (elementError) throw elementError;
   }
+  await syncRelatedExploreSlugs(client, pageId, sections);
 }
 
 /** Load only the selected page's independent section and element rows. */
@@ -477,15 +541,17 @@ export const updateSeoLandingPage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { id, ...fields } = data;
     const sb = db(context.supabase);
-    let previousSlug: string | null = null;
-    if (fields.slug) {
-      const { data: current } = await sb
-        .from("seo_landing_pages")
-        .select("slug")
-        .eq("id", id)
-        .maybeSingle();
-      previousSlug = (current as { slug?: string } | null)?.slug ?? null;
+    const { data: current } = await sb
+      .from("seo_landing_pages")
+      .select("slug, published")
+      .eq("id", id)
+      .maybeSingle();
+    const currentRow = current as { slug?: string; published?: boolean } | null;
+    if (fields.published === true && currentRow?.published !== true) {
+      const { assertLandingPublishable } = await import("./landing-briefs.functions");
+      await assertLandingPublishable(sb, id);
     }
+    const previousSlug = fields.slug ? (currentRow?.slug ?? null) : null;
     const payload: Record<string, unknown> = { ...fields };
     let { error } = await sb.from("seo_landing_pages").update(payload).eq("id", id);
     if (error && Object.prototype.hasOwnProperty.call(payload, "noindex") && isMissingSchemaError(error)) {
@@ -507,7 +573,19 @@ export const publishSeoLandingPage = createServerFn({ method: "POST" })
     z.object({ id: z.string().uuid(), published: z.boolean() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { error } = await db(context.supabase)
+    const sb = db(context.supabase);
+    if (data.published) {
+      const { data: current } = await sb
+        .from("seo_landing_pages")
+        .select("published")
+        .eq("id", data.id)
+        .maybeSingle();
+      if ((current as { published?: boolean } | null)?.published !== true) {
+        const { assertLandingPublishable } = await import("./landing-briefs.functions");
+        await assertLandingPublishable(sb, data.id);
+      }
+    }
+    const { error } = await sb
       .from("seo_landing_pages")
       .update({ published: data.published })
       .eq("id", data.id);
@@ -528,95 +606,97 @@ export const deleteSeoLandingPage = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** AI-powered landing page content generation. */
+/** Build a builder-block draft from an approved keyword brief. */
 export const generateLandingPageContent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
-    z.object({ keyword: z.string().min(1).max(200) }).parse(d),
-  )
-  .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("LOVABLE_API_KEY tidak dikonfigurasi. Tambahkan di Settings.");
-
-    const slug = data.keyword
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .slice(0, 80);
-
-    const systemMsg =
-      "You are an expert SEO content writer for Pomah Guesthouse, a budget-friendly guesthouse in Gunungpati, Semarang, Indonesia, near UNNES (Universitas Negeri Semarang). " +
-      "You write compelling, keyword-optimised landing pages in Bahasa Indonesia. " +
-      "Always respond with valid JSON only — no markdown fences, no extra text.";
-
-    const userMsg =
-      `Generate a complete SEO landing page targeting the keyword: "${data.keyword}"\n\n` +
-      `Return ONLY a JSON object with these exact fields:\n` +
-      `{\n` +
-      `  "title": "page title in Bahasa Indonesia, max 80 chars",\n` +
-      `  "slug": "${slug}",\n` +
-      `  "target_keyword": "${data.keyword}",\n` +
-      `  "hero_headline": "compelling headline, max 80 chars, include keyword naturally",\n` +
-      `  "hero_subheadline": "supporting subtitle 1–2 sentences, max 150 chars",\n` +
-      `  "hero_cta_text": "CTA button text, max 30 chars, e.g. Pesan Sekarang",\n` +
-      `  "body_content": "4–6 HTML sections using h2, h3, p, ul, li, strong tags. 500–800 words. Cover: why choose Pomah, facilities, location benefits, FAQs. Include the keyword naturally at least 3 times.",\n` +
-      `  "meta_title": "50–60 chars, keyword first, ends with | Pomah Guesthouse",\n` +
-      `  "meta_description": "120–160 chars, include keyword, mention location, compelling call to action"\n` +
-      `}`;
-
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemMsg },
-          { role: "user",   content: userMsg   },
-        ],
-      }),
+  .inputValidator((d) => z.object({ briefId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { generateFromApprovedBrief } = await import("./landing-briefs.functions");
+    const result = await generateFromApprovedBrief({
+      briefId: data.briefId,
+      client: db(context.supabase),
     });
+    return { ok: true, ...result };
+  });
 
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`AI gateway error ${res.status}: ${txt}`);
-    }
-
-    const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const raw = j.choices?.[0]?.message?.content?.trim() ?? "";
-
-    // Strip possible markdown fences that some models add
-    const cleaned = raw
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-
-    let parsed: Record<string, string>;
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch {
-      throw new Error("AI mengembalikan format yang tidak valid. Coba lagi.");
-    }
-
+/** Staff-only draft. Unpublished pages stay off the public query. */
+export const previewSeoLandingPage = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ slug: z.string().min(1) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const sb = db(context.supabase);
+    const { data: staff, error: staffError } = await sb.rpc("is_staff", { _user_id: context.userId });
+    if (staffError || staff !== true) return { page: null, forbidden: true as const };
+    const { data: row, error } = await sb.from("seo_landing_pages").select("*").eq("slug", data.slug).maybeSingle();
+    if (error || !row) return { page: null, forbidden: false as const };
+    const page = row as unknown as SeoLandingPage;
+    const sections = (await loadPageSections(sb, page.id)) ?? page.sections;
+    const { data: landmarkRows, error: landmarkError } = await sb
+      .from("seo_landmarks")
+      .select("id, name, category, lat, lng, road_distance_km, travel_minutes, verified")
+      .order("sort_order", { ascending: true });
+    const { getPublicSiteData } = await import("@/public/functions/public.functions");
+    const { getGoogleReviews } = await import("@/public/functions/google-reviews.functions");
+    const { loadCityGuidePlaces } = await import("@/public/lib/city-guide.server");
+    const [site, reviewResult, places] = await Promise.all([
+      getPublicSiteData().catch(() => null),
+      getGoogleReviews().catch(() => ({ rating: null, total: null, reviews: [], status: "ERROR" as const })),
+      loadCityGuidePlaces().catch(() => []),
+    ]);
+    const asNumber = (value: unknown): number | null => {
+      if (value == null || value === "") return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const landmarks = landmarkError || !Array.isArray(landmarkRows)
+      ? []
+      : landmarkRows.map((row) => {
+          const item = row as Record<string, unknown>;
+          return {
+            id: String(item.id ?? ""),
+            name: String(item.name ?? ""),
+            category: item.category == null ? null : String(item.category),
+            lat: asNumber(item.lat),
+            lng: asNumber(item.lng),
+            road_distance_km: asNumber(item.road_distance_km),
+            travel_minutes: asNumber(item.travel_minutes),
+            verified: item.verified === true,
+          };
+        });
+    const rawRooms = Array.isArray(site?.roomTypes) ? site.roomTypes : [];
+    const roomTypes = rawRooms.map((row) => {
+      const room = row as Record<string, unknown>;
+      return {
+        id: String(room.id ?? ""),
+        name: String(room.name ?? ""),
+        slug: String(room.slug ?? ""),
+        capacity: asNumber(room.capacity),
+        base_rate: asNumber(room.base_rate),
+        hero_image_url: room.hero_image_url == null ? null : String(room.hero_image_url),
+      };
+    });
+    const rawProperty = site?.property;
+    const property = rawProperty
+      ? {
+          name: rawProperty.name ?? null,
+          logo_url: rawProperty.logo_url ?? null,
+          whatsapp_number: rawProperty.whatsapp_number ?? null,
+          email: rawProperty.email ?? null,
+          homepage_config: rawProperty.homepage_config ?? null,
+        }
+      : null;
     return {
-      page: {
-        title:            (parsed.title            ?? "").slice(0, 200),
-        slug:             (parsed.slug             ?? slug).toLowerCase().replace(/[^a-z0-9-]/g, "-"),
-        target_keyword:   parsed.target_keyword    ?? data.keyword,
-        hero_headline:    (parsed.hero_headline    ?? "").slice(0, 300),
-        hero_subheadline: (parsed.hero_subheadline ?? "").slice(0, 500),
-        hero_cta_text:    (parsed.hero_cta_text    ?? "Pesan Sekarang").slice(0, 100),
-        hero_cta_url:     "/book",
-        body_content:     parsed.body_content      ?? "",
-        meta_title:       (parsed.meta_title       ?? "").slice(0, 60),
-        meta_description: (parsed.meta_description ?? "").slice(0, 160),
-        og_image_url:     null as string | null,
-        published:        false,
-      },
+      page: { ...page, sections, noindex: true as const },
+      forbidden: false as const,
+      landmarks,
+      property,
+      roomTypes,
+      reviews: reviewResult,
+      explorePlaces: places.map((place) => ({
+        slug: place.slug,
+        name: place.name,
+        category: place.category ?? null,
+      })),
     };
   });
 

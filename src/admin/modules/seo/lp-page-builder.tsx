@@ -3,6 +3,8 @@
  * Manages an ordered list of typed section blocks.
  */
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   ChevronUp,
   ChevronDown,
@@ -22,8 +24,14 @@ import {
   Film,
   BedDouble,
   CalendarCheck,
+  MapPin,
+  Banknote,
+  Newspaper,
 } from "lucide-react";
 import { MediaPicker, type MediaKind } from "@/admin/components/media-picker";
+import { listSeoLandmarks, type LandmarkRow } from "./landing-briefs.functions";
+import { CITY_GUIDE_ARTICLES } from "@/public/content/approved-seo";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
@@ -60,6 +68,11 @@ import {
   type LPButtonSection,
   type LPRoomSliderSection,
   type LPDatePickerSection,
+  type LPLocationSection,
+  type LPFilteredRoomsSection,
+  type LPStartingPriceSection,
+  type LPRelatedExploreSection,
+  type LPFilteredReviewsSection,
   type LPSectionsData,
 } from "./landing-page.functions";
 
@@ -93,6 +106,16 @@ function makeDefault(type: LPSection["type"]): LPSection {
       return { id, type: "slider", autoplayMs: 5000, height: 480, transition: "fade", fontFamily: "serif", fontSize: 48, fontStyle: "bold", slides: [{ imageUrl: "", videoUrl: "", heading: "Selamat Datang Di Pomah Guesthouse", subheading: "Penginapan Murah di Kota Semarang" }] };
     case "button":
       return { id, type: "button", text: "Pesan Sekarang", url: "/book", align: "center", variant: "solid", color: "teal" };
+    case "location":
+      return { id, type: "location", title: "Jarak dari Pomah", landmark_ids: [] };
+    case "filtered_rooms":
+      return { id, type: "filtered_rooms", title: "Kamar yang cocok", min_capacity: null, room_type_ids: [] };
+    case "starting_price":
+      return { id, type: "starting_price", title: "Mulai dari" };
+    case "related_explore":
+      return { id, type: "related_explore", title: "Baca juga", slugs: [] };
+    case "filtered_reviews":
+      return { id, type: "filtered_reviews", title: "Ulasan tamu", keywords: ["wisuda", "keluarga"], limit: 3 };
   }
 }
 
@@ -110,6 +133,11 @@ const SECTION_META: { type: LPSection["type"]; label: string; desc: string; Icon
   { type: "cta_banner",   label: "CTA Banner",         desc: "Strip ajakan bertindak di halaman",    Icon: Megaphone,        color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   { type: "button",       label: "Tombol",             desc: "Tombol tautan tunggal",                Icon: MousePointerClick,color: "bg-pink-50 text-pink-700 border-pink-200" },
   { type: "testimonials", label: "Testimoni",          desc: "Kutipan ulasan dari tamu",             Icon: Quote,            color: "bg-rose-50 text-rose-700 border-rose-200" },
+  { type: "location",     label: "Jarak landmark",     desc: "Jarak terverifikasi + peta",           Icon: MapPin,           color: "bg-sky-50 text-sky-700 border-sky-200" },
+  { type: "filtered_rooms", label: "Kamar terfilter",  desc: "Kamar menurut kapasitas atau tipe",    Icon: BedDouble,        color: "bg-lime-50 text-lime-800 border-lime-200" },
+  { type: "starting_price", label: "Harga mulai dari", desc: "Harga terendah langsung dari kamar",   Icon: Banknote,         color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+  { type: "related_explore", label: "Artikel Jelajahi", desc: "Tautan ke /explore",                 Icon: Newspaper,        color: "bg-amber-50 text-amber-800 border-amber-200" },
+  { type: "filtered_reviews", label: "Ulasan terfilter", desc: "Ulasan Google yang memuat kata kunci", Icon: Quote,         color: "bg-rose-50 text-rose-800 border-rose-200" },
 ];
 
 function typeMeta(type: LPSection["type"]) {
@@ -396,6 +424,11 @@ function SectionEditor({ section, onUpdate }: { section: LPSection; onUpdate: (p
     case "cta_banner":   return <CtaBannerEditor     s={section} onUpdate={onUpdate} />;
     case "button":       return <ButtonEditor        s={section} onUpdate={onUpdate} />;
     case "testimonials": return <TestimonialsEditor  s={section} onUpdate={onUpdate} />;
+    case "location":     return <LocationEditor      s={section} onUpdate={onUpdate} />;
+    case "filtered_rooms": return <FilteredRoomsEditor s={section} onUpdate={onUpdate} />;
+    case "starting_price": return <StartingPriceEditor s={section} onUpdate={onUpdate} />;
+    case "related_explore": return <RelatedExploreEditor s={section} onUpdate={onUpdate} />;
+    case "filtered_reviews": return <FilteredReviewsEditor s={section} onUpdate={onUpdate} />;
     default:             return null;
   }
 }
@@ -947,6 +980,173 @@ function TestimonialsEditor({ s, onUpdate }: { s: LPTestimonialsSection; onUpdat
         </Button>
       </div>
       )}
+    </div>
+  );
+}
+
+function useLandmarkOptions() {
+  const listFn = useServerFn(listSeoLandmarks);
+  return useQuery({
+    queryKey: ["seo-landmarks-picker"],
+    queryFn: () => listFn(),
+    refetchOnWindowFocus: false,
+  });
+}
+
+function useRoomOptions() {
+  return useQuery({
+    queryKey: ["lp-room-type-picker"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("room_types")
+        .select("id, name, slug, capacity")
+        .order("name", { ascending: true });
+      if (error) return [] as Array<{ id: string; name: string | null; slug: string | null; capacity: number | null }>;
+      return data ?? [];
+    },
+    refetchOnWindowFocus: false,
+  });
+}
+
+function LocationEditor({ s, onUpdate }: { s: LPLocationSection; onUpdate: UpFn }) {
+  const query = useLandmarkOptions();
+  const landmarks = (query.data?.landmarks ?? []) as LandmarkRow[];
+  const selected = new Set(s.landmark_ids ?? []);
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onUpdate({ landmark_ids: [...next] } as Partial<LPSection>);
+  };
+  return (
+    <div className="space-y-3">
+      <Fld label="Judul" hint="Jarak dan waktu hanya tampil untuk landmark yang sudah diverifikasi.">
+        <Input value={s.title ?? ""} onChange={(e) => onUpdate({ title: e.target.value } as Partial<LPSection>)} className="mt-1" />
+      </Fld>
+      {query.data?.missing ? (
+        <p className="text-[11px] text-amber-800">Tabel landmark belum ada. Jalankan migrasi SQL setelah deploy.</p>
+      ) : null}
+      <div className="max-h-56 space-y-1 overflow-y-auto">
+        {landmarks.map((row) => (
+          <label key={row.id} className="flex items-start gap-2 rounded-md border border-stone-200 px-2 py-1.5 text-xs">
+            <input type="checkbox" className="mt-0.5 accent-teal-700" checked={selected.has(row.id)} onChange={() => toggle(row.id)} />
+            <span className="min-w-0">
+              <span className="break-words font-medium">{row.name}</span>
+              <span className={row.verified ? "ml-1 text-emerald-700" : "ml-1 text-amber-700"}>
+                {row.verified ? "terverifikasi" : "belum diverifikasi"}
+              </span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FilteredRoomsEditor({ s, onUpdate }: { s: LPFilteredRoomsSection; onUpdate: UpFn }) {
+  const query = useRoomOptions();
+  const rooms = query.data ?? [];
+  const selected = new Set(s.room_type_ids ?? []);
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onUpdate({ room_type_ids: [...next] } as Partial<LPSection>);
+  };
+  return (
+    <div className="space-y-3">
+      <Fld label="Judul">
+        <Input value={s.title ?? ""} onChange={(e) => onUpdate({ title: e.target.value } as Partial<LPSection>)} className="mt-1" />
+      </Fld>
+      <Fld label="Kapasitas minimum" hint="0 berarti semua kapasitas.">
+        <NumericInput
+          value={s.min_capacity ?? 0}
+          emptyValue={0}
+          min={0}
+          max={20}
+          onValueChange={(value) => onUpdate({ min_capacity: value > 0 ? value : null } as Partial<LPSection>)}
+          className="mt-1"
+        />
+      </Fld>
+      <div className="max-h-56 space-y-1 overflow-y-auto">
+        {rooms.map((room) => (
+          <label key={room.id} className="flex items-center gap-2 text-xs">
+            <input type="checkbox" className="accent-teal-700" checked={selected.has(room.id)} onChange={() => toggle(room.id)} />
+            <span className="break-words">{room.name || room.slug}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StartingPriceEditor({ s, onUpdate }: { s: LPStartingPriceSection; onUpdate: UpFn }) {
+  return (
+    <Fld label="Judul" hint="Angka diambil dari harga terendah room_types. Tidak diketik manual.">
+      <Input value={s.title ?? ""} onChange={(e) => onUpdate({ title: e.target.value } as Partial<LPSection>)} className="mt-1" />
+    </Fld>
+  );
+}
+
+function RelatedExploreEditor({ s, onUpdate }: { s: LPRelatedExploreSection; onUpdate: UpFn }) {
+  const selected = new Set(s.slugs ?? []);
+  const toggle = (slug: string) => {
+    const next = new Set(selected);
+    if (next.has(slug)) next.delete(slug);
+    else next.add(slug);
+    onUpdate({ slugs: [...next] } as Partial<LPSection>);
+  };
+  return (
+    <div className="space-y-3">
+      <Fld label="Judul">
+        <Input value={s.title ?? ""} onChange={(e) => onUpdate({ title: e.target.value } as Partial<LPSection>)} className="mt-1" />
+      </Fld>
+      <Fld label="Tag cadangan" hint="Dipakai bila tidak ada slug yang dipilih.">
+        <Input value={s.tag ?? ""} onChange={(e) => onUpdate({ tag: e.target.value } as Partial<LPSection>)} className="mt-1" placeholder="wisata" />
+      </Fld>
+      <div className="max-h-56 space-y-1 overflow-y-auto">
+        {CITY_GUIDE_ARTICLES.map((article) => (
+          <label key={article.canonicalSlug} className="flex items-start gap-2 text-xs">
+            <input
+              type="checkbox"
+              className="mt-0.5 accent-teal-700"
+              checked={selected.has(article.canonicalSlug)}
+              onChange={() => toggle(article.canonicalSlug)}
+            />
+            <span className="break-words">{article.title}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FilteredReviewsEditor({ s, onUpdate }: { s: LPFilteredReviewsSection; onUpdate: UpFn }) {
+  return (
+    <div className="space-y-3">
+      <Fld label="Judul">
+        <Input value={s.title ?? ""} onChange={(e) => onUpdate({ title: e.target.value } as Partial<LPSection>)} className="mt-1" />
+      </Fld>
+      <Fld label="Kata kunci" hint="Pisahkan dengan koma. Contoh: wisuda, keluarga. Kosong memakai ulasan teratas.">
+        <Input
+          value={(s.keywords ?? []).join(", ")}
+          onChange={(e) =>
+            onUpdate({
+              keywords: e.target.value.split(",").map((word) => word.trim()).filter(Boolean),
+            } as Partial<LPSection>)
+          }
+          className="mt-1"
+        />
+      </Fld>
+      <Fld label="Jumlah ulasan">
+        <NumericInput
+          value={s.limit ?? 3}
+          min={1}
+          max={8}
+          onValueChange={(limit) => onUpdate({ limit } as Partial<LPSection>)}
+          className="mt-1"
+        />
+      </Fld>
     </div>
   );
 }
