@@ -13,7 +13,7 @@
  *   {{8}} DP / pembayaran
  *   {{9}} sisa
  *
- * Teks template di Meta (bahasa id, nama default `new_booking_alert`):
+ * Teks template di Meta (bahasa id, nama yang diset di env `new_booking_alert`):
  *   Booking baru {{1}}
  *   Tamu: {{2}}
  *   Kamar: {{3}}
@@ -24,8 +24,12 @@
  */
 import { sanitizeTemplateParam } from "@/services/whatsapp-meta.service";
 
+/** Nama yang dipakai bila env di-set. Tidak dipakai otomatis selama belum disetujui Meta. */
 export const STAFF_BOOKING_TEMPLATE_NAME_DEFAULT = "new_booking_alert";
 export const STAFF_BOOKING_TEMPLATE_LANG_DEFAULT = "id";
+
+/** Template hilang atau parameter tidak cocok — kirim teks bebas, jangan gagalkan alert. */
+export const STAFF_TEMPLATE_CONFIG_ERROR_CODES = [132000, 132001, 132005, 132007, 132012] as const;
 
 /** Batas tunggu di jalur booking. Sama dengan invoice (9 detik). */
 export const STAFF_BOOKING_ALERT_TIMEOUT_MS = 9_000;
@@ -62,21 +66,138 @@ export interface StaffBookingTemplateConfig {
 type EnvLike = Record<string, string | undefined>;
 
 /**
- * Nama template dari env. Kosong eksplisit = tidak dikonfigurasi (teks bebas).
- * Tidak di-set sama sekali memakai default `new_booking_alert` / bahasa `id`.
+ * Template hanya bila `WHATSAPP_STAFF_BOOKING_TEMPLATE_NAME` di-set dan tidak kosong.
+ * Env tidak ada atau kosong → teks bebas, supaya alert tidak gagal sebelum template Meta disetujui.
+ * Bahasa default `id` hanya berlaku kalau namanya di-set.
  */
 export function resolveStaffBookingTemplate(env: EnvLike = process.env): StaffBookingTemplateConfig | null {
   const rawName = env.WHATSAPP_STAFF_BOOKING_TEMPLATE_NAME;
-  const name = (rawName === undefined ? STAFF_BOOKING_TEMPLATE_NAME_DEFAULT : rawName).trim();
+  if (rawName === undefined) return null;
+  const name = rawName.trim();
   if (!name) return null;
   const rawLang = env.WHATSAPP_STAFF_BOOKING_TEMPLATE_LANG;
   const lang = (rawLang === undefined || rawLang.trim() === "" ? STAFF_BOOKING_TEMPLATE_LANG_DEFAULT : rawLang).trim();
   return { name, lang: lang || STAFF_BOOKING_TEMPLATE_LANG_DEFAULT };
 }
 
-/** Template terkonfigurasi → selalu template. Selain itu teks bebas. */
+/** Template terkonfigurasi → template. Selain itu teks bebas. */
 export function selectStaffBookingSendMode(env: EnvLike = process.env): StaffBookingSendMode {
   return resolveStaffBookingTemplate(env) ? "template" : "text";
+}
+
+const TEMPLATE_CONFIG_LABEL: Record<(typeof STAFF_TEMPLATE_CONFIG_ERROR_CODES)[number], string> = {
+  132000: "jumlah parameter tidak cocok",
+  132001: "template tidak ada",
+  132005: "teks template terlalu panjang",
+  132007: "format template ditolak",
+  132012: "format parameter tidak cocok",
+};
+
+function asMetaCode(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim());
+  return null;
+}
+
+/** Kode 132000/132001/132005/132007/132012 di respons sinkron Meta, bila ada. */
+export function findStaffTemplateConfigError(source: { error?: string | null; raw?: unknown } | unknown): number | null {
+  let found: number | null = null;
+  const mark = (value: unknown) => {
+    const code = asMetaCode(value);
+    if (code != null && (STAFF_TEMPLATE_CONFIG_ERROR_CODES as readonly number[]).includes(code)) found = code;
+  };
+  const visit = (value: unknown, depth: number) => {
+    if (found != null || depth > 8 || value == null) return;
+    if (typeof value === "string") {
+      for (const code of STAFF_TEMPLATE_CONFIG_ERROR_CODES) {
+        if (new RegExp(`\\b${code}\\b`).test(value)) {
+          found = code;
+          return;
+        }
+      }
+      return;
+    }
+    if (typeof value === "number") {
+      mark(value);
+      return;
+    }
+    if (typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1);
+      return;
+    }
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (key === "code" || key === "error_code" || key === "error_subcode") mark(child);
+      else visit(child, depth + 1);
+    }
+  };
+  if (source && typeof source === "object" && ("error" in source || "raw" in source)) {
+    const record = source as { error?: string | null; raw?: unknown };
+    visit(record.raw, 0);
+    if (record.error) visit(record.error, 0);
+    return found;
+  }
+  visit(source, 0);
+  return found;
+}
+
+export function formatStaffTemplateConfigFailure(code: number): string {
+  const label = TEMPLATE_CONFIG_LABEL[code as (typeof STAFF_TEMPLATE_CONFIG_ERROR_CODES)[number]];
+  return label ? `Meta ${code}: ${label}` : `Meta ${code}: template ditolak`;
+}
+
+export interface StaffChannelSendResult {
+  ok: boolean;
+  error?: string | null;
+  raw?: unknown;
+  messageId?: string | null;
+}
+
+export interface StaffBookingDeliveryInput {
+  phone: string;
+  message: string;
+  fileUrl?: string;
+  template: (StaffBookingTemplateConfig & { bodyParams: string[] }) | null;
+}
+
+/**
+ * Kirim alert staf. Template yang ditolak Meta karena belum ada / parameter
+ * tidak cocok dilanjutkan sebagai teks bebas pada pengiriman yang sama.
+ */
+export async function deliverStaffBookingMessage(
+  input: StaffBookingDeliveryInput,
+  deps: {
+    sendTemplate: (
+      phone: string,
+      name: string,
+      languageCode: string,
+      bodyParams: string[],
+      logBody?: string,
+    ) => Promise<StaffChannelSendResult>;
+    sendText: (phone: string, message: string, fileUrl?: string) => Promise<StaffChannelSendResult>;
+    warn?: (message: string) => void;
+  },
+): Promise<StaffChannelSendResult> {
+  const warn = deps.warn ?? ((message: string) => console.warn(message));
+  if (!input.template) {
+    return deps.sendText(input.phone, input.message, input.fileUrl);
+  }
+  const templateResult = await deps.sendTemplate(
+    input.phone,
+    input.template.name,
+    input.template.lang,
+    input.template.bodyParams,
+    input.message,
+  );
+  if (templateResult.ok) return templateResult;
+  const code = findStaffTemplateConfigError(templateResult);
+  if (code == null) return templateResult;
+  const reason = formatStaffTemplateConfigFailure(code);
+  warn(`[ManagerNotifier] ${reason}; kirim teks bebas ke ${input.phone}`);
+  const textResult = await deps.sendText(input.phone, input.message, input.fileUrl);
+  if (textResult.ok) return textResult;
+  const textError = textResult.error?.trim() || "teks bebas gagal";
+  return { ...textResult, ok: false, error: `${reason}; teks bebas: ${textError}` };
 }
 
 export function staffAlertDedupeKey(bookingId: string, managerId: string): string {

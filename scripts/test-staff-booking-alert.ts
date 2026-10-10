@@ -16,6 +16,8 @@ import {
   formatStaffRoomLabel,
   formatStaffRooms,
   isCutOffPendingLog,
+  deliverStaffBookingMessage,
+  findStaffTemplateConfigError,
   resolveStaffBookingTemplate,
   selectStaffAlertRecoveryTargets,
   selectStaffBookingSendMode,
@@ -173,8 +175,8 @@ assert.equal(
 );
 assert.equal(formatStaffRooms([]), "-");
 
-assert.equal(selectStaffBookingSendMode({}), "template");
-assert.deepEqual(resolveStaffBookingTemplate({}), { name: "new_booking_alert", lang: "id" });
+assert.equal(selectStaffBookingSendMode({}), "text");
+assert.equal(resolveStaffBookingTemplate({}), null);
 assert.equal(selectStaffBookingSendMode({ WHATSAPP_STAFF_BOOKING_TEMPLATE_NAME: "" }), "text");
 assert.equal(resolveStaffBookingTemplate({ WHATSAPP_STAFF_BOOKING_TEMPLATE_NAME: "  " }), null);
 assert.deepEqual(
@@ -188,6 +190,128 @@ assert.equal(
   resolveStaffBookingTemplate({ WHATSAPP_STAFF_BOOKING_TEMPLATE_NAME: "new_booking_alert" })?.lang,
   "id",
 );
+assert.equal(selectStaffBookingSendMode({ WHATSAPP_STAFF_BOOKING_TEMPLATE_NAME: "new_booking_alert" }), "template");
+
+for (const code of [132000, 132001, 132005, 132007, 132012]) {
+  assert.equal(findStaffTemplateConfigError({ raw: { error: { code } } }), code);
+  assert.equal(findStaffTemplateConfigError({ error: `HTTP 400: (#${code}) template` }), code);
+}
+assert.equal(findStaffTemplateConfigError({ raw: { error: { code: 131047 } } }), null);
+
+{
+  const calls: string[] = [];
+  const warnings: string[] = [];
+  const textOnly = await deliverStaffBookingMessage(
+    { phone: "628111", message: "bebas", template: null },
+    {
+      sendTemplate: async () => {
+        calls.push("template");
+        return { ok: true, messageId: "wamid.tpl" };
+      },
+      sendText: async () => {
+        calls.push("text");
+        return { ok: true, messageId: "wamid.text" };
+      },
+      warn: (message) => warnings.push(message),
+    },
+  );
+  assert.deepEqual(calls, ["text"]);
+  assert.equal(textOnly.messageId, "wamid.text");
+  assert.equal(warnings.length, 0);
+}
+
+{
+  const calls: string[] = [];
+  const sent = await deliverStaffBookingMessage(
+    {
+      phone: "628111",
+      message: "bebas",
+      template: { name: "new_booking_alert", lang: "id", bodyParams: ["PG-1"] },
+    },
+    {
+      sendTemplate: async () => {
+        calls.push("template");
+        return { ok: true, messageId: "wamid.tpl" };
+      },
+      sendText: async () => {
+        calls.push("text");
+        return { ok: true, messageId: "wamid.text" };
+      },
+    },
+  );
+  assert.deepEqual(calls, ["template"]);
+  assert.equal(sent.messageId, "wamid.tpl");
+}
+
+{
+  const calls: string[] = [];
+  const warnings: string[] = [];
+  const sent = await deliverStaffBookingMessage(
+    {
+      phone: "628111",
+      message: "bebas",
+      template: { name: "new_booking_alert", lang: "id", bodyParams: ["PG-1"] },
+    },
+    {
+      sendTemplate: async () => {
+        calls.push("template");
+        return { ok: false, error: "HTTP 400", raw: { error: { code: 132001, message: "template name does not exist" } } };
+      },
+      sendText: async () => {
+        calls.push("text");
+        return { ok: true, messageId: "wamid.text" };
+      },
+      warn: (message) => warnings.push(message),
+    },
+  );
+  assert.deepEqual(calls, ["template", "text"]);
+  assert.equal(sent.ok, true);
+  assert.equal(sent.messageId, "wamid.text");
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /132001/);
+  assert.match(warnings[0], /teks bebas/);
+}
+
+{
+  const calls: string[] = [];
+  const kept = await deliverStaffBookingMessage(
+    {
+      phone: "628111",
+      message: "bebas",
+      template: { name: "new_booking_alert", lang: "id", bodyParams: ["PG-1"] },
+    },
+    {
+      sendTemplate: async () => {
+        calls.push("template");
+        return { ok: false, error: "HTTP 400", raw: { error: { code: 131047 } } };
+      },
+      sendText: async () => {
+        calls.push("text");
+        return { ok: true, messageId: "wamid.text" };
+      },
+    },
+  );
+  assert.deepEqual(calls, ["template"]);
+  assert.equal(kept.ok, false);
+}
+
+{
+  const failed = await deliverStaffBookingMessage(
+    {
+      phone: "628111",
+      message: "bebas",
+      template: { name: "new_booking_alert", lang: "id", bodyParams: ["a"] },
+    },
+    {
+      sendTemplate: async () => ({ ok: false, error: "HTTP 400: 132012", raw: null }),
+      sendText: async () => ({ ok: false, error: "di luar jendela" }),
+      warn: () => undefined,
+    },
+  );
+  assert.equal(failed.ok, false);
+  assert.match(String(failed.error), /132012/);
+  assert.match(String(failed.error), /di luar jendela/);
+}
 assert.equal(STAFF_BOOKING_TEMPLATE_BODY.includes("{{9}}"), true);
 assert.doesNotMatch(STAFF_BOOKING_TEMPLATE_BODY, /sumber|Sumber|source/i);
 
