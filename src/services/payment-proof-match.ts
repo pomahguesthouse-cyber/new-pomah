@@ -61,7 +61,19 @@ export interface PaymentMatchResult {
   received_amount: number | null;
   dp_amount: number | null;
   remaining_amount: number | null;
+  /**
+   * Kelebihan transfer (Rp) pada hasil cocok, biasanya biaya transfer yang ikut
+   * ditambahkan tamu. Null bila tidak cocok atau nominal tidak lebih.
+   */
+  transfer_fee_surplus: number | null;
 }
+
+/**
+ * Batas kelebihan transfer yang tetap dianggap cocok: biaya BI-FAST Rp2.500
+ * dan transfer antarbank biasa Rp6.500 yang ikut ditambahkan tamu.
+ * Kekurangan bayar tetap memakai toleransi kecil (paymentAmountTolerance).
+ */
+export const TRANSFER_FEE_SURPLUS_TOLERANCE = 6500;
 
 const DRAFT_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 const GENERIC_ROOM_TOKENS = new Set([
@@ -105,7 +117,10 @@ export function receivedTransferAmount(ocr: PaymentProofOcrInput | null | undefi
   return total;
 }
 
-/** Toleransi: yang lebih besar antara Rp1.000 dan 0,5% dari angka yang diharapkan. */
+/**
+ * Toleransi kecil (lebih atau kurang): yang lebih besar antara Rp1.000 dan 0,5%.
+ * Kelebihan karena biaya transfer ditangani terpisah lewat TRANSFER_FEE_SURPLUS_TOLERANCE.
+ */
 export function paymentAmountTolerance(expected: number): number {
   const rounded = Math.round(expected);
   if (!Number.isFinite(rounded) || rounded <= 0) return 1000;
@@ -118,6 +133,26 @@ export function paymentAmountsClose(received: number, expected: number): boolean
   const left = Math.round(received);
   const right = Math.round(expected);
   return Math.abs(left - right) <= paymentAmountTolerance(right);
+}
+
+export type PaymentAmountFit = "exact" | "tolerance" | "transfer_fee";
+
+/**
+ * Seberapa cocok nominal diterima dengan angka yang diharapkan.
+ * - exact: sama persis
+ * - tolerance: selisih dalam max(Rp1.000, 0,5%), lebih atau kurang
+ * - transfer_fee: LEBIH sampai TRANSFER_FEE_SURPLUS_TOLERANCE (biaya transfer ikut ditambahkan)
+ * Kurang bayar di luar toleransi kecil → null.
+ */
+export function paymentAmountFit(received: number, expected: number): PaymentAmountFit | null {
+  if (!(received > 0) || !(expected > 0)) return null;
+  const left = Math.round(received);
+  const right = Math.round(expected);
+  const diff = left - right;
+  if (diff === 0) return "exact";
+  if (Math.abs(diff) <= paymentAmountTolerance(right)) return "tolerance";
+  if (diff > 0 && diff <= TRANSFER_FEE_SURPLUS_TOLERANCE) return "transfer_fee";
+  return null;
 }
 
 export function formatRpCompact(value: number | null | undefined): string {
@@ -310,6 +345,8 @@ interface BookingFit {
   expectation: Expectation;
   diff: number;
   exact: boolean;
+  /** Cocok hanya karena kelebihan biaya transfer (di luar toleransi kecil). */
+  feeOnly: boolean;
   room: boolean;
   createdAt: number;
   index: number;
@@ -327,14 +364,16 @@ function bestFitForBooking(
   index: number,
 ): BookingFit | null {
   const hits = expectationsFor(candidate)
-    .filter((expectation) => paymentAmountsClose(received, expectation.amount))
-    .map((expectation) => {
+    .map((expectation) => ({ expectation, fit: paymentAmountFit(received, expectation.amount) }))
+    .filter((hit): hit is { expectation: Expectation; fit: PaymentAmountFit } => hit.fit != null)
+    .map(({ expectation, fit }) => {
       const diff = received - expectation.amount;
-      return { expectation, diff, exact: diff === 0 };
+      return { expectation, diff, exact: fit === "exact", feeOnly: fit === "transfer_fee" };
     });
   if (hits.length === 0) return null;
   hits.sort((left, right) => {
     if (left.exact !== right.exact) return left.exact ? -1 : 1;
+    if (left.feeOnly !== right.feeOnly) return left.feeOnly ? 1 : -1;
     const distance = Math.abs(left.diff) - Math.abs(right.diff);
     if (distance !== 0) return distance;
     return kindRank(left.expectation.kind, paidOf(candidate)) - kindRank(right.expectation.kind, paidOf(candidate));
@@ -345,6 +384,7 @@ function bestFitForBooking(
     expectation: winner.expectation,
     diff: winner.diff,
     exact: winner.exact,
+    feeOnly: winner.feeOnly,
     room: roomTypeMentioned(candidate.roomTypes, note),
     createdAt: createdMillis(candidate),
     index,
@@ -377,8 +417,8 @@ function classifyMiss(candidate: PaymentMatchCandidate, received: number): Payme
   const list = expectationsFor(candidate);
   if (list.length === 0) return "unmatched";
   const maxAmount = Math.max(...list.map((item) => item.amount));
-  const belowAll = list.every((item) => received < item.amount && !paymentAmountsClose(received, item.amount));
-  const aboveAll = received > maxAmount && !paymentAmountsClose(received, maxAmount);
+  const belowAll = list.every((item) => received < item.amount && paymentAmountFit(received, item.amount) == null);
+  const aboveAll = received > maxAmount && paymentAmountFit(received, maxAmount) == null;
   if (aboveAll) return "overpaid";
   if (belowAll) return "partial";
   return "unmatched";
@@ -392,6 +432,29 @@ export interface PaymentMatchSummaryInput {
   received_amount?: number | null;
   dp_amount?: number | null;
   remaining_amount?: number | null;
+  amount_diff?: number | null;
+  transfer_fee_surplus?: number | null;
+}
+
+/** "lebih Rp2.500, kemungkinan biaya transfer" bila nominal cocok tapi sedikit lebih. */
+export function transferFeeSurplusNote(surplus: number | null | undefined): string {
+  if (surplus == null || !Number.isFinite(surplus) || surplus <= 0) return "";
+  return `lebih ${formatRpCompact(surplus)}, kemungkinan biaya transfer`;
+}
+
+function matchedSurplus(match: PaymentMatchSummaryInput): number | null {
+  const explicit = match.transfer_fee_surplus;
+  if (explicit != null && Number.isFinite(explicit)) return explicit > 0 ? Math.round(explicit) : null;
+  const diff = match.amount_diff;
+  if (diff != null && Number.isFinite(diff) && diff > 0 && diff <= TRANSFER_FEE_SURPLUS_TOLERANCE) {
+    return Math.round(diff);
+  }
+  return null;
+}
+
+function amountWithSurplus(amount: number, match: PaymentMatchSummaryInput): string {
+  const note = transferFeeSurplusNote(matchedSurplus(match));
+  return note ? `${formatRpCompact(amount)}, ${note}` : formatRpCompact(amount);
 }
 
 export function formatPaymentProofSummary(match: PaymentMatchSummaryInput | null | undefined): string {
@@ -401,13 +464,13 @@ export function formatPaymentProofSummary(match: PaymentMatchSummaryInput | null
   const expected = match.expected_amount ?? null;
   const status = match.status;
   if (status === "matched_dp" && code && expected != null) {
-    return `Cocok DP 50% ${code} (${formatRpCompact(expected)})`;
+    return `Cocok DP 50% ${code} (${amountWithSurplus(expected, match)})`;
   }
   if (status === "matched_full" && code && expected != null) {
-    return `Cocok lunas ${code} (${formatRpCompact(expected)})`;
+    return `Cocok lunas ${code} (${amountWithSurplus(expected, match)})`;
   }
   if (status === "matched_remaining" && code && expected != null) {
-    return `Cocok sisa ${code} (${formatRpCompact(expected)})`;
+    return `Cocok sisa ${code} (${amountWithSurplus(expected, match)})`;
   }
   if (status === "matched") {
     const amount = expected ?? match.booking_amount ?? null;
@@ -476,6 +539,7 @@ export function matchProofToCandidates(
       received_amount: received,
       dp_amount: null,
       remaining_amount: null,
+      transfer_fee_surplus: null,
     });
   }
 
@@ -492,6 +556,7 @@ export function matchProofToCandidates(
       received_amount: null,
       dp_amount: dpAmount(reference),
       remaining_amount: remainingBalance(reference),
+      transfer_fee_surplus: null,
     });
   }
 
@@ -502,6 +567,7 @@ export function matchProofToCandidates(
   if (fits.length > 0) {
     fits.sort((left, right) => {
       if (left.exact !== right.exact) return left.exact ? -1 : 1;
+      if (left.feeOnly !== right.feeOnly) return left.feeOnly ? 1 : -1;
       if (left.room !== right.room) return left.room ? -1 : 1;
       if (left.createdAt !== right.createdAt) return right.createdAt - left.createdAt;
       return left.index - right.index;
@@ -509,7 +575,13 @@ export function matchProofToCandidates(
     const winner = fits[0];
     const status = statusFor(winner.expectation.kind, winner.candidate);
     const roomNote = winner.room ? " Catatan transfer menyebut tipe kamar." : "";
-    const exactNote = winner.exact ? "persis" : "dalam toleransi";
+    const surplus = winner.diff > 0 ? winner.diff : null;
+    const exactNote = winner.exact
+      ? "persis"
+      : winner.feeOnly
+        ? "dalam toleransi biaya transfer"
+        : "dalam toleransi";
+    const surplusNote = surplus != null ? ` (${transferFeeSurplusNote(surplus)})` : "";
     const label =
       status === "matched_dp" ? "DP 50%" : status === "matched_remaining" ? "sisa tagihan" : "pelunasan";
     return withSummary({
@@ -520,11 +592,12 @@ export function matchProofToCandidates(
       amount_diff: winner.diff,
       match_reason:
         `Nominal ${formatRpCompact(received)} ${exactNote} ${label} ${winner.candidate.bookingCode} ` +
-        `(${formatRpCompact(winner.expectation.amount)}).${roomNote} Status pembayaran tidak diubah.`,
+        `(${formatRpCompact(winner.expectation.amount)})${surplusNote}.${roomNote} Status pembayaran tidak diubah.`,
       destination_ok,
       received_amount: received,
       dp_amount: dpAmount(winner.candidate),
       remaining_amount: remainingBalance(winner.candidate),
+      transfer_fee_surplus: surplus,
     });
   }
 
@@ -548,6 +621,7 @@ export function matchProofToCandidates(
     received_amount: received,
     dp_amount: dpAmount(reference),
     remaining_amount: remainingBalance(reference),
+    transfer_fee_surplus: null,
   });
 }
 
