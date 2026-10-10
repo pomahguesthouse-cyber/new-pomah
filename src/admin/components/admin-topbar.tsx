@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/command";
 import { useTheme } from "@/hooks/use-theme";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { clearAdminAssignFlag, clearAuthNext, clearStaffSessionHint } from "@/lib/auth-return";
 import { unregisterStaffPush } from "@/lib/native-admin";
 
@@ -112,6 +113,7 @@ export function AdminTopbar({
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [open, setOpen] = useState(false);
 
+  const calendarChrome = path === "/admin/calendar" || path.startsWith("/admin/calendar/");
   const title =
     SECTION_TITLES[path] ??
     (path !== "/admin"
@@ -167,7 +169,10 @@ export function AdminTopbar({
           {/* Search trigger */}
           <button
             onClick={() => setOpen(true)}
-            className="hidden h-9 w-64 items-center gap-2 rounded-md border border-input bg-card/40 px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/10 hover:text-foreground md:flex"
+            className={cn(
+              "hidden h-9 items-center gap-2 rounded-md border border-input bg-card/40 px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/10 hover:text-foreground",
+              calendarChrome ? "w-52 min-[1100px]:flex" : "w-64 md:flex",
+            )}
           >
             <Search className="h-4 w-4" />
             <span className="flex-1 truncate">Search…</span>
@@ -178,7 +183,7 @@ export function AdminTopbar({
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden"
+            className={calendarChrome ? "min-[1100px]:hidden" : "md:hidden"}
             onClick={() => setOpen(true)}
             aria-label="Search"
           >
@@ -251,7 +256,12 @@ export function AdminTopbar({
                     {initials(fullName ?? email)}
                   </AvatarFallback>
                 </Avatar>
-                <span className="hidden max-w-[120px] truncate text-sm font-medium md:inline">
+                <span
+                  className={cn(
+                    "hidden max-w-[120px] truncate text-sm font-medium",
+                    calendarChrome ? "min-[1100px]:inline" : "md:inline",
+                  )}
+                >
                   {fullName ?? email ?? "Staff"}
                 </span>
               </Button>

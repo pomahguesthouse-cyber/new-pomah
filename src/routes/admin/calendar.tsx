@@ -8,7 +8,7 @@ import {
   differenceInCalendarDays,
   format,
   isToday,
-  isSunday,
+  isWeekend,
   parseISO,
   startOfDay,
   startOfMonth,
@@ -18,7 +18,17 @@ import {
   getMonth,
 } from "date-fns";
 import { id } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, FileDown, Printer, Loader2, Ban } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, FileDown, Printer, Loader2, Ban, MoreHorizontal } from "lucide-react";
+import {
+  calendarGridMetrics,
+  guessCalendarContentWidth,
+  type CalendarGridMetrics,
+} from "@/admin/lib/calendar-grid-layout";
+import {
+  buildCalendarFixture,
+  calendarFixtureDialog,
+  isCalendarFixtureRequest,
+} from "@/admin/lib/calendar-fixture";
 
 import {
   getCalendarData,
@@ -56,8 +66,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+/** Sheet/dialog shell: 90dvh, internal scroll, safe-area. The width class is kept for the invoice dispatch check. */
+const calendarSheetClass =
+  "flex max-h-[90dvh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[440px] max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl";
+
+const calendarSheetFooterClass =
+  "sticky bottom-0 z-10 shrink-0 gap-2 border-t border-border bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]";
 
 export const Route = createFileRoute("/admin/calendar")({
   component: CalendarPage,
@@ -154,9 +177,29 @@ function calendarRowsToExport(bookings: any[], rooms: any[], roomTypes: any[]): 
   });
 }
 
+function useScrollportWidth() {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [width, setWidth] = React.useState(() =>
+    typeof window === "undefined" ? 1280 : guessCalendarContentWidth(window.innerWidth),
+  );
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const apply = () => setWidth(el.clientWidth);
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return { ref, width };
+}
+
 function CalendarPage() {
   const [anchor, setAnchor] = React.useState<Date>(startOfDay(new Date()));
   const queryClient = useQueryClient();
+  const fixture = isCalendarFixtureRequest();
+  const scrollport = useScrollportWidth();
+  const metrics = calendarGridMetrics(scrollport.width);
 
   const days = React.useMemo(
     () => Array.from({ length: WINDOW_DAYS + LEAD_DAYS }, (_, i) => addDays(anchor, i - LEAD_DAYS)),
@@ -167,16 +210,44 @@ function CalendarPage() {
   const to = fmtIso(days[days.length - 1]);
 
   const fetchCalendar = useServerFn(getCalendarData);
-  const { data, isLoading } = useQuery({
+  const fixtureData = React.useMemo(() => (fixture ? buildCalendarFixture() : null), [fixture]);
+  const { data: remote, isLoading } = useQuery({
     queryKey: ["admin-calendar", from, to],
     queryFn: () => fetchCalendar({ data: { from, to } }),
+    enabled: !fixture,
   });
+  const data = fixture ? fixtureData : remote;
+  const loading = fixture ? false : isLoading;
 
   const [createCtx, setCreateCtx] = React.useState<any>(null);
   const [editCtx, setEditCtx] = React.useState<any>(null);
   const [newOpen, setNewOpen] = React.useState(false);
   const [blockOpen, setBlockOpen] = React.useState(false);
   const [exporting, setExporting] = React.useState<null | "csv" | "pdf">(null);
+
+  React.useEffect(() => {
+    const dialog = calendarFixtureDialog();
+    if (!dialog || !data) return;
+    if (dialog === "new") setNewOpen(true);
+    if (dialog === "block") setBlockOpen(true);
+    if (dialog === "detail") {
+      const booking = (data.bookings ?? []).find((b: any) => b.room_id) ?? data.bookings?.[0];
+      if (booking) setEditCtx(booking);
+    }
+    if (dialog === "create") {
+      const room = data.rooms?.[0];
+      const rt = data.roomTypes?.find((t: any) => t.id === room?.room_type_id);
+      if (room) {
+        setCreateCtx({
+          roomId: room.id,
+          roomNumber: room.number,
+          roomTypeName: rt?.name,
+          baseRate: rt?.base_rate,
+          date: startOfDay(new Date()),
+        });
+      }
+    }
+  }, [data]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-calendar"] });
 
@@ -214,128 +285,167 @@ function CalendarPage() {
     }
   }
 
+  const jumpToDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    const next = parseISO(value);
+    if (Number.isNaN(next.getTime())) return;
+    setAnchor(startOfDay(next));
+  };
+
   return (
-    <div className="flex h-full flex-col bg-background w-full overflow-hidden">
-      {/* Header Utama - Z-Index 40 agar di bawah Sidebar (biasanya z-50) tapi di atas Kalender */}
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-card px-6 py-3 shadow-sm z-40 relative">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="mr-2">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              Reservations
-            </p>
-            <h1 className="text-xl font-semibold uppercase tracking-tight text-foreground">
-              Calendar
-            </h1>
-          </div>
+    <div className="admin-calendar-page flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-background">
+      <header
+        data-calendar-toolbar
+        className="relative z-40 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border bg-card px-[max(0.5rem,env(safe-area-inset-left))] py-1.5 pr-[max(0.5rem,env(safe-area-inset-right))] shadow-sm"
+      >
+        <h1 className="sr-only">Kalender booking</h1>
+        <Button
+          variant="default"
+          size="sm"
+          className="h-10 px-3 font-bold"
+          onClick={() => setAnchor(startOfDay(new Date()))}
+        >
+          Hari ini
+        </Button>
 
+        <div className="flex items-center rounded-lg border bg-muted/50 p-0.5">
           <Button
-            variant="default"
-            size="sm"
-            className="font-bold px-4 h-9 bg-primary hover:bg-primary/90 shadow-sm"
-            onClick={() => setAnchor(startOfDay(new Date()))}
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10"
+            aria-label="7 hari sebelumnya"
+            onClick={() => setAnchor(addDays(anchor, -7))}
           >
-            HARI INI
+            <ChevronLeft className="h-4 w-4" />
           </Button>
-
-          <div className="flex items-center gap-2">
-            <Select
-              value={getMonth(anchor).toString()}
-              onValueChange={(v) => setAnchor(startOfMonth(setMonth(anchor, parseInt(v))))}
-            >
-              <SelectTrigger className="h-9 w-[130px] font-bold border-none bg-muted/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MONTHS.map((name, i) => (
-                  <SelectItem key={i} value={i.toString()}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={getYear(anchor).toString()}
-              onValueChange={(v) => setAnchor(setYear(anchor, parseInt(v)))}
-            >
-              <SelectTrigger className="h-9 w-[90px] font-bold border-none bg-muted/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {YEARS.map((y) => (
-                  <SelectItem key={y} value={y.toString()}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-1 border">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 hover:bg-background"
-              onClick={() => setAnchor(addDays(anchor, -7))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 hover:bg-background"
-              onClick={() => setAnchor(addDays(anchor, 7))}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10"
+            aria-label="7 hari berikutnya"
+            onClick={() => setAnchor(addDays(anchor, 7))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-2"
-            disabled={exporting !== null}
-            onClick={() => runExport("csv")}
-          >
-            {exporting === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-            Export CSV
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-2"
-            disabled={exporting !== null}
-            onClick={() => runExport("pdf")}
-          >
-            {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-            Cetak / PDF
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-2"
-            onClick={() => setBlockOpen(true)}
-          >
-            <Ban className="h-4 w-4" />
-            Blokir Kamar
-          </Button>
-          <Button size="sm" className="h-9 gap-2" onClick={() => setNewOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Booking Baru
-          </Button>
+        <Select
+          value={getMonth(anchor).toString()}
+          onValueChange={(v) => setAnchor(startOfMonth(setMonth(anchor, parseInt(v))))}
+        >
+          <SelectTrigger className="h-10 w-[7.5rem] border-none bg-muted/50 font-bold sm:w-[8.5rem]" aria-label="Bulan">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {MONTHS.map((name, i) => (
+              <SelectItem key={i} value={i.toString()}>
+                {name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={getYear(anchor).toString()}
+          onValueChange={(v) => setAnchor(setYear(anchor, parseInt(v)))}
+        >
+          <SelectTrigger className="h-10 w-[5.25rem] border-none bg-muted/50 font-bold" aria-label="Tahun">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {YEARS.map((y) => (
+              <SelectItem key={y} value={y.toString()}>
+                {y}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          type="date"
+          aria-label="Pilih tanggal"
+          value={fmtIso(anchor)}
+          onChange={(e) => jumpToDate(e.target.value)}
+          className="h-10 w-[9.5rem] font-semibold"
+        />
+
+        <div className="ml-auto flex items-center gap-1.5">
+          <div className="hidden items-center gap-1.5 min-[1100px]:flex">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 gap-2"
+              disabled={exporting !== null}
+              onClick={() => runExport("csv")}
+            >
+              {exporting === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+              Export CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 gap-2"
+              disabled={exporting !== null}
+              onClick={() => runExport("pdf")}
+            >
+              {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+              Cetak / PDF
+            </Button>
+            <Button variant="outline" size="sm" className="h-10 gap-2" onClick={() => setBlockOpen(true)}>
+              <Ban className="h-4 w-4" />
+              Blokir Kamar
+            </Button>
+            <Button size="sm" className="h-10 gap-2" onClick={() => setNewOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Booking Baru
+            </Button>
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 min-[1100px]:hidden"
+                aria-label="Menu kalender"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem className="min-h-10" disabled={exporting !== null} onClick={() => runExport("csv")}>
+                <FileDown className="h-4 w-4" />
+                Export CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem className="min-h-10" disabled={exporting !== null} onClick={() => runExport("pdf")}>
+                <Printer className="h-4 w-4" />
+                Cetak / PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem className="min-h-10" onClick={() => setBlockOpen(true)}>
+                <Ban className="h-4 w-4" />
+                Blokir Kamar
+              </DropdownMenuItem>
+              <DropdownMenuItem className="min-h-10" onClick={() => setNewOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Booking Baru
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
-      {/* Container Scroll Area */}
-      <div className="flex-1 overflow-auto bg-muted/10 relative p-4">
-        {isLoading ? (
+      <div
+        ref={scrollport.ref}
+        data-calendar-scroll
+        className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain bg-card"
+        style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-x pan-y" }}
+      >
+        {loading ? (
           <div className="flex h-full items-center justify-center font-bold text-muted-foreground animate-pulse">
             LOADING DATA...
           </div>
         ) : (
           <CalendarGrid
             days={days}
+            metrics={metrics}
             rooms={data?.rooms ?? []}
             roomTypes={data?.roomTypes ?? []}
             bookings={data?.bookings ?? []}
@@ -379,9 +489,26 @@ function CalendarPage() {
   );
 }
 
-function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, onBookingClick }: any) {
-  const cellWidth = 72;
-  const labelWidth = 160;
+function CalendarGrid({
+  days,
+  metrics,
+  rooms,
+  roomTypes,
+  bookings,
+  blocks,
+  onCellClick,
+  onBookingClick,
+}: {
+  days: Date[];
+  metrics: CalendarGridMetrics;
+  rooms: any[];
+  roomTypes: any[];
+  bookings: any[];
+  blocks: any[];
+  onCellClick: (roomId: string, date: Date) => void;
+  onBookingClick: (booking: any) => void;
+}) {
+  const { cellWidth, labelWidth, rowHeight } = metrics;
   const windowStart = days[0];
 
   // Gabungkan tanggal stop_sell per tipe kamar menjadi rentang kontigu
@@ -468,15 +595,19 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
       if (endIdx < 0 || startIdx >= days.length) return null;
       const left = labelWidth + startIdx * cellWidth + cellWidth / 2;
       const width = (endIdx - startIdx) * cellWidth;
+      const name = (b.guests?.full_name ?? "Tamu").trim();
+      const code = (b.reference_code ?? "").trim();
       return (
         <button
           key={b.booking_room_id ?? b.id}
+          type="button"
+          data-booking-bar
           onClick={(e) => {
             e.stopPropagation();
             onBookingClick(b);
           }}
           className={cn(
-            "absolute top-2.5 bottom-2.5 flex items-center px-3 rounded-lg border text-[10px] font-black shadow-md transition-all hover:scale-[1.01] overflow-hidden z-10",
+            "absolute top-0.5 bottom-0.5 z-10 flex min-h-10 items-center overflow-hidden rounded-md border px-1.5 text-left text-[11px] font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             b.status === "confirmed"
               ? "bg-emerald-600 border-emerald-700 text-white"
               : b.status === "checked_in"
@@ -486,36 +617,40 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
                   : "bg-rose-100 border-rose-300 text-rose-700",
           )}
           style={{ left: left + 2, width: Math.max(width - 4, 40) }}
+          title={code ? `${name} · ${code}` : name}
         >
-          <span className="truncate uppercase tracking-tighter">{b.guests?.full_name}</span>
+          <span className="truncate">
+            <span className="uppercase tracking-tight">{name}</span>
+            {code ? <span className="ml-1 font-mono text-[10px] font-semibold normal-case tracking-normal opacity-90">{code}</span> : null}
+          </span>
         </button>
       );
     });
 
+  const gridWidth = labelWidth + days.length * cellWidth;
+
   return (
-    <div className="rounded-xl border border-border bg-card shadow-xl overflow-hidden ring-1 ring-black/5">
-      <div className="overflow-x-auto">
-        <div style={{ minWidth: labelWidth + days.length * cellWidth }} className="relative">
-          {/* Header Tanggal - STICKY VERTICAL (top-0) */}
-          <div className="flex border-b border-border bg-card sticky top-0 z-30 shadow-sm">
-            {/* Pojok Kiri Atas (Label Unit) - STICKY VERTICAL & HORIZONTAL (top-0 & left-0) */}
-            {/* Z-Index 40 agar selalu di atas Header Tanggal dan Kolom Kamar */}
+    <div style={{ width: gridWidth }} className="relative min-w-full select-none">
+          <div data-calendar-header className="sticky top-0 z-30 flex border-b border-border bg-card shadow-sm">
             <div
               style={{ width: labelWidth }}
-              className="shrink-0 px-4 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-end sticky top-0 left-0 z-40 bg-card border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
+              className="sticky left-0 z-40 flex shrink-0 items-end border-r border-border bg-card px-2 py-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
             >
-              UNIT
+              Unit
             </div>
 
             {days.map((d: Date) => {
               const today = isToday(d);
+              const weekend = isWeekend(d);
               return (
                 <div
                   key={d.toISOString()}
+                  data-day-header
+                  data-today={today ? "true" : undefined}
                   style={{ width: cellWidth }}
                   className={cn(
-                    "shrink-0 border-l border-border px-1 py-2 text-center transition-all relative",
-                    isSunday(d) ? "bg-rose-100" : today ? "bg-primary/5" : "",
+                    "relative shrink-0 border-l border-border px-0.5 py-1.5 text-center",
+                    today ? "bg-primary/15" : weekend ? "bg-rose-100" : "bg-card",
                   )}
                 >
                   <div
@@ -528,16 +663,14 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
                   </div>
                   <div
                     className={cn(
-                      "text-base font-black leading-tight mt-0.5",
+                      "mt-0.5 text-sm font-black leading-tight",
                       today ? "text-primary" : "text-foreground",
                     )}
                   >
                     {format(d, "dd")}
                   </div>
                   {today && (
-                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-primary px-1.5 py-px text-[8px] font-black uppercase tracking-wider text-primary-foreground shadow-sm">
-                      Today
-                    </span>
+                    <span className="mx-auto mt-0.5 block h-1 w-1 rounded-full bg-primary" aria-hidden />
                   )}
                 </div>
               );
@@ -548,10 +681,10 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
           {roomTypes.map((type: any) => (
             <div key={type.id} className="group">
               {/* Tipe Kamar - bar membentang seluruh grid, label sticky di kiri */}
-              <div className="relative flex bg-muted border-b border-border h-9">
+              <div className="relative flex h-9 border-b border-border bg-muted">
                 <div
                   style={{ width: labelWidth }}
-                  className="shrink-0 sticky left-0 z-20 bg-muted flex items-center px-4 text-[9px] font-black text-foreground/70 uppercase tracking-widest border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
+                  className="sticky left-0 z-20 flex shrink-0 items-center border-r border-border bg-muted px-2 text-[9px] font-black uppercase tracking-widest text-foreground/70 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
                 >
                   <span className="truncate">
                     {type.name} <span className="mx-2 opacity-30">|</span>{" "}
@@ -565,7 +698,10 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
                   <div
                     key={d.toISOString()}
                     style={{ width: cellWidth }}
-                    className="shrink-0 border-l border-border/40"
+                    className={cn(
+                      "shrink-0 border-l border-border/40",
+                      isToday(d) ? "bg-primary/10" : isWeekend(d) ? "bg-rose-50/80" : "",
+                    )}
                   />
                 ))}
 
@@ -576,26 +712,29 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
                 .map((room: any) => (
                   <div
                     key={room.id}
-                    className="relative flex border-b border-border h-[60px] hover:bg-muted/5 transition-colors"
+                    data-room-row
+                    className="relative flex border-b border-border"
+                    style={{ height: rowHeight, minHeight: 40 }}
                   >
-                    {/* Nomor Kamar - STICKY HORIZONTAL (left-0) */}
-                    {/* Z-Index 20 agar bar booking terpotong di bawahnya saat scroll horizontal */}
                     <div
+                      data-room-label
                       style={{ width: labelWidth }}
-                      className="flex shrink-0 items-center px-4 border-r border-border font-bold text-xs text-foreground/70 sticky left-0 z-20 bg-card shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
+                      className="sticky left-0 z-20 flex shrink-0 items-center border-r border-border bg-card px-2 text-sm font-semibold text-foreground/80 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
                     >
-                      {room.number}
+                      <span className="truncate">{room.number}</span>
                     </div>
 
-                    {/* Day Cells */}
                     {days.map((d: Date) => (
                       <button
                         key={d.toISOString()}
+                        type="button"
+                        data-day-cell
+                        aria-label={`${room.number} ${format(d, "d MMM", { locale: id })}`}
                         onClick={() => onCellClick(room.id, d)}
                         style={{ width: cellWidth }}
                         className={cn(
-                          "shrink-0 border-l border-border/50 transition-colors focus:outline-none",
-                          isSunday(d) ? "bg-rose-50" : isToday(d) ? "bg-primary/[0.02]" : "",
+                          "h-full shrink-0 border-l border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                          isToday(d) ? "bg-primary/10" : isWeekend(d) ? "bg-rose-50" : "bg-card",
                         )}
                       />
                     ))}
@@ -610,7 +749,7 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
                           key={`block-${room.id}-${i}`}
                           title={r.note ?? "Diblokir (stop sell)"}
                           style={{ left: left + 2, width: Math.max(width - 4, 24) }}
-                          className="pointer-events-none absolute top-2.5 bottom-2.5 flex items-center gap-1.5 px-2 rounded-md border border-rose-600/60 bg-rose-600/90 text-white text-[9px] font-black uppercase tracking-wider shadow-sm overflow-hidden z-[5]"
+                          className="pointer-events-none absolute top-0.5 bottom-0.5 z-[5] flex min-h-10 items-center gap-1 overflow-hidden rounded-md border border-rose-600/60 bg-rose-600/90 px-1.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm"
                         >
                           <Ban className="h-3 w-3 shrink-0" />
                           <span className="truncate">
@@ -628,12 +767,15 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
 
               {/* Bookings of this type without a room assigned yet */}
               {(unassignedByType.get(type.id) ?? []).length > 0 && (
-                <div className="relative flex border-b border-border h-[60px] bg-amber-50/50">
+                <div
+                  className="relative flex border-b border-border bg-amber-50/50"
+                  style={{ height: rowHeight, minHeight: 40 }}
+                >
                   <div
                     style={{ width: labelWidth }}
-                    className="flex shrink-0 items-center gap-1.5 px-4 border-r border-border text-[10px] font-black uppercase tracking-tight text-amber-700 sticky left-0 z-20 bg-amber-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
+                    className="sticky left-0 z-20 flex shrink-0 items-center border-r border-border bg-amber-50 px-2 text-[10px] font-black uppercase tracking-tight text-amber-700 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
                   >
-                    Belum ditugaskan
+                    <span className="truncate">Belum ditugaskan</span>
                   </div>
                   {days.map((d: Date) => (
                     <div
@@ -651,15 +793,18 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
           {/* Bookings with unknown or missing room type */}
           {(unassignedByType.get(undefined) || unassignedByType.get(null) || []).length > 0 && (
             <div className="mb-8">
-              <div className="sticky top-0 z-30 flex h-10 items-center border-y border-border bg-red-50 text-red-800 px-4 font-black text-sm tracking-tighter uppercase shadow-sm">
+              <div className="flex h-10 items-center border-y border-border bg-red-50 px-4 text-sm font-black uppercase tracking-tighter text-red-800">
                 Tipe Kamar Tidak Diketahui
               </div>
-              <div className="relative flex border-b border-border h-[60px] bg-red-50/50">
+              <div
+                className="relative flex border-b border-border bg-red-50/50"
+                style={{ height: rowHeight, minHeight: 40 }}
+              >
                 <div
                   style={{ width: labelWidth }}
-                  className="flex shrink-0 items-center gap-1.5 px-4 border-r border-border text-[10px] font-black uppercase tracking-tight text-red-700 sticky left-0 z-20 bg-red-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
+                  className="sticky left-0 z-20 flex shrink-0 items-center border-r border-border bg-red-50 px-2 text-[10px] font-black uppercase tracking-tight text-red-700 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
                 >
-                  Perlu Diperiksa
+                  <span className="truncate">Perlu diperiksa</span>
                 </div>
                 {days.map((d: Date) => (
                   <div
@@ -675,8 +820,6 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
               </div>
             </div>
           )}
-        </div>
-      </div>
     </div>
   );
 }
@@ -703,13 +846,16 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
   }, [ctx]);
   return (
     <Dialog open={!!ctx} onOpenChange={(o) => !o && !saving && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-[400px]">
-        <DialogHeader>
-          <DialogTitle className="break-words pr-6 font-black text-xl uppercase tracking-tighter">
+      <DialogContent className={calendarSheetClass}>
+        <DialogHeader className="shrink-0 space-y-1 px-4 pb-2 pr-10 pt-4">
+          <DialogTitle className="break-words text-xl font-black uppercase tracking-tighter">
             New Booking {ctx?.roomNumber}
           </DialogTitle>
+          <DialogDescription>
+            {ctx?.roomTypeName ? `${ctx.roomTypeName} · kamar ${ctx.roomNumber}` : "Booking dari kalender"}
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-4 py-3">
           <Field label="Nama Tamu">
             <Input
               value={form.guestName}
@@ -744,12 +890,12 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
             />
           </Field>
         </div>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" className="w-full font-bold sm:w-auto" onClick={onClose} disabled={saving}>
+        <DialogFooter className={calendarSheetFooterClass}>
+          <Button variant="outline" className="h-10 w-full font-bold sm:w-auto" onClick={onClose} disabled={saving}>
             BATAL
           </Button>
           <Button
-            className="w-full font-bold sm:w-auto"
+            className="h-10 w-full font-bold sm:w-auto"
             disabled={saving}
             onClick={async () => {
               if (saving) return;
@@ -809,18 +955,22 @@ function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
   const typeRooms = (rooms ?? []).filter((r: any) => r.room_type_id === booking.room_type_id);
   return (
     <Dialog open={!!booking} onOpenChange={(o) => !o && !saving && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="font-black text-xl tracking-tighter uppercase">
-            Update: {booking.guests?.full_name}
+      <DialogContent className={calendarSheetClass}>
+        <DialogHeader className="shrink-0 space-y-1 px-4 pb-2 pr-10 pt-4">
+          <DialogTitle className="break-words text-xl font-black uppercase tracking-tighter">
+            {booking.guests?.full_name ?? "Booking"}
           </DialogTitle>
-          {booking.reference_code && (
-            <p className="font-mono text-xs font-semibold text-muted-foreground tracking-wider">
-              Ref: <span className="text-foreground">{booking.reference_code}</span>
-            </p>
-          )}
+          <DialogDescription className="font-mono text-xs">
+            {booking.reference_code ? <span className="font-semibold text-foreground">{booking.reference_code}</span> : null}
+            {booking.check_in && booking.check_out ? (
+              <span>
+                {booking.reference_code ? " · " : ""}
+                {formatDateId(booking.check_in)} – {formatDateId(booking.check_out)}
+              </span>
+            ) : null}
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-4 py-3">
           <Field label="Kamar">
             <Select
               value={roomId || "none"}
@@ -862,12 +1012,12 @@ function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
             </Select>
           </Field>
         </div>
-        <DialogFooter>
-          <Button variant="outline" className="font-bold" onClick={onClose} disabled={saving}>
+        <DialogFooter className={calendarSheetFooterClass}>
+          <Button variant="outline" className="h-10 font-bold" onClick={onClose} disabled={saving}>
             TUTUP
           </Button>
           <Button
-            className="font-bold"
+            className="h-10 font-bold"
             disabled={saving || !status}
             onClick={async () => {
               if (saving) return;

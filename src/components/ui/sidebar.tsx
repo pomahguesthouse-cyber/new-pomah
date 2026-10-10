@@ -52,6 +52,8 @@ const SidebarProvider = React.forwardRef<
     defaultOpen?: boolean;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
+    /** Viewport width below which the sidebar renders as a drawer. Default 768. */
+    mobileBreakpoint?: number;
   }
 >(
   (
@@ -62,11 +64,12 @@ const SidebarProvider = React.forwardRef<
       className,
       style,
       children,
+      mobileBreakpoint,
       ...props
     },
     ref,
   ) => {
-    const isMobile = useIsMobile();
+    const isMobile = useIsMobile(mobileBreakpoint);
     const [openMobile, setOpenMobile] = React.useState(false);
 
     // This is the internal state of the sidebar.
