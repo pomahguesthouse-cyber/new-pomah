@@ -94,6 +94,7 @@ import {
   looksLikeBookingInquiry,
   mentionsExplicitDateSignal,
   messageOpensWithGreeting,
+  availabilityCheckoutWasAssumed,
   parseAvailabilityDateRange,
   parseGuestCountFollowup,
   resolveDisplayedGuests,
@@ -371,7 +372,7 @@ async function buildDeterministicAvailabilityReply(params: {
     result.dates = {
       checkIn: range.checkIn,
       checkOut: range.checkOut,
-      checkoutAssumed: range.checkoutAssumed === true,
+      checkoutAssumed: availabilityCheckoutWasAssumed(params.message, today),
     };
     if (guests) result.guests = guests;
   }
@@ -468,7 +469,9 @@ async function buildContextualBookingInquiryReply(params: {
     result.dates = {
       checkIn,
       checkOut,
-      ...(explicitRange ? { checkoutAssumed: explicitRange.checkoutAssumed === true } : {}),
+      ...(explicitRange
+        ? { checkoutAssumed: availabilityCheckoutWasAssumed(params.message, today) }
+        : {}),
     };
     result.intent = `${result.intent}_contextual`;
     if (guests) result.guests = guests;

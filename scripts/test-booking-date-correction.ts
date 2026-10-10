@@ -14,7 +14,11 @@
  */
 import assert from "node:assert/strict";
 import { resolveRelativeDayRange } from "../src/lib/id-date";
-import { parseAvailabilityDateRange, resolveDisplayedGuests } from "../src/services/wa-autoreply/message-parsers";
+import {
+  availabilityCheckoutWasAssumed,
+  parseAvailabilityDateRange,
+  resolveDisplayedGuests,
+} from "../src/services/wa-autoreply/message-parsers";
 import { protectStatedGuestCount } from "../src/lib/guest-count";
 import { resolveStartBookingGuests } from "../src/tools/start-booking.tool";
 import { staySnapshotsMatch, snapshotFromStay } from "../src/ai/state-machine/booking-stay-guard";
@@ -172,10 +176,9 @@ function writes(calls: Array<Record<string, unknown>>) {
   assert.equal(stay!.checkoutAssumed, true);
   assert.equal(stay!.needsConfirm, undefined);
   const lookup = parseAvailabilityDateRange("21 nov masih ada kamar?", TODAY);
-  assert.deepEqual(
-    lookup && { checkIn: lookup.checkIn, checkOut: lookup.checkOut },
-    { checkIn: "2026-11-21", checkOut: "2026-11-22" },
-  );
+  assert.deepEqual(lookup, { checkIn: "2026-11-21", checkOut: "2026-11-22" });
+  assert.equal(availabilityCheckoutWasAssumed("21 nov masih ada kamar?", TODAY), true);
+  assert.equal(availabilityCheckoutWasAssumed("tanggal 20-21 november", TODAY), false);
   assert.equal(
     formatStayConfirmQuestion("2026-11-21", "2026-11-22"),
     "Check-in 21 Nov, check-out 22 Nov (1 malam) ya Kak?",

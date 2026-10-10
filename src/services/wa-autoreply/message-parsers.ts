@@ -22,16 +22,22 @@ export function parseAvailabilityDateRange(
   message: string,
   today: string,
   now?: Date | string,
-): { checkIn: string; checkOut: string; checkoutAssumed?: boolean } | null {
+): { checkIn: string; checkOut: string } | null {
   const resolved = resolveRelativeDayRange(message, nowForStayParsing(today, now));
   // Tanggal ambigu ("minggu depan", "besok" dini hari) tidak boleh dipakai
   // diam-diam oleh fast-path. Biarkan agent mengonfirmasi.
   if (!resolved || resolved.needsConfirm) return null;
-  return {
-    checkIn: resolved.checkIn,
-    checkOut: resolved.checkOut,
-    ...(resolved.checkoutAssumed ? { checkoutAssumed: true as const } : {}),
-  };
+  return { checkIn: resolved.checkIn, checkOut: resolved.checkOut };
+}
+
+/** Satu tanggal kalender yang check-out-nya kita asumsikan +1 hari. */
+export function availabilityCheckoutWasAssumed(
+  message: string,
+  today: string,
+  now?: Date | string,
+): boolean {
+  const resolved = resolveRelativeDayRange(message, nowForStayParsing(today, now));
+  return resolved?.checkoutAssumed === true && !resolved.needsConfirm;
 }
 
 /**
