@@ -25,6 +25,7 @@ import {
   STAFF_ALERT_MAX_ATTEMPTS,
   STAFF_BOOKING_ALERT_TIMEOUT_MS,
   buildStaffBookingAlert,
+  deliverStaffBookingMessage,
   isCutOffPendingLog,
   resolveStaffBookingTemplate,
   staffAlertDedupeKey,
@@ -267,18 +268,24 @@ function acceptedMetaResult(result: {
 
 async function dispatchByChannel(opts: SendOptions, _waToken: string | null): Promise<WaDeliverResult> {
   if (!isMetaConfigured()) return { ok: false, error: "WhatsApp Business belum terhubung" };
-  if (opts.staffTemplate) {
-    const template = opts.staffTemplate;
-    const sent = await sendMetaTemplateMessage(
-      opts.recipient.phone,
-      template.name,
-      template.languageCode,
-      template.bodyParams,
-      opts.message,
-    );
-    return acceptedMetaResult(sent);
-  }
-  const sent = await sendWhatsAppMessage("", opts.recipient.phone, opts.message, opts.fileUrl);
+  const sent = await deliverStaffBookingMessage(
+    {
+      phone: opts.recipient.phone,
+      message: opts.message,
+      fileUrl: opts.fileUrl,
+      template: opts.staffTemplate
+        ? {
+            name: opts.staffTemplate.name,
+            lang: opts.staffTemplate.languageCode,
+            bodyParams: opts.staffTemplate.bodyParams,
+          }
+        : null,
+    },
+    {
+      sendTemplate: sendMetaTemplateMessage,
+      sendText: (phone, message, fileUrl) => sendWhatsAppMessage("", phone, message, fileUrl),
+    },
+  );
   return acceptedMetaResult(sent);
 }
 
