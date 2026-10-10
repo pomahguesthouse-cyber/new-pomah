@@ -483,12 +483,10 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
     // di Workers setelah response, jadi baris invoices tidak tertulis.
     const invoice = await sendPublicBookingInvoice(booking.id, "submitPublicBooking");
 
-    // Notif manager — pakai waitUntil agar tetap jalan setelah response dikirim.
-    const { runDeferred } = await import("@/lib/cf-context");
-    runDeferred("submitPublicBooking.notifyNewBooking", async () => {
-      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
-      await notifyNewBooking(supabaseAdmin, booking.id);
-    });
+    // Alert staf di request ini. waitUntil terputus di Workers. Timeout
+    // tidak membatalkan booking.
+    const { awaitNotifyNewBooking } = await import("@/services/manager-notifier.service");
+    await awaitNotifyNewBooking(supabaseAdmin, booking.id);
 
     return {
       id: booking.id,
@@ -629,12 +627,10 @@ export const submitCartBooking = createServerFn({ method: "POST" })
 
     const invoice = await sendPublicBookingInvoice(booking.id, "submitCartBooking");
 
-    // Notif manager — pakai waitUntil agar tetap jalan setelah response dikirim.
-    const { runDeferred: runDeferredCart } = await import("@/lib/cf-context");
-    runDeferredCart("submitCartBooking.notifyNewBooking", async () => {
-      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
-      await notifyNewBooking(supabaseAdmin, booking.id);
-    });
+    // Alert staf di request ini. waitUntil terputus di Workers. Timeout
+    // tidak membatalkan booking.
+    const { awaitNotifyNewBooking: awaitCartStaffAlert } = await import("@/services/manager-notifier.service");
+    await awaitCartStaffAlert(supabaseAdmin, booking.id);
 
     return {
       id: booking.id,

@@ -10,8 +10,8 @@
  * Semua pengiriman dicatat ke `notification_logs` (status, attempts, error)
  * dengan `dedupe_key` unik untuk mencegah pengiriman ganda.
  *
- * Pemicu di hot-path memanggil fungsi-fungsi ini secara fire-and-forget
- * agar tidak memblokir alur utama (booking creation, webhook reply).
+ * Booking baru ditunggu pemanggil lewat `awaitNotifyNewBooking` (batas waktu)
+ * supaya Worker tidak memutus kirim. Event lain boleh tetap fire-and-forget.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -19,8 +19,16 @@ import { fmtDateID } from "@/lib/date";
 import { formatPaymentProofSummary } from "./payment-proof-match";
 import type { PaymentProofResult } from "./payment-proof.service";
 import { findNotificationThreadId } from "./notification-thread-resolver";
-import { isMetaConfigured } from "./whatsapp-meta.service";
+import { isMetaConfigured, sendMetaTemplateMessage } from "./whatsapp-meta.service";
 import { sendWhatsAppMessage } from "./whatsapp.service";
+import {
+  STAFF_ALERT_MAX_ATTEMPTS,
+  STAFF_BOOKING_ALERT_TIMEOUT_MS,
+  buildStaffBookingAlert,
+  isCutOffPendingLog,
+  resolveStaffBookingTemplate,
+  staffAlertDedupeKey,
+} from "./staff-booking-alert";
 
 type Db = SupabaseClient<any, any, any>;
 
@@ -64,6 +72,9 @@ async function getWaToken(db: Db): Promise<string | null> {
 /* ------------------------------------------------------------------ */
 
 async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[]> {
+  // TODO: Jangan mulai menghormati property_managers.is_muted. Pengelola yang
+  // di-mute (mis. Bu Titik, booking_manager) tetap harus menerima alert
+  // operasional, termasuk booking baru.
   let query = db.from("property_managers").select("id, name, phone, role, is_active");
 
   if (role) query = query.eq("role", role);
@@ -109,12 +120,20 @@ interface SendOptions {
   relatedId?: string | null;
   /** Channel this delivery targets — affects log row + dedupe scoping. */
   channel: Channel;
+  /**
+   * Bila diisi, alert booking baru dikirim sebagai template Utility,
+   * bukan teks bebas. `message` tetap disimpan di notification_logs.
+   */
+  staffTemplate?: {
+    name: string;
+    languageCode: string;
+    bodyParams: string[];
+  };
 }
 
-type WaDeliver = (
-  opts: SendOptions,
-  waToken: string | null,
-) => Promise<{ ok: boolean; error?: string }>;
+type WaDeliverResult = { ok: boolean; error?: string; messageId?: string | null };
+
+type WaDeliver = (opts: SendOptions, waToken: string | null) => Promise<WaDeliverResult>;
 
 /**
  * Kirim pesan WhatsApp ke satu manager, dengan retry 3x backoff.
@@ -130,23 +149,27 @@ export async function sendWithRetry(
 ): Promise<boolean> {
   const { data: existing } = await db
     .from("notification_logs")
-    .select("id, status, created_at")
+    .select("id, status, created_at, attempts")
     .eq("dedupe_key", opts.dedupeKey)
     .eq("channel", opts.channel)
     .maybeSingle();
 
   if (existing) {
     const status = (existing as any).status as string;
-    if (status === "sent") {
+    if (status === "sent" || status === "delivered" || status === "read") {
       console.info(`[ManagerNotifier] Skip — sudah terkirim: ${opts.dedupeKey}`);
       return false;
     }
-    if (status === "pending" && !isRetryablePendingLog(existing as any)) {
-      console.info(`[ManagerNotifier] Skip — sedang pending: ${opts.dedupeKey}`);
-      return false;
-    }
     if (status === "pending") {
-      console.info(`[ManagerNotifier] Pending >10 menit, dicoba ulang: ${opts.dedupeKey}`);
+      const cutOff = isCutOffPendingLog(existing as any);
+      const stale = isRetryablePendingLog(existing as any);
+      if (!cutOff && !stale) {
+        console.info(`[ManagerNotifier] Skip — sedang pending: ${opts.dedupeKey}`);
+        return false;
+      }
+      console.info(
+        `[ManagerNotifier] ${cutOff ? "Pending 0 attempt terputus" : "Pending >10 menit"}, dicoba ulang: ${opts.dedupeKey}`,
+      );
     }
     if (status === "failed") {
       // Sudah dicoba 3x dan gagal dalam window ini (WhatsApp gateway down?).
@@ -193,14 +216,15 @@ export async function sendWithRetry(
 
   let lastError = "";
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= STAFF_ALERT_MAX_ATTEMPTS; attempt++) {
     const delay = STAFF_NOTIFY_RETRY_DELAYS_MS[attempt - 1] ?? 0;
     if (delay > 0) {
       await new Promise((r) => setTimeout(r, delay));
     }
     const result = await deliver(opts, waToken);
+    const wamid = result.messageId?.trim() ?? "";
 
-    if (result.ok) {
+    if (result.ok && wamid) {
       await db
         .from("notification_logs")
         .update({
@@ -208,28 +232,53 @@ export async function sendWithRetry(
           attempts: attempt,
           sent_at: new Date().toISOString(),
           error: null,
+          provider_message_id: wamid,
         })
         .eq("id", logId);
       console.info(`[ManagerNotifier] Terkirim ke ${opts.recipient.name} via ${opts.channel} (attempt ${attempt})`);
       return true;
     }
-    lastError = result.error ?? "unknown error";
+    lastError = result.ok
+      ? result.error?.trim() || "Meta tidak mengembalikan id pesan"
+      : result.error ?? "unknown error";
     console.warn(
       `[ManagerNotifier] Gagal kirim ke ${opts.recipient.name} via ${opts.channel} (attempt ${attempt}): ${lastError}`,
     );
   }
 
-  await db.from("notification_logs").update({ status: "failed", attempts: 3, error: lastError }).eq("id", logId);
+  await db
+    .from("notification_logs")
+    .update({ status: "failed", attempts: STAFF_ALERT_MAX_ATTEMPTS, error: lastError })
+    .eq("id", logId);
   return false;
 }
 
-async function dispatchByChannel(
-  opts: SendOptions,
-  _waToken: string | null,
-): Promise<{ ok: boolean; error?: string }> {
+function acceptedMetaResult(result: {
+  ok: boolean;
+  error?: string | null;
+  messageId?: string | null;
+}): WaDeliverResult {
+  if (!result.ok) return { ok: false, error: result.error ?? undefined, messageId: result.messageId ?? null };
+  const messageId = result.messageId?.trim() ?? "";
+  if (!messageId) return { ok: false, error: "Meta tidak mengembalikan id pesan" };
+  return { ok: true, messageId };
+}
+
+async function dispatchByChannel(opts: SendOptions, _waToken: string | null): Promise<WaDeliverResult> {
   if (!isMetaConfigured()) return { ok: false, error: "WhatsApp Business belum terhubung" };
-  const r = await sendWhatsAppMessage("", opts.recipient.phone, opts.message, opts.fileUrl);
-  return { ok: r.ok, error: r.error ?? undefined };
+  if (opts.staffTemplate) {
+    const template = opts.staffTemplate;
+    const sent = await sendMetaTemplateMessage(
+      opts.recipient.phone,
+      template.name,
+      template.languageCode,
+      template.bodyParams,
+      opts.message,
+    );
+    return acceptedMetaResult(sent);
+  }
+  const sent = await sendWhatsAppMessage("", opts.recipient.phone, opts.message, opts.fileUrl);
+  return acceptedMetaResult(sent);
 }
 
 /**
@@ -253,6 +302,7 @@ async function fanOut(
         message: base.message,
         fileUrl: base.fileUrl,
         relatedId: base.relatedId,
+        staffTemplate: base.staffTemplate,
         recipient: m,
         channel: "wa",
         dedupeKey: base.dedupeKeyFor(m),
@@ -312,7 +362,7 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
     const { data: booking, error } = await db
       .from("bookings")
       .select(
-        "id, reference_code, check_in, check_out, nights, total_amount, source, guest_id, guests(full_name), booking_rooms(room_type_id, room_types(name))",
+        "id, reference_code, check_in, check_out, nights, total_amount, paid_amount, payment_status, payment_method, guest_id, guests(full_name), booking_rooms(room_type_id, room_types(name))",
       )
       .eq("id", bookingId)
       .maybeSingle();
@@ -323,19 +373,21 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
     }
 
     const b = booking as any;
-    const guestName = b.guests?.full_name ?? "Tamu";
-    const roomName = summarizeBookingRooms(b.booking_rooms);
-    const message =
-      "🏨 NEW BOOKING ALERT\n\n" +
-      `Guest: ${guestName}\n` +
-      `Room: ${roomName}\n` +
-      `Check-in: ${fmtDateID(b.check_in)}\n` +
-      `Check-out: ${fmtDateID(b.check_out)}\n` +
-      `Nights: ${b.nights ?? "-"}\n` +
-      `Total: ${formatRupiah(b.total_amount)}\n` +
-      `Source: ${sourceLabel(b.source)}\n\n` +
-      `Booking Code:\n${b.reference_code ?? b.id}\n\n` +
-      "Please review in Manager Dashboard.";
+    const guest = Array.isArray(b.guests) ? b.guests[0] : b.guests;
+    const alert = buildStaffBookingAlert({
+      referenceCode: b.reference_code,
+      bookingId: b.id,
+      guestName: guest?.full_name,
+      rooms: b.booking_rooms,
+      checkIn: b.check_in,
+      checkOut: b.check_out,
+      nights: b.nights,
+      totalAmount: b.total_amount,
+      paidAmount: b.paid_amount,
+      paymentStatus: b.payment_status,
+      paymentMethod: b.payment_method,
+    });
+    const template = resolveStaffBookingTemplate();
 
     const waToken = await getWaToken(db);
     const managers = (await getActiveManagers(db)).filter((m) => !!m.phone);
@@ -346,12 +398,51 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
 
     await fanOut(db, waToken, managers, {
       eventType: "new_booking",
-      message,
+      message: alert.message,
       relatedId: b.id,
-      dedupeKeyFor: (m) => `new_booking:${b.id}:${m.id}`,
+      staffTemplate: template
+        ? { name: template.name, languageCode: template.lang, bodyParams: alert.params }
+        : undefined,
+      dedupeKeyFor: (m) => staffAlertDedupeKey(b.id, m.id),
     });
   } catch (e) {
     console.error("[ManagerNotifier] notifyNewBooking error:", e);
+  }
+}
+
+/**
+ * Tunggu alert booking baru. Timeout dan error tidak melempar, supaya
+ * simpan booking tetap berhasil. Dedupe tetap di `notifyNewBooking`.
+ */
+export async function awaitNotifyNewBooking(
+  db: Db,
+  bookingId: string,
+  opts?: { timeoutMs?: number; notify?: (db: Db, bookingId: string) => Promise<void> },
+): Promise<void> {
+  const timeoutMs = opts?.timeoutMs ?? STAFF_BOOKING_ALERT_TIMEOUT_MS;
+  const notify = opts?.notify ?? notifyNewBooking;
+  const work = Promise.resolve()
+    .then(() => notify(db, bookingId))
+    .catch((err) => {
+      console.error(
+        `[ManagerNotifier] notifyNewBooking gagal booking=${bookingId.slice(0, 8)}:`,
+        err instanceof Error ? err.message : err,
+      );
+    });
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await Promise.race([
+      work.then(() => "done" as const),
+      new Promise<"timeout">((resolve) => {
+        timer = setTimeout(() => resolve("timeout"), timeoutMs);
+      }),
+    ]);
+    if (result === "timeout") {
+      console.warn(`[ManagerNotifier] notifyNewBooking timeout ${timeoutMs}ms booking=${bookingId.slice(0, 8)}`);
+    }
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

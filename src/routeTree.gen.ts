@@ -69,6 +69,7 @@ import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cro
 import { Route as ApiCronExpireBookingsRouteImport } from './routes/api.cron.expire-bookings'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
 import { Route as ApiCronRecoverMissingInvoicesRouteImport } from './routes/api.cron.recover-missing-invoices'
+import { Route as ApiCronRecoverStaffBookingAlertsRouteImport } from './routes/api.cron.recover-staff-booking-alerts'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
 import { Route as ApiCronWaQueueSafetyNetRouteImport } from './routes/api.cron.wa-queue-safety-net'
@@ -388,6 +389,12 @@ const ApiCronRecoverMissingInvoicesRoute =
     path: '/api/cron/recover-missing-invoices',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiCronRecoverStaffBookingAlertsRoute =
+  ApiCronRecoverStaffBookingAlertsRouteImport.update({
+    id: '/api/cron/recover-staff-booking-alerts',
+    path: '/api/cron/recover-staff-booking-alerts',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCronRunArticleSchedulesRoute =
   ApiCronRunArticleSchedulesRouteImport.update({
     id: '/api/cron/run-article-schedules',
@@ -508,6 +515,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/recover-missing-invoices': typeof ApiCronRecoverMissingInvoicesRoute
+  '/api/cron/recover-staff-booking-alerts': typeof ApiCronRecoverStaffBookingAlertsRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
@@ -579,6 +587,7 @@ export interface FileRoutesByTo {
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/recover-missing-invoices': typeof ApiCronRecoverMissingInvoicesRoute
+  '/api/cron/recover-staff-booking-alerts': typeof ApiCronRecoverStaffBookingAlertsRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
@@ -653,6 +662,7 @@ export interface FileRoutesById {
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/recover-missing-invoices': typeof ApiCronRecoverMissingInvoicesRoute
+  '/api/cron/recover-staff-booking-alerts': typeof ApiCronRecoverStaffBookingAlertsRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
@@ -728,6 +738,7 @@ export interface FileRouteTypes {
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/recover-missing-invoices'
+    | '/api/cron/recover-staff-booking-alerts'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
     | '/api/cron/wa-queue-safety-net'
@@ -799,6 +810,7 @@ export interface FileRouteTypes {
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/recover-missing-invoices'
+    | '/api/cron/recover-staff-booking-alerts'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
     | '/api/cron/wa-queue-safety-net'
@@ -872,6 +884,7 @@ export interface FileRouteTypes {
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/recover-missing-invoices'
+    | '/api/cron/recover-staff-booking-alerts'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
     | '/api/cron/wa-queue-safety-net'
@@ -916,6 +929,7 @@ export interface RootRouteChildren {
   ApiCronExpireBookingsRoute: typeof ApiCronExpireBookingsRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronRecoverMissingInvoicesRoute: typeof ApiCronRecoverMissingInvoicesRoute
+  ApiCronRecoverStaffBookingAlertsRoute: typeof ApiCronRecoverStaffBookingAlertsRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
   ApiCronWaQueueSafetyNetRoute: typeof ApiCronWaQueueSafetyNetRoute
@@ -1349,6 +1363,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronRecoverMissingInvoicesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/recover-staff-booking-alerts': {
+      id: '/api/cron/recover-staff-booking-alerts'
+      path: '/api/cron/recover-staff-booking-alerts'
+      fullPath: '/api/cron/recover-staff-booking-alerts'
+      preLoaderRoute: typeof ApiCronRecoverStaffBookingAlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/run-article-schedules': {
       id: '/api/cron/run-article-schedules'
       path: '/api/cron/run-article-schedules'
@@ -1560,6 +1581,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronExpireBookingsRoute: ApiCronExpireBookingsRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronRecoverMissingInvoicesRoute: ApiCronRecoverMissingInvoicesRoute,
+  ApiCronRecoverStaffBookingAlertsRoute: ApiCronRecoverStaffBookingAlertsRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
   ApiCronWaQueueSafetyNetRoute: ApiCronWaQueueSafetyNetRoute,

@@ -286,12 +286,10 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
       skipWhatsApp: false,
     });
 
-    // Beritahu manager — pakai waitUntil agar tetap jalan setelah response dikirim.
-    const { runDeferred } = await import("@/lib/cf-context");
-    runDeferred("createBookingFromAdmin.notifyNewBooking", async () => {
-      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
-      await notifyNewBooking(supabase, bookingId);
-    });
+    // Alert staf di request ini. waitUntil terputus di Workers. Timeout
+    // tidak membatalkan booking.
+    const { awaitNotifyNewBooking } = await import("@/services/manager-notifier.service");
+    await awaitNotifyNewBooking(supabase, bookingId);
 
     return { ok: true, bookingId, invoice };
   });
