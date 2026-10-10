@@ -8,6 +8,7 @@
  * Explore places are public pages at /explore/<slug>, built from the same
  * City Guide catalog (explore_config + published explore_items).
  */
+import { landingSlugFromPath, resolveLandingSlugRedirect } from "@/public/lib/lp-slug-redirects";
 import { canonicalUrlForPath } from "@/public/lib/public-seo";
 
 export const CANONICAL_HOST = "pomahguesthouse.com";
@@ -18,10 +19,15 @@ export type ExplorePlaceRef = { name: string; slug?: string | null };
 
 export type SeoRedirect = { location: string; reason: string };
 
+export const GUESTHOUSE_DEKAT_UNNES_PATH = "/guesthouse-dekat-unnes";
+export const PENGINAPAN_DEKAT_UNNES_PATH = "/lp/penginapan-dekat-unnes";
+
 export type SeoRedirectInput = {
   requestUrl: string;
   deluxeRoomPath?: string;
   explorePlaces?: ExplorePlaceRef[];
+  /** Rows from seo_slug_redirects. Empty when the table is not migrated yet. */
+  landingRedirects?: readonly { from_slug: string; to_slug: string }[];
 };
 
 export function normalizeHost(hostname: string): string {
@@ -84,13 +90,19 @@ export function isRetiredExploreSlug(slug: string | null | undefined): boolean {
   return Boolean(clean && Object.prototype.hasOwnProperty.call(EXPLORE_SLUG_ALIASES, clean));
 }
 
-export type LegacyKind = "explore-index" | "explore-slug" | "deluxe-ocean-view" | "explore-alias";
+export type LegacyKind =
+  | "explore-index"
+  | "explore-slug"
+  | "deluxe-ocean-view"
+  | "explore-alias"
+  | "guesthouse-dekat-unnes";
 
 export function legacyKindForPath(pathname: string): LegacyKind | null {
   const path = normalizePathname(pathname);
   if (path === "/explore-semarang") return "explore-index";
   if (path.startsWith("/explore-semarang/")) return "explore-slug";
   if (path === "/rooms/deluxe-ocean-view") return "deluxe-ocean-view";
+  if (path === GUESTHOUSE_DEKAT_UNNES_PATH) return "guesthouse-dekat-unnes";
   if (exploreAliasTarget(path)) return "explore-alias";
   return null;
 }
@@ -172,7 +184,12 @@ export function buildSeoRedirect(input: SeoRedirectInput): SeoRedirect | null {
   const hasTrailingSlash = rawPath.length > 1 && rawPath.endsWith("/") && !staffPath;
   const kind = legacyKindForPath(pathname);
   const canonicalizeHost = shouldCanonicalizeHost(url);
-  if (!kind && !canonicalizeHost && !hasTrailingSlash) return null;
+  const requestedLp = landingSlugFromPath(pathname);
+  const lpTarget =
+    requestedLp && input.landingRedirects?.length
+      ? resolveLandingSlugRedirect(requestedLp, input.landingRedirects)
+      : null;
+  if (!kind && !canonicalizeHost && !hasTrailingSlash && !lpTarget) return null;
 
   let path = pathname;
   if (kind === "explore-index") path = "/explore";
@@ -182,6 +199,10 @@ export function buildSeoRedirect(input: SeoRedirectInput): SeoRedirect | null {
     path = resolveExploreLegacyTarget(slug, input.explorePlaces ?? []);
   } else if (kind === "deluxe-ocean-view") {
     path = input.deluxeRoomPath?.trim() || DELUXE_OCEAN_VIEW_FALLBACK;
+  } else if (kind === "guesthouse-dekat-unnes") {
+    path = PENGINAPAN_DEKAT_UNNES_PATH;
+  } else if (lpTarget) {
+    path = `/lp/${lpTarget}`;
   }
 
   // Query and hash ride along. OAuth returns (`?code=`, `?next=`, `#access_token`)
@@ -194,7 +215,7 @@ export function buildSeoRedirect(input: SeoRedirectInput): SeoRedirect | null {
   const onProduction = isProductionHost(url.hostname);
   const location = onProduction
     ? `${canonicalUrlForPath(path)}${search}${hash}`
-    : kind
+    : kind || lpTarget
       ? `${path}${search}${hash}`
       : hasTrailingSlash
         ? `${url.origin}${pathname}${search}${hash}`
@@ -210,6 +231,7 @@ export function buildSeoRedirect(input: SeoRedirectInput): SeoRedirect | null {
     canonicalizeHost ? "host-canonical" : null,
     hasTrailingSlash ? "trailing-slash" : null,
     kind ? "legacy-url" : null,
+    lpTarget ? "lp-slug" : null,
   ]
     .filter(Boolean)
     .join("+");

@@ -26,6 +26,7 @@ import {
   collectSitemapPaths,
   EXPLORE_SEO,
   HOME_SEO,
+  isIndexableSitemapPath,
   isUnoptimizedSharePng,
   preferredOgImage,
   explorePlaceSeoMeta,
@@ -329,6 +330,12 @@ assert.ok(!paths.includes("/explore-semarang/sam-poo-kong"));
 assert.ok(!paths.includes("/rooms/deluxe-ocean-view"));
 assert.ok(!paths.includes("/explore/eksplorasi-sejarah-kota-lama-semarang"));
 assert.ok(!paths.includes("/connect"), "/connect must not be listed in the sitemap");
+assert.equal(isIndexableSitemapPath("/guesthouse-dekat-unnes"), false);
+assert.ok(
+  !collectSitemapPaths({
+    pageSlugs: ["guesthouse-dekat-unnes", "/guesthouse-dekat-unnes"],
+  }).includes("/guesthouse-dekat-unnes"),
+);
 const connectBlocked = collectSitemapPaths({
   pageSlugs: ["/connect", "connect", "https://pomahguesthouse.com/connect"],
 });

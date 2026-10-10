@@ -2510,6 +2510,7 @@ function PageSettingsPanel({
   const [customRobots, setCustomRobots] = useState("");
   const [jsonLdOn, setJsonLdOn] = useState(true);
   const [customJsonLd, setCustomJsonLd] = useState("");
+  const [noindex, setNoindex] = useState(false);
 
   useEffect(() => {
     if (target.kind === "home" || target.kind === "book") {
@@ -2523,6 +2524,7 @@ function PageSettingsPanel({
       setTargetKw(s.targetKeyword ?? "");
       setOgImage(s.ogImageUrl ?? "");
       setIndexable(true);
+      setNoindex(false);
       setCustomHead(s.customHead ?? "");
       setCustomRobots(s.customRobots ?? "");
       setJsonLdOn(s.jsonLdEnabled ?? true);
@@ -2538,6 +2540,7 @@ function PageSettingsPanel({
       setTargetKw(page.target_keyword ?? "");
       setOgImage(page.og_image_url ?? "");
       setIndexable(page.published);
+      setNoindex(page.noindex === true);
       setCustomHead(page.custom_head ?? "");
       setCustomRobots(page.custom_robots ?? "");
       setJsonLdOn(page.json_ld_enabled ?? true);
@@ -2596,6 +2599,7 @@ function PageSettingsPanel({
             target_keyword: targetKw || null,
             og_image_url: ogImage || null,
             published: indexable,
+            noindex,
             custom_head: customHead || null,
             custom_robots: customRobots || null,
             json_ld_enabled: jsonLdOn,
@@ -2695,9 +2699,18 @@ function PageSettingsPanel({
                 <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
                   <div>
                     <p className="text-xs font-medium">Halaman dipublikasikan</p>
-                    <p className="text-[10px] text-muted-foreground">Terlihat publik & dapat diindeks Google.</p>
+                    <p className="text-[10px] text-muted-foreground">Terlihat publik. Matikan untuk menyembunyikan halaman.</p>
                   </div>
                   <Switch checked={indexable} onCheckedChange={setIndexable} />
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+                  <div>
+                    <p className="text-xs font-medium">Noindex</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Halaman tetap bisa dibuka, tetapi tidak diindeks dan tidak masuk sitemap.
+                    </p>
+                  </div>
+                  <Switch checked={noindex} onCheckedChange={setNoindex} />
                 </div>
                 <a
                   href={`/lp/${pageSlug}`}
@@ -2793,14 +2806,17 @@ function PageSettingsPanel({
               />
               <p className="mt-0.5 text-[10px] text-muted-foreground">Disisipkan ke dalam &lt;head&gt; halaman ini.</p>
             </FieldRow>
-            <FieldRow label="Custom robots.txt">
+            <FieldRow label="Meta robots">
               <Textarea
                 value={customRobots}
                 onChange={(e) => setCustomRobots(e.target.value)}
-                rows={4}
+                rows={3}
                 className="font-mono text-xs"
-                placeholder={"User-agent: *\nAllow: /"}
+                placeholder="index, follow"
               />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Isi atribut content pada meta robots. Noindex terpisah ada di tab Access.
+              </p>
             </FieldRow>
             <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
               <div>

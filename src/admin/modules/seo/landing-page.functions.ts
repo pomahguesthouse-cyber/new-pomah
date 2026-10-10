@@ -11,6 +11,11 @@ import type { Json } from "@/integrations/supabase/types";
 import { createClient } from "@supabase/supabase-js";
 import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { stripSecretKeys } from "@/public/lib/public-settings";
+import {
+  isMissingSchemaError,
+  planSlugRedirectUpdates,
+  type SlugRedirectRow,
+} from "@/public/lib/lp-slug-redirects";
 
 /** Cast to an untyped client — seo_landing_pages is not in the generated types yet. */
 function db(client: unknown): SupabaseClient {
@@ -222,6 +227,8 @@ export type SeoLandingPage = {
   custom_robots: string | null;
   json_ld_enabled: boolean;
   custom_json_ld: string | null;
+  /** Published pages can stay reachable while staying out of the index. Absent until the migration runs. */
+  noindex?: boolean | null;
   created_at: string;
   updated_at: string;
 };
@@ -247,6 +254,7 @@ const pageShape = z.object({
   custom_robots:    z.string().max(10000).optional().nullable(),
   json_ld_enabled:  z.boolean().optional(),
   custom_json_ld:   z.string().max(20000).optional().nullable(),
+  noindex:          z.boolean().optional(),
 });
 
 type PageSectionRow = {
@@ -418,6 +426,48 @@ export const createSeoLandingPage = createServerFn({ method: "POST" })
     return { ok: true, id: (row as { id: string }).id };
   });
 
+/**
+ * Remember the previous slug after a successful rename. Missing table is ignored
+ * so a deploy before the SQL migration still saves the page.
+ */
+async function recordLandingSlugRename(client: SupabaseClient, oldSlug: string, newSlug: string) {
+  try {
+    const { data, error } = await client.from("seo_slug_redirects").select("from_slug, to_slug");
+    if (error) {
+      if (!isMissingSchemaError(error)) {
+        console.warn("[lp-seo] slug redirect read failed:", error.message);
+      }
+      return;
+    }
+    const plan = planSlugRedirectUpdates((data ?? []) as SlugRedirectRow[], oldSlug, newSlug);
+    if (plan.deletes.length > 0) {
+      const { error: deleteError } = await client
+        .from("seo_slug_redirects")
+        .delete()
+        .in("from_slug", plan.deletes);
+      if (deleteError) {
+        if (!isMissingSchemaError(deleteError)) {
+          console.warn("[lp-seo] slug redirect delete failed:", deleteError.message);
+        }
+        return;
+      }
+    }
+    if (plan.upserts.length > 0) {
+      const { error: upsertError } = await client
+        .from("seo_slug_redirects")
+        .upsert(plan.upserts, { onConflict: "from_slug" });
+      if (upsertError && !isMissingSchemaError(upsertError)) {
+        console.warn("[lp-seo] slug redirect upsert failed:", upsertError.message);
+      }
+    }
+  } catch (error) {
+    console.warn(
+      "[lp-seo] slug redirect write skipped:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 /** Update an existing landing page (partial update supported). */
 export const updateSeoLandingPage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -426,11 +476,27 @@ export const updateSeoLandingPage = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { id, ...fields } = data;
-    const { error } = await db(context.supabase)
-      .from("seo_landing_pages")
-      .update(fields)
-      .eq("id", id);
+    const sb = db(context.supabase);
+    let previousSlug: string | null = null;
+    if (fields.slug) {
+      const { data: current } = await sb
+        .from("seo_landing_pages")
+        .select("slug")
+        .eq("id", id)
+        .maybeSingle();
+      previousSlug = (current as { slug?: string } | null)?.slug ?? null;
+    }
+    const payload: Record<string, unknown> = { ...fields };
+    let { error } = await sb.from("seo_landing_pages").update(payload).eq("id", id);
+    if (error && Object.prototype.hasOwnProperty.call(payload, "noindex") && isMissingSchemaError(error)) {
+      delete payload.noindex;
+      const retry = await sb.from("seo_landing_pages").update(payload).eq("id", id);
+      error = retry.error;
+    }
     if (error) throw error;
+    if (previousSlug && fields.slug && previousSlug !== fields.slug) {
+      await recordLandingSlugRename(sb, previousSlug, fields.slug);
+    }
     return { ok: true };
   });
 

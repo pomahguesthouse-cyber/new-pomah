@@ -2327,6 +2327,7 @@ export type Database = {
           id: string
           json_ld_enabled: boolean
           meta_description: string | null
+          noindex: boolean
           meta_title: string | null
           og_image_url: string | null
           property_id: string | null
@@ -2352,6 +2353,7 @@ export type Database = {
           json_ld_enabled?: boolean
           meta_description?: string | null
           meta_title?: string | null
+          noindex?: boolean
           og_image_url?: string | null
           property_id?: string | null
           published?: boolean
@@ -2376,6 +2378,7 @@ export type Database = {
           json_ld_enabled?: boolean
           meta_description?: string | null
           meta_title?: string | null
+          noindex?: boolean
           og_image_url?: string | null
           property_id?: string | null
           published?: boolean
