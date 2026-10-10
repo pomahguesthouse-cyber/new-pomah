@@ -179,6 +179,57 @@ export type Database = {
         }
         Relationships: []
       }
+      booking_drafts: {
+        Row: {
+          booking_code: string | null
+          check_in: string | null
+          check_out: string | null
+          created_at: string
+          guest_name: string | null
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          payload: Json
+          phone: string
+          quoted_total: number | null
+          room_type: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          booking_code?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string
+          guest_name?: string | null
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          payload?: Json
+          phone: string
+          quoted_total?: number | null
+          room_type?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          booking_code?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string
+          guest_name?: string | null
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          payload?: Json
+          phone?: string
+          quoted_total?: number | null
+          room_type?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       booking_events: {
         Row: {
           actor_id: string | null
@@ -2327,8 +2378,8 @@ export type Database = {
           id: string
           json_ld_enabled: boolean
           meta_description: string | null
-          noindex: boolean
           meta_title: string | null
+          noindex: boolean
           og_image_url: string | null
           property_id: string | null
           published: boolean
@@ -2487,6 +2538,30 @@ export type Database = {
           json_ld?: Json
           name?: string
           schema_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      seo_slug_redirects: {
+        Row: {
+          created_at: string
+          from_slug: string
+          id: string
+          to_slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          from_slug: string
+          id?: string
+          to_slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          from_slug?: string
+          id?: string
+          to_slug?: string
           updated_at?: string
         }
         Relationships: []
@@ -3233,74 +3308,6 @@ export type Database = {
           },
         ]
       }
-      wa_wpp_sync_state: {
-        Row: {
-          created_at: string
-          error_message: string | null
-          external_chat_id: string | null
-          finished_at: string | null
-          id: string
-          imported_count: number
-          last_cursor: string | null
-          last_synced_at: string | null
-          metadata: Json
-          phone: string | null
-          skipped_count: number
-          started_at: string | null
-          status: string
-          sync_type: string
-          thread_id: string | null
-          updated_at: string
-          updated_count: number
-        }
-        Insert: {
-          created_at?: string
-          error_message?: string | null
-          external_chat_id?: string | null
-          finished_at?: string | null
-          id?: string
-          imported_count?: number
-          last_cursor?: string | null
-          last_synced_at?: string | null
-          metadata?: Json
-          phone?: string | null
-          skipped_count?: number
-          started_at?: string | null
-          status?: string
-          sync_type: string
-          thread_id?: string | null
-          updated_at?: string
-          updated_count?: number
-        }
-        Update: {
-          created_at?: string
-          error_message?: string | null
-          external_chat_id?: string | null
-          finished_at?: string | null
-          id?: string
-          imported_count?: number
-          last_cursor?: string | null
-          last_synced_at?: string | null
-          metadata?: Json
-          phone?: string | null
-          skipped_count?: number
-          started_at?: string | null
-          status?: string
-          sync_type?: string
-          thread_id?: string | null
-          updated_at?: string
-          updated_count?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "wa_wpp_sync_state_thread_id_fkey"
-            columns: ["thread_id"]
-            isOneToOne: false
-            referencedRelation: "whatsapp_threads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       walkthrough_hotspots: {
         Row: {
           created_at: string
@@ -3929,6 +3936,7 @@ export type Database = {
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
       is_still_winner: { Args: { p_entry_id: string }; Returns: boolean }
+      kick_wa_queue_drain: { Args: never; Returns: undefined }
       list_staff_push_tokens: {
         Args: { p_user_ids?: string[] }
         Returns: {

@@ -1506,7 +1506,6 @@ const ExploreRouteChildren: ExploreRouteChildren = {
 const ExploreRouteWithChildren =
   ExploreRoute._addFileChildren(ExploreRouteChildren)
 
-
 interface ApiBookingInvoiceIdRouteChildren {
   ApiBookingInvoiceIdSendRoute: typeof ApiBookingInvoiceIdSendRoute
 }
