@@ -45,6 +45,14 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { builderDialogClass, useBuilderLayout } from "@/admin/modules/seo/builder-layout";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -165,6 +173,7 @@ export function LpPageBuilder({
   const [activeId,   setActiveId]   = useState<string | null>(null);
   const [addDialog,  setAddDialog]  = useState(false);
   const [editorTab,  setEditorTab]  = useState<"content" | "style">("content");
+  const compact = useBuilderLayout() !== "triple";
 
   const activeTab = activeMode;
   const setActiveTab = setActiveMode || (() => {});
@@ -236,10 +245,70 @@ export function LpPageBuilder({
     updateCurrentList(currentList.map((s) => (s.id === id ? ({ ...s, ...patch } as LPSection) : s)));
   };
 
+  const editorBody = active ? (
+    <div className="mt-2 rounded-xl border border-teal-200 bg-teal-50/40 p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-teal-150 pb-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="text-xs font-bold uppercase tracking-wide text-teal-600">
+            Edit: {typeMeta(active.type).label}
+          </p>
+          <span className="rounded-full border border-teal-200 bg-teal-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-teal-700">
+            Page-specific
+          </span>
+        </div>
+        <div className="flex rounded bg-stone-200/60 p-0.5">
+          <button
+            type="button"
+            className={`min-h-10 rounded px-3 text-xs font-semibold transition ${
+              editorTab === "content" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700"
+            }`}
+            onClick={() => setEditorTab("content")}
+          >
+            Konten
+          </button>
+          <button
+            type="button"
+            className={`min-h-10 rounded px-3 text-xs font-semibold transition ${
+              editorTab === "style" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700"
+            }`}
+            onClick={() => setEditorTab("style")}
+          >
+            Style
+          </button>
+        </div>
+      </div>
+      {editorTab === "content" ? (
+        <SectionEditor section={active} onUpdate={(patch) => update(active.id, patch)} />
+      ) : (
+        <ResponsiveStyleEditor
+          section={active}
+          activeMode={activeTab}
+          onUpdate={(patch) => update(active.id, patch)}
+        />
+      )}
+    </div>
+  ) : null;
+
+  const palette = (
+    <div className="grid grid-cols-1 gap-2 py-2 min-[480px]:grid-cols-2">
+      {SECTION_META.map((m) => (
+        <button key={m.type} type="button"
+          className="flex min-h-11 flex-col items-start gap-1 rounded-xl border border-stone-200 bg-white p-3 text-left transition hover:border-teal-300 hover:shadow-sm"
+          onClick={() => add(m.type)}>
+          <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${m.color}`}>
+            <m.Icon className="mr-1 inline h-3 w-3" />
+            {m.label}
+          </span>
+          <span className="text-[11px] leading-snug text-stone-400">{m.desc}</span>
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4 [&_input]:max-w-full [&_textarea]:max-w-full">
       {/* Toggle Split */}
-      <div className="flex items-center justify-between rounded-xl border border-stone-200 bg-white p-3.5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white p-3.5 shadow-sm">
         <div>
           <h3 className="text-xs font-bold text-stone-900">Pemisahan Desain Desktop & Mobile</h3>
           <p className="text-[11px] text-stone-400 mt-0.5">Diferensiasikan elemen atau konten khusus perangkat mobile.</p>
@@ -252,7 +321,7 @@ export function LpPageBuilder({
         <div className="flex rounded-lg border border-stone-200 bg-stone-100 p-1">
           <button
             type="button"
-            className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition ${
+            className={`min-h-10 flex-1 rounded-md px-2 text-xs font-semibold transition ${
               activeTab === "desktop"
                 ? "bg-white text-stone-900 shadow-sm"
                 : "text-stone-500 hover:text-stone-850"
@@ -263,7 +332,7 @@ export function LpPageBuilder({
           </button>
           <button
             type="button"
-            className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition ${
+            className={`min-h-10 flex-1 rounded-md px-2 text-xs font-semibold transition ${
               activeTab === "mobile"
                 ? "bg-white text-stone-900 shadow-sm"
                 : "text-stone-500 hover:text-stone-850"
@@ -290,7 +359,7 @@ export function LpPageBuilder({
             const isActive = s.id === activeId;
             return (
               <div key={s.id}
-                className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 transition cursor-pointer ${
+                className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 transition cursor-pointer ${
                   isActive
                     ? "border-teal-300 bg-teal-50"
                     : "border-stone-200 bg-white hover:border-stone-300"
@@ -308,21 +377,21 @@ export function LpPageBuilder({
                     : meta.label}
                 </span>
                 <span className="shrink-0 font-mono text-[10px] text-stone-300">{idx + 1}</span>
-                <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                  <button type="button" title="Naik" disabled={idx === 0}
-                    className="rounded p-1 hover:bg-stone-100 disabled:opacity-30"
+                <div className="ml-auto flex shrink-0 items-center" onClick={(e) => e.stopPropagation()}>
+                  <button type="button" title="Naik" aria-label="Naik" disabled={idx === 0}
+                    className="inline-flex size-10 items-center justify-center rounded-md hover:bg-stone-100 disabled:opacity-30"
                     onClick={() => move(s.id, -1)}>
-                    <ChevronUp className="h-3.5 w-3.5 text-stone-500" />
+                    <ChevronUp className="h-4 w-4 text-stone-500" />
                   </button>
-                  <button type="button" title="Turun" disabled={idx === currentList.length - 1}
-                    className="rounded p-1 hover:bg-stone-100 disabled:opacity-30"
+                  <button type="button" title="Turun" aria-label="Turun" disabled={idx === currentList.length - 1}
+                    className="inline-flex size-10 items-center justify-center rounded-md hover:bg-stone-100 disabled:opacity-30"
                     onClick={() => move(s.id, 1)}>
-                    <ChevronDown className="h-3.5 w-3.5 text-stone-500" />
+                    <ChevronDown className="h-4 w-4 text-stone-500" />
                   </button>
-                  <button type="button" title="Hapus section"
-                    className="rounded p-1 text-stone-300 hover:bg-red-50 hover:text-red-500"
+                  <button type="button" title="Hapus section" aria-label="Hapus section"
+                    className="inline-flex size-10 items-center justify-center rounded-md text-stone-400 hover:bg-red-50 hover:text-red-500"
                     onClick={() => remove(s.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
@@ -331,78 +400,56 @@ export function LpPageBuilder({
         </div>
       )}
 
-      <Button type="button" variant="outline" size="sm" className="w-full gap-1.5 border-dashed"
+      <Button type="button" variant="outline" size="sm" className="h-10 w-full gap-1.5 border-dashed"
         onClick={() => setAddDialog(true)}>
         <Plus className="h-4 w-4" /> Tambah Section
       </Button>
 
-      {/* Section editor */}
-      {active && (
-        <div className="mt-2 rounded-xl border border-teal-200 bg-teal-50/40 p-4">
-          <div className="mb-3 flex items-center justify-between border-b border-teal-150 pb-2">
-            <div className="flex items-center gap-2">
-              <p className="text-xs font-bold uppercase tracking-wide text-teal-600">
-                Edit: {typeMeta(active.type).label}
-              </p>
-              <span className="rounded-full border border-teal-200 bg-teal-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-teal-700">
-                Page-specific
-              </span>
-            </div>
-            <div className="flex rounded bg-stone-200/60 p-0.5">
-              <button
-                type="button"
-                className={`rounded px-2.5 py-0.5 text-[10px] font-semibold transition ${
-                  editorTab === "content" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700"
-                }`}
-                onClick={() => setEditorTab("content")}
-              >
-                Konten
-              </button>
-              <button
-                type="button"
-                className={`rounded px-2.5 py-0.5 text-[10px] font-semibold transition ${
-                  editorTab === "style" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700"
-                }`}
-                onClick={() => setEditorTab("style")}
-              >
-                Style
-              </button>
-            </div>
-          </div>
-          {editorTab === "content" ? (
-            <SectionEditor section={active} onUpdate={(patch) => update(active.id, patch)} />
-          ) : (
-            <ResponsiveStyleEditor
-              section={active}
-              activeMode={activeTab}
-              onUpdate={(patch) => update(active.id, patch)}
-            />
-          )}
-        </div>
-      )}
+      {compact ? null : editorBody}
 
-      {/* Add section dialog */}
-      <Dialog open={addDialog} onOpenChange={setAddDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Pilih Tipe Section</DialogTitle>
-            <DialogDescription>Pilih jenis section yang ingin ditambahkan ke halaman.</DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-2 py-2">
-            {SECTION_META.map((m) => (
-              <button key={m.type} type="button"
-                className="flex flex-col items-start gap-1 rounded-xl border border-stone-200 bg-white p-3 text-left transition hover:border-teal-300 hover:shadow-sm"
-                onClick={() => add(m.type)}>
-                <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${m.color}`}>
-                  <m.Icon className="mr-1 inline h-3 w-3" />
-                  {m.label}
-                </span>
-                <span className="text-[11px] text-stone-400 leading-snug">{m.desc}</span>
-              </button>
-            ))}
+      <Sheet open={compact && !!active} onOpenChange={(open) => { if (!open) setActiveId(null); }}>
+        <SheetContent
+          side="bottom"
+          className="pb-tap flex max-h-[90dvh] w-full flex-col gap-0 overflow-hidden rounded-t-xl p-0 sm:max-w-full"
+        >
+          <SheetHeader className="shrink-0 px-4 pb-2 pt-4 pr-12 text-left">
+            <SheetTitle>Properti section</SheetTitle>
+            <SheetDescription>Ubah konten atau style blok yang dipilih.</SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {editorBody}
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
+
+      {compact ? (
+        <Sheet open={addDialog} onOpenChange={setAddDialog}>
+          <SheetContent
+            side="bottom"
+            className="pb-tap flex max-h-[90dvh] w-full flex-col gap-0 overflow-hidden rounded-t-xl p-0 sm:max-w-full"
+          >
+            <SheetHeader className="shrink-0 px-4 pb-2 pt-4 pr-12 text-left">
+              <SheetTitle>Pilih Tipe Section</SheetTitle>
+              <SheetDescription>Pilih jenis section yang ingin ditambahkan ke halaman.</SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              {palette}
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Dialog open={addDialog} onOpenChange={setAddDialog}>
+          <DialogContent className={builderDialogClass + " max-w-lg"}>
+            <DialogHeader className="shrink-0 px-4 pb-2 pt-4 pr-12 text-left">
+              <DialogTitle>Pilih Tipe Section</DialogTitle>
+              <DialogDescription>Pilih jenis section yang ingin ditambahkan ke halaman.</DialogDescription>
+            </DialogHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              {palette}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

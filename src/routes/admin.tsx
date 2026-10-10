@@ -16,6 +16,7 @@ import {
   resetSessionValidated,
   sessionValidatedWithin,
 } from "@/lib/admin-session-trust";
+import { isPbFixtureRequest } from "@/admin/modules/seo/builder-layout";
 
 /**
  * beforeLoad runs on every /admin/* navigation. A full checkSession() calls the
@@ -54,6 +55,8 @@ export const Route = createFileRoute("/admin")({
   }),
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
+    // Local layout preview only. import.meta.env.DEV is false in production builds.
+    if (isPbFixtureRequest()) return;
     if (sessionValidatedWithin(SESSION_TRUST_MS)) {
       try {
         const { data } = await supabase.auth.getSession();
@@ -90,6 +93,7 @@ export const Route = createFileRoute("/admin")({
  */
 function AdminLayout() {
   useEffect(() => {
+    if (isPbFixtureRequest()) return;
     let cancelled = false;
     let decided = false;
     let leaveTimer: number | null = null;
