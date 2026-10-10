@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { createMultiRoomBooking, listRooms, resendInvoice } from "@/admin/functions/bookings.functions";
+import { calendarFixtureRooms, isCalendarFixtureRequest } from "@/admin/lib/calendar-fixture";
 import { toastBookingInvoice } from "@/admin/lib/invoice-toast";
 import type { BookingInvoiceOutcome } from "@/services/invoice-dispatch";
 import { cn } from "@/lib/utils";
@@ -43,8 +44,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-
 const STATUSES = [
   { value: "pending", label: "Pending" },
   { value: "confirmed", label: "Confirmed" },
@@ -138,12 +137,13 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
   const fnRooms = useServerFn(listRooms);
   const qc = useQueryClient();
 
+  const fixture = isCalendarFixtureRequest();
   const { data: roomsData } = useQuery({
     queryKey: ["rooms"],
     queryFn: () => fnRooms(),
-    enabled: open,
+    enabled: open && !fixture,
   });
-  const allRooms = (roomsData?.rooms ?? []) as RoomRow[];
+  const allRooms = (fixture ? calendarFixtureRooms() : (roomsData?.rooms ?? [])) as RoomRow[];
 
   // Form state
   const [guest, setGuest] = React.useState({
@@ -381,7 +381,7 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:w-full sm:max-w-[920px]">
+      <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:w-full sm:max-w-[920px] max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl">
         {/* Hero header */}
         <div className="relative shrink-0 border-b border-border bg-gradient-to-br from-primary/15 via-accent/5 to-transparent px-4 py-4 pr-12 sm:px-6 sm:py-5">
           <DialogHeader>
@@ -412,8 +412,8 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
         </div>
 
         {/* Body — 2-col on lg+, stacked on mobile */}
-        <div className="grid flex-1 min-h-0 grid-cols-1 lg:grid-cols-[1fr_320px]">
-          <ScrollArea className="border-r border-border">
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto overscroll-contain lg:grid-cols-[1fr_320px] lg:overflow-hidden">
+          <div className="min-h-0 border-b border-border lg:overflow-y-auto lg:overscroll-contain lg:border-b-0 lg:border-r">
             <div className="space-y-4 p-3 sm:space-y-5 sm:p-6">
               {/* Tamu */}
               <Section icon={<User className="h-4 w-4" />} title="Informasi Tamu">
@@ -774,10 +774,10 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                 </div>
               </Section>
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Summary side panel */}
-          <aside className="bg-muted/20">
+          <aside className="min-h-0 bg-muted/20 lg:overflow-y-auto lg:overscroll-contain">
             <div className="sticky top-0 p-5 space-y-4">
               <div>
                 <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -873,11 +873,11 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
           </aside>
         </div>
 
-        <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-muted/30 px-4 py-3 sm:flex-row sm:px-6">
-          <Button variant="outline" onClick={onClose} disabled={createMut.isPending} className="h-11 sm:h-9">
+        <DialogFooter className="sticky bottom-0 z-10 shrink-0 flex-col gap-2 border-t border-border bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:px-6">
+          <Button variant="outline" onClick={onClose} disabled={createMut.isPending} className="h-11 sm:h-10">
             Batal
           </Button>
-          <Button onClick={() => createMut.mutate()} disabled={!canSubmit} className="h-11 gap-1.5 sm:h-9">
+          <Button onClick={() => createMut.mutate()} disabled={!canSubmit} className="h-11 gap-1.5 sm:h-10">
             {createMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             {createMut.isPending ? "Menyimpan…" : "Buat Booking"}
           </Button>
