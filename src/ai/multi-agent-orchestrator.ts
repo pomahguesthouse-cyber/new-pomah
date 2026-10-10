@@ -1488,6 +1488,11 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   }
   // Persist partial booking slots (tipe kamar / jumlah tamu) hasil merge live
   // extraction, supaya turn berikutnya tidak menanyakan ulang.
+  if (liveSlots.checkout_assumed) {
+    finalSlots.checkoutAssumed = true;
+  } else if (shouldAcceptLiveDates && liveSlots.check_in && liveSlots.check_out) {
+    finalSlots.checkoutAssumed = false;
+  }
   if (input.agentCtx.partialBooking) {
     if (input.agentCtx.partialBooking.roomType !== undefined)
       finalSlots.partialRoomType = input.agentCtx.partialBooking.roomType;

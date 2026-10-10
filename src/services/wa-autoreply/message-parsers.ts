@@ -30,6 +30,16 @@ export function parseAvailabilityDateRange(
   return { checkIn: resolved.checkIn, checkOut: resolved.checkOut };
 }
 
+/** Satu tanggal kalender yang check-out-nya kita asumsikan +1 hari. */
+export function availabilityCheckoutWasAssumed(
+  message: string,
+  today: string,
+  now?: Date | string,
+): boolean {
+  const resolved = resolveRelativeDayRange(message, nowForStayParsing(today, now));
+  return resolved?.checkoutAssumed === true && !resolved.needsConfirm;
+}
+
 /**
  * Pertanyaan PROSES booking ("sistem bookingnya gimana", "cara pesannya",
  * "syarat DP-nya apa") — bukan pertanyaan ketersediaan. Insiden 16 Sep 2026:
@@ -156,6 +166,23 @@ export function parseGuestCountFollowup(message: string): ParsedGuestCount | nul
   if (total < 1 || total > 20) return null;
 
   return { adults, children, total };
+}
+
+/**
+ * Jumlah tamu untuk balasan ketersediaan.
+ * "2 kamar" tidak boleh menimpa 4 tamu yang sudah tersimpan.
+ */
+export function resolveDisplayedGuests(
+  message: string,
+  slots?: Record<string, unknown> | null,
+): ParsedGuestCount | null {
+  const parsed = parseGuestCountFollowup(message);
+  const stored = guestsFromStoredSlots(slots);
+  if (!parsed) return stored;
+  if (!stored || parsed.total >= stored.total) return parsed;
+  const roomCount = parseRequestedRoomCount(message);
+  if (roomCount != null && parsed.total === roomCount && stored.total > parsed.total) return stored;
+  return parsed;
 }
 
 /** Jumlah tamu yang sudah ada di slot percakapan. Tidak memakai ringkasan sesi lama. */

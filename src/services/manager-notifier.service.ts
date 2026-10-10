@@ -112,7 +112,8 @@ interface SendOptions {
     | "booking_stuck"
     | "rpc_failure"
     | "ai_credit_low"
-    | "booking_write_failed";
+    | "booking_write_failed"
+    | "booking_change_request";
   recipient: ManagerContact;
   message: string;
   fileUrl?: string;
@@ -1415,5 +1416,97 @@ export async function notifyBookingWriteFailed(db: Db, input: BookingWriteFailed
     }
   } catch (e) {
     console.warn("[ManagerNotifier] notifyBookingWriteFailed error (non-fatal):", e);
+  }
+}
+
+export interface BookingChangeRequestNotice {
+  phone: string;
+  bookingCode: string;
+  guestName?: string | null;
+  recordedCheckIn?: string | null;
+  recordedCheckOut?: string | null;
+  /** Permintaan tamu, apa adanya. Bukan klaim bahwa sistem sudah mengubah booking. */
+  requestedChange: string;
+  threadId?: string | null;
+  dedupeKey: string;
+}
+
+/**
+ * Tamu minta ubah booking yang SUDAH tercatat, dan bot tidak punya tool ubah
+ * tanggal yang aman. Beri tahu staf. Tidak menulis booking. Tidak melempar.
+ */
+export async function notifyBookingChangeRequest(db: Db, input: BookingChangeRequestNotice): Promise<void> {
+  try {
+    const dedupeKey = `booking_change_request:${input.dedupeKey}`;
+    const { data: existing } = await db
+      .from("notification_logs")
+      .select("id")
+      .eq("dedupe_key", dedupeKey)
+      .eq("channel", "push")
+      .maybeSingle();
+    if ((existing as { id?: string } | null)?.id) return;
+
+    let threadId = input.threadId?.trim() || null;
+    if (!threadId) threadId = await findNotificationThreadId(db as any, input.phone);
+    const dates =
+      input.recordedCheckIn && input.recordedCheckOut
+        ? `${fmtDateID(input.recordedCheckIn)} – ${fmtDateID(input.recordedCheckOut)}`
+        : "-";
+    const logMessage =
+      `Tamu minta ubah booking ${input.bookingCode} — BELUM diubah bot\n\n` +
+      `Tamu: ${(input.guestName || "").trim() || "Tamu"}\n` +
+      `Nomor: ${phoneDigits(input.phone) || "-"}\n` +
+      `Tanggal tercatat: ${dates}\n` +
+      `Permintaan: ${input.requestedChange.trim()}\n` +
+      `Thread: ${threadId ? `/admin/whatsapp?thread=${threadId}` : "/admin/whatsapp"}`;
+
+    const claim = await db
+      .from("notification_logs")
+      .insert({
+        event_type: "booking_change_request",
+        recipient_phone: "staff-push",
+        recipient_role: "staff",
+        message: logMessage,
+        status: "sent",
+        attempts: 1,
+        dedupe_key: dedupeKey,
+        related_id: threadId && THREAD_UUID_RE.test(threadId) ? threadId : null,
+        channel: "push",
+        sent_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    if (claim.error) {
+      const message = String((claim.error as { message?: string }).message ?? claim.error);
+      if (!/duplicate|unique|23505/i.test(message)) {
+        console.warn("[ManagerNotifier] log ubah booking tidak tersimpan:", message);
+      }
+    }
+
+    const { error: pushError } = await db.rpc("enqueue_staff_push", {
+      p_payload: {
+        kind: "booking_change_request",
+        title: `Ubah booking ${input.bookingCode}`,
+        body: `${input.bookingCode} belum diubah\n${input.requestedChange.trim().slice(0, 140)}`,
+        url: threadId ? `/admin/whatsapp?thread=${threadId}` : "/admin/whatsapp",
+        thread_id: threadId,
+      },
+    });
+    if (pushError) {
+      console.warn("[ManagerNotifier] enqueue_staff_push ubah booking:", pushError.message ?? pushError);
+    }
+
+    const waToken = await getWaToken(db);
+    const managers = (await getActiveManagers(db)).filter((m) => !!m.phone);
+    if (managers.length > 0) {
+      await fanOut(db, waToken, managers, {
+        eventType: "booking_change_request",
+        message: logMessage,
+        relatedId: threadId && THREAD_UUID_RE.test(threadId) ? threadId : null,
+        dedupeKeyFor: (m) => `${dedupeKey}:mgr:${m.id}`,
+      });
+    }
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyBookingChangeRequest error (non-fatal):", e);
   }
 }

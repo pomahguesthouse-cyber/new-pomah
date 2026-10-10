@@ -13,12 +13,33 @@ import { toPaymentAccountFields } from "@/lib/payment-account";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeGrandTotal, toRupiah, totalsMatch } from "@/lib/booking-total";
+import { snapshotFromStay, staySnapshotsMatch, type BookingSummarySnapshot } from "@/ai/state-machine/booking-stay-guard";
 import type { ToolContext, ToolHandler } from "./types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
+}
+
+function readExpectedSummary(value: unknown): BookingSummarySnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as BookingSummarySnapshot;
+  if (typeof row.checkIn !== "string" || typeof row.checkOut !== "string") return null;
+  if (!Array.isArray(row.rooms)) return null;
+  return {
+    checkIn: row.checkIn,
+    checkOut: row.checkOut,
+    rooms: row.rooms
+      .filter((room) => room && typeof room.roomTypeId === "string")
+      .map((room) => ({
+        roomTypeId: room.roomTypeId,
+        quantity: Math.max(1, Math.floor(Number(room.quantity) || 1)),
+      })),
+    adults: Math.max(0, Math.floor(Number(row.adults) || 0)),
+    children: Math.max(0, Math.floor(Number(row.children) || 0)),
+    total: Math.round(Number(row.total) || 0),
+  };
 }
 
 /**
@@ -632,6 +653,31 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   // Guard total terkonfirmasi: bila pemanggil (state machine) menyertakan total
   // yang sudah dikonfirmasi tamu dan hasil hitung server berbeda, BERHENTI
   // sebelum menulis apa pun — tamu harus mengonfirmasi ulang dengan angka sistem.
+  const expectedSummary = readExpectedSummary(args.expected_summary);
+  if (expectedSummary) {
+    const roomCounts = new Map<string, number>();
+    for (const assignment of assignments) {
+      roomCounts.set(assignment.roomTypeId, (roomCounts.get(assignment.roomTypeId) ?? 0) + 1);
+    }
+    const latest = snapshotFromStay({
+      checkIn,
+      checkOut,
+      rooms: [...roomCounts.entries()].map(([roomTypeId, quantity]) => ({ roomTypeId, quantity })),
+      adults,
+      children,
+      total,
+    });
+    if (!latest || !staySnapshotsMatch(expectedSummary, latest)) {
+      return JSON.stringify({
+        ok: false,
+        summary_mismatch: true,
+        error:
+          "Data booking tidak sama dengan ringkasan terakhir yang ditampilkan ke tamu. " +
+          "Jangan catat. Tampilkan ulang ringkasan dari state dan minta konfirmasi.",
+      });
+    }
+  }
+
   if (args.expected_total !== undefined && args.expected_total !== null && !totalsMatch(args.expected_total, total)) {
     return JSON.stringify({
       ok: false,

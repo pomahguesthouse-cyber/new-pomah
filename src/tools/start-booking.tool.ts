@@ -9,6 +9,8 @@
  */
 
 import { isDateString, todayWIB } from "@/lib/date";
+import { protectStatedGuestCount } from "@/lib/guest-count";
+import { formatRoomQuantityLabel, formatStayConfirmQuestion } from "@/ai/state-machine/booking-stay-guard";
 import {
   buildBookingSummaryAsync,
   getBookingState,
@@ -35,6 +37,7 @@ function cappedCount(value: unknown): number | undefined {
 export function resolveStartBookingGuests(
   args: { adults?: unknown; children?: unknown },
   stored?: Record<string, unknown> | null,
+  rooms?: Array<{ capacity?: number | null }>,
 ): { adults?: number; children: number } {
   const argAdults = cappedCount(args.adults);
   const argAdultsValid = argAdults !== undefined && argAdults >= 1 ? argAdults : undefined;
@@ -57,7 +60,17 @@ export function resolveStartBookingGuests(
   if (argAdultsValid === undefined && storedHasParty) {
     return { adults: storedAdults, children: Math.max(storedChildren, argChildren ?? 0) };
   }
-  return { adults: argAdultsValid, children: argChildren ?? 0 };
+  const resolved = { adults: argAdultsValid, children: argChildren ?? 0 };
+  if (!rooms?.length || resolved.adults === undefined) return resolved;
+  const guarded = protectStatedGuestCount(
+    resolved,
+    { adults: storedAdults, children: storedChildren },
+    rooms,
+  );
+  return {
+    adults: guarded.adults,
+    children: guarded.children ?? resolved.children,
+  };
 }
 
 function resolveRoomType(input: string, rooms: RoomTypeRow[]): RoomTypeRow | undefined {
@@ -105,6 +118,7 @@ export const startBookingDetails: ToolHandler = async (
   const resolvedGuests = resolveStartBookingGuests(
     { adults: args.adults, children: args.children },
     storedGuests,
+    ctx.rooms,
   );
   const adults = resolvedGuests.adults;
   const children = resolvedGuests.children;
@@ -122,16 +136,20 @@ export const startBookingDetails: ToolHandler = async (
     });
   }
   // Default to a single night if only one date is provided.
+  // Check-out yang kita buat sendiri belum disetujui tamu.
+  let synthesizedOneNight = false;
   if (!checkOut) {
     // Tidak ada checkOut sama sekali → default 1 malam
     const d = new Date(checkIn);
     d.setUTCDate(d.getUTCDate() + 1);
     checkOut = d.toISOString().slice(0, 10);
+    synthesizedOneNight = true;
   } else if (checkOut < checkIn) {
     // checkOut sebelum checkIn → tidak valid → default 1 malam
     const d = new Date(checkIn);
     d.setUTCDate(d.getUTCDate() + 1);
     checkOut = d.toISOString().slice(0, 10);
+    synthesizedOneNight = true;
   } else if (checkOut === checkIn) {
     // Same-day (dayuse) → izinkan, jangan ubah diam-diam
     // State machine akan menampilkan "0 malam / dayuse" di ringkasan
@@ -220,7 +238,7 @@ export const startBookingDetails: ToolHandler = async (
     context.rooms = parsedRooms;
     // Set fallback scalar variables from first room.
     context.roomId = parsedRooms[0].roomTypeId;
-    context.roomName = parsedRooms.map((r) => `${r.quantity}x ${r.roomTypeName}`).join(", ");
+    context.roomName = parsedRooms.map((r) => formatRoomQuantityLabel(r.quantity, r.roomTypeName)).join(", ");
     context.pricePerNight = parsedRooms[0].pricePerNight;
     roomsDescription = context.roomName;
     // Compute total: sum(rate × qty × nights) across all room items.
@@ -279,6 +297,24 @@ export const startBookingDetails: ToolHandler = async (
 
   ctx.lastDates = { checkIn, checkOut };
 
+  const oneNight = (() => {
+    const d = new Date(`${checkIn}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return checkOut === d.toISOString().slice(0, 10);
+  })();
+  const storedAssumption =
+    storedGuests.checkoutAssumed === true || storedGuests.checkout_assumed === true;
+  const datesAlreadyConfirmed = storedGuests.datesConfirmed === true;
+  // Check-out yang baru kita susun sendiri selalu ditanyakan, meski state
+  // lama sempat menandai tanggal lain sebagai sudah dikonfirmasi.
+  if (oneNight && (synthesizedOneNight || (storedAssumption && !datesAlreadyConfirmed))) {
+    context.checkoutAssumed = true;
+    context.datesConfirmed = false;
+  } else {
+    context.checkoutAssumed = false;
+    context.datesConfirmed = true;
+  }
+
   // Masuk ke state machine. Jika slot wajib sudah lengkap, langsung tampilkan
   // ringkasan final dan simpan state CONFIRMING_BOOKING. Ini mencegah jawaban
   // "ya" berikutnya jatuh kembali ke agent/tool loop dan mengulang prompt.
@@ -289,6 +325,16 @@ export const startBookingDetails: ToolHandler = async (
     !!context.checkOut &&
     !!context.roomName &&
     (context.adults ?? 0) >= 1;
+
+  if (hasCompleteRequiredSlots && context.checkoutAssumed && context.datesConfirmed !== true) {
+    context.guestName = guestName;
+    await updateBookingState(ctx.supabaseAdmin, ctx.phone, "CONFIRMING_BOOKING", context);
+    return JSON.stringify({
+      ok: true,
+      relay_verbatim: true,
+      message: formatStayConfirmQuestion(checkIn, checkOut),
+    });
+  }
 
   if (hasCompleteRequiredSlots) {
     context.guestName = guestName;
