@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { embedSessionInline } from "@/admin/modules/training/wa-correction.functions";
 
 function normalizePhone(raw: unknown) {
   if (raw == null) return null;
@@ -70,5 +71,7 @@ export const createWhatsappCorrectionLiveSession = createServerFn({ method: "POS
       .select("id")
       .single();
     if (error) throw error;
-    return { ok: true, id: inserted?.id as string };
+    const id = inserted?.id as string;
+    if (id && data.status === "approved") await embedSessionInline(id);
+    return { ok: true, id };
   });

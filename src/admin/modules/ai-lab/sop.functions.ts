@@ -9,6 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { processSopDocumentChunks } from "@/ai/rag.service";
 import type { AiClientConfig } from "@/ai/types";
+import { embedInline, updateRowTolerant } from "@/services/training-embedding";
 
 /** Untyped client view — `sop_documents` is not in the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -123,17 +124,12 @@ export const createSopDocument = createServerFn({ method: "POST" })
     if (error) throw error;
 
     if (insertedSop?.id && (data.content || data.sourceUrl)) {
-      getAiConfig(sb).then(config => {
-        if (config) {
-          processSopDocumentChunks(
-            sb,
-            insertedSop.id,
-            data.content || "",
-            data.sourceUrl || null,
-            config
-          ).catch(e => console.error("[SOP] Background chunk error:", e));
-        }
-      });
+      await indexSopDocumentInline(
+        sb,
+        insertedSop.id,
+        data.content || "",
+        data.sourceUrl || null,
+      );
     }
 
     return { ok: true };
@@ -183,11 +179,11 @@ export const updateSopDocumentContent = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const sb = db(context.supabase);
-    const { error } = await sb
-      .from("sop_documents")
-      .update({ content: data.content })
-      .eq("id", data.id);
-    if (error) throw error;
+    await updateRowTolerant(
+      (patch) => sb.from("sop_documents").update(patch).eq("id", data.id),
+      { content: data.content, updated_at: new Date().toISOString() },
+      ["updated_at"],
+    );
 
     const { data: doc } = await sb
       .from("sop_documents")
@@ -195,17 +191,12 @@ export const updateSopDocumentContent = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .maybeSingle();
 
-    getAiConfig(sb).then(config => {
-      if (config) {
-        processSopDocumentChunks(
-          sb,
-          data.id,
-          data.content,
-          (doc as Record<string, unknown> | null)?.source_url as string | null,
-          config
-        ).catch(e => console.error("[SOP] Background update chunk error:", e));
-      }
-    });
+    await indexSopDocumentInline(
+      sb,
+      data.id,
+      data.content,
+      ((doc as Record<string, unknown> | null)?.source_url as string | null) ?? null,
+    );
 
     return { ok: true };
   });
@@ -628,8 +619,46 @@ export const seedDefaultSopDocuments = createServerFn({ method: "POST" })
 
     if (toInsert.length === 0) return { seeded: 0 };
 
-    const { error } = await sb.from("sop_documents").insert(toInsert);
+    const { error, data: inserted } = await sb
+      .from("sop_documents")
+      .insert(toInsert)
+      .select("id, content, source_url");
     if (error) throw error;
+
+    const deadline = Date.now() + 12_000;
+    for (const row of (inserted ?? []) as Array<{ id: string; content: string | null; source_url: string | null }>) {
+      const remaining = deadline - Date.now();
+      if (remaining < 500) break;
+      await embedInline(
+        `sop-seed:${row.id}`,
+        (signal) => indexSopWithSignal(sb, row.id, row.content ?? "", row.source_url, signal),
+        remaining,
+      );
+    }
 
     return { seeded: toInsert.length };
   });
+
+async function indexSopDocumentInline(
+  supabase: SupabaseClient,
+  documentId: string,
+  content: string,
+  sourceUrl: string | null,
+): Promise<void> {
+  await embedInline(`sop:${documentId}`, (signal) =>
+    indexSopWithSignal(supabase, documentId, content, sourceUrl, signal),
+  );
+}
+
+async function indexSopWithSignal(
+  supabase: SupabaseClient,
+  documentId: string,
+  content: string,
+  sourceUrl: string | null,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const config = await getAiConfig(supabase);
+  if (!config) return false;
+  const result = await processSopDocumentChunks(supabase, documentId, content, sourceUrl, config, { signal });
+  return result.complete && result.failed === 0;
+}

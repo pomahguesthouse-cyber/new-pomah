@@ -7,6 +7,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { loadTrainingAiConfig } from "@/services/training-ai-config";
+import {
+  buildCuratedEmbeddingText,
+  embedInline,
+  updateRowTolerant,
+  writeEmbedding,
+} from "@/services/training-embedding";
 
 export type TrainingJson =
   | string
@@ -82,40 +89,23 @@ function genId(prefix: string): string {
 }
 
 /**
- * Best-effort embedding generator. Mengambil konfigurasi LLM dari
- * tabel `properties` (sama dengan pipeline lain). Gagal di tahap ini
- * tidak menggagalkan request — admin dapat menjalankan backfill nanti.
+ * Embedding kurasi. Gagal atau timeout tidak melempar — baris tetap tersimpan
+ * dengan embedding NULL dan cron backfill mengisinya.
  */
-async function embedCuratedRows(ids: string[]): Promise<{ ok: number; failed: number }> {
+async function embedCuratedRows(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<{ ok: number; failed: number }> {
   if (ids.length === 0) return { ok: 0, failed: 0 };
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { generateEmbedding } = await import("@/ai/embedding.service");
-
-    const { data: prop } = await supabaseAdmin
-      .from("properties")
-      .select("ai_api_key, ai_base_url, ai_model")
-      .limit(1)
-      .maybeSingle();
-    const p = (prop ?? {}) as { ai_api_key?: string; ai_base_url?: string; ai_model?: string };
-    const explicitKey = p.ai_api_key?.trim();
-    const lovableKey = process.env.LOVABLE_API_KEY?.trim();
-    const useLovable = !explicitKey && !!lovableKey;
-    const apiKey = explicitKey || lovableKey || null;
-    if (!apiKey) return { ok: 0, failed: ids.length };
-    const baseUrl = useLovable
-      ? "https://ai.gateway.lovable.dev/v1"
-      : (p.ai_base_url || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
-    const cfgModel = p.ai_model?.trim();
-    const model = useLovable
-      ? cfgModel?.includes("/")
-        ? cfgModel
-        : "google/gemini-2.5-flash"
-      : cfgModel || "gpt-4o-mini";
+    const config = await loadTrainingAiConfig();
+    if (!config) return { ok: 0, failed: ids.length };
 
     const { data: rows } = await (supabaseAdmin as any)
       .from("chatbot_training_examples")
-      .select("id, user_message, ideal_assistant_response")
+      .select("id, user_message, ideal_assistant_response, is_active")
       .in("id", ids);
 
     let ok = 0;
@@ -124,21 +114,19 @@ async function embedCuratedRows(ids: string[]): Promise<{ ok: number; failed: nu
       id: string;
       user_message: string;
       ideal_assistant_response: string;
+      is_active?: boolean | null;
     }>) {
-      const text = `Tamu: ${row.user_message}\nAsisten: ${row.ideal_assistant_response}`;
-      const embedding = await generateEmbedding({ apiKey, baseUrl, model }, text);
+      if (signal?.aborted) break;
+      if (row.is_active === false) continue;
+      const text = buildCuratedEmbeddingText(row.user_message, row.ideal_assistant_response);
+      const embedding = await generateEmbedding(config, text, { signal });
+      if (signal?.aborted) break;
       if (!embedding) {
         failed++;
         continue;
       }
-      const { error: updErr } = await (supabaseAdmin as any)
-        .from("chatbot_training_examples")
-        .update({
-          embedding: embedding as unknown as string,
-          embedding_updated_at: new Date().toISOString(),
-        })
-        .eq("id", row.id);
-      if (updErr) failed++;
+      const written = await writeEmbedding(supabaseAdmin, "chatbot_training_examples", row.id, embedding);
+      if (!written.ok) failed++;
       else ok++;
     }
     return { ok, failed };
@@ -146,6 +134,10 @@ async function embedCuratedRows(ids: string[]): Promise<{ ok: number; failed: nu
     console.warn("[chatbot-training] embed failed:", e);
     return { ok: 0, failed: ids.length };
   }
+}
+
+async function embedCuratedInline(ids: string[]): Promise<void> {
+  await embedInline("curated", (signal) => embedCuratedRows(ids, signal).then((result) => result.failed === 0 && result.ok > 0 || ids.length === 0));
 }
 
 export const uploadTrainingExamples = createServerFn({ method: "POST" })
@@ -173,8 +165,7 @@ export const uploadTrainingExamples = createServerFn({ method: "POST" })
     if (error) throw error;
 
     const ids = (inserted ?? []).map((r: { id: string }) => r.id);
-    // Best-effort embedding di belakang layar — tidak blocking response.
-    void embedCuratedRows(ids);
+    await embedCuratedInline(ids);
 
     return { inserted: ids.length, total: rows.length };
   });
@@ -190,22 +181,22 @@ export const updateTrainingExample = createServerFn({ method: "POST" })
   .inputValidator((d) => updateInput.parse(d))
   .handler(async ({ data, context }) => {
     const patch: Record<string, unknown> = {};
-    if (data.ideal_assistant_response !== undefined) {
-      patch.ideal_assistant_response = data.ideal_assistant_response;
-      // Reset embedding karena teks berubah — backfill akan re-embed.
+    const textChanged = data.ideal_assistant_response !== undefined;
+    const deactivated = data.is_active === false;
+    if (textChanged) patch.ideal_assistant_response = data.ideal_assistant_response;
+    if (textChanged || deactivated) {
       patch.embedding = null;
       patch.embedding_updated_at = null;
     }
     if (data.is_active !== undefined) patch.is_active = data.is_active;
     if (Object.keys(patch).length === 0) return { ok: true };
-    const { error } = await (context.supabase as any)
-      .from("chatbot_training_examples")
-      .update(patch)
-      .eq("id", data.id);
-    if (error) throw error;
-    // Re-embed bila jawaban diubah & sekarang aktif.
-    if (data.ideal_assistant_response !== undefined) {
-      void embedCuratedRows([data.id]);
+    await updateRowTolerant(
+      (next) =>
+        (context.supabase as any).from("chatbot_training_examples").update(next).eq("id", data.id),
+      patch,
+    );
+    if (!deactivated && (textChanged || data.is_active === true)) {
+      await embedCuratedInline([data.id]);
     }
     return { ok: true };
   });
@@ -316,6 +307,6 @@ export const promoteLogToCurated = createServerFn({ method: "POST" })
       .insert(row);
     if (insErr) throw insErr;
 
-    void embedCuratedRows([id]);
+    await embedCuratedInline([id]);
     return { ok: true, id, alreadyExisted: false };
   });

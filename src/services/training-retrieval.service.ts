@@ -284,6 +284,9 @@ export async function findTrainingContext(
       match_count: candidateCount,
     }),
   ]);
+  logRetrievalSearch("match_chatbot_training_examples", curatedRes);
+  logRetrievalSearch("match_training_examples", logRes);
+  logRetrievalSearch("match_wa_correction_ideal_examples", correctionRes);
 
   const merged: UnifiedTrainingExample[] = [];
   if (curatedRes.status === "fulfilled" && Array.isArray(curatedRes.value.data)) {
@@ -356,6 +359,17 @@ export async function findTrainingContext(
   return Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity).slice(0, limit);
 }
 
+function logRetrievalSearch(label: string, result: PromiseSettledResult<unknown>): void {
+  if (result.status === "rejected") {
+    console.error(`[TrainingRAG] ${label} search failed:`, result.reason);
+    return;
+  }
+  const error = (result.value as { error?: { message?: string } | null } | null)?.error;
+  if (error) {
+    console.error(`[TrainingRAG] ${label} search error:`, error.message ?? error);
+  }
+}
+
 function keywordToUnified(ex: KeywordExample, fakeSim: number): UnifiedTrainingExample {
   return {
     id: ex.id,
@@ -405,6 +419,8 @@ export async function findNegativeExamples(
       match_count: limit,
     }),
   ]);
+  logRetrievalSearch("match_bad_training_examples", badLogRes);
+  logRetrievalSearch("match_wa_correction_examples", waCorrectionRes);
 
   const merged: NegativeTrainingExample[] = [];
   if (badLogRes.status === "fulfilled" && Array.isArray(badLogRes.value.data)) {

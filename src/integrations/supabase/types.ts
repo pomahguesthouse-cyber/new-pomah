@@ -2619,6 +2619,7 @@ export type Database = {
           property_id: string | null
           source_url: string | null
           storage_bucket: string | null
+          updated_at: string | null
         }
         Insert: {
           agent_key?: string | null
@@ -2634,6 +2635,7 @@ export type Database = {
           property_id?: string | null
           source_url?: string | null
           storage_bucket?: string | null
+          updated_at?: string | null
         }
         Update: {
           agent_key?: string | null
@@ -2649,6 +2651,7 @@ export type Database = {
           property_id?: string | null
           source_url?: string | null
           storage_bucket?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -3920,6 +3923,7 @@ export type Database = {
       get_guest_structured_memory: { Args: { p_phone: string }; Returns: Json }
       get_public_booking_invoice: { Args: { p_id: string }; Returns: Json }
       get_public_property: { Args: never; Returns: Json }
+      has_pgvector_extension: { Args: never; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

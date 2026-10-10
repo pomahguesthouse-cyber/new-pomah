@@ -11,6 +11,8 @@ import {
   Trash2,
   Save,
   ArrowUpRight,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 
 import {
@@ -23,10 +25,13 @@ import {
   uploadTrainingExamples,
   updateTrainingExample,
   deleteTrainingExample,
-  backfillCuratedEmbeddings,
   promoteLogToCurated,
   type TrainingExampleRow,
 } from "@/admin/functions/chatbot-training.functions";
+import {
+  getTrainingIndexSummary,
+  reindexTrainingEmbeddings,
+} from "@/admin/modules/training/training-index.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +59,8 @@ export function TrainingPage() {
           log percakapan asli yang di-rating admin.
         </p>
       </header>
+
+      <TrainingIndexCard />
 
       <Tabs defaultValue="curated" className="space-y-4">
         <TabsList>
@@ -108,12 +115,75 @@ function parseJsonl(text: string): ParsedLine[] {
     });
 }
 
+function TrainingIndexCard() {
+  const summaryFn = useServerFn(getTrainingIndexSummary);
+  const reindexFn = useServerFn(reindexTrainingEmbeddings);
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["training-index-summary"],
+    queryFn: () => summaryFn(),
+  });
+  const reindex = useMutation({
+    mutationFn: () => reindexFn(),
+    onSuccess: (result) => {
+      toast.success(
+        `Indeks selesai: ${result.embedded} tertanam, ${result.failed} gagal (dari ${result.checked}).`,
+      );
+      qc.invalidateQueries({ queryKey: ["training-index-summary"] });
+      qc.invalidateQueries({ queryKey: ["training-examples"] });
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const sources = data?.sources ?? [];
+
+  return (
+    <section className="min-w-0 rounded-xl border bg-card p-3 sm:p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold">Indeks embedding</h2>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+            Angka di bawah adalah baris aktif dibanding yang sudah punya vektor.
+            Cron mengisi sisanya tiap 5 menit. Tombol ini menjalankan batch yang sama.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 w-full shrink-0 sm:w-auto"
+          disabled={reindex.isPending}
+          onClick={() => reindex.mutate()}
+        >
+          {reindex.isPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="mr-2 h-4 w-4" />
+          )}
+          Indeks ulang sekarang
+        </Button>
+      </div>
+      {isLoading ? (
+        <p className="mt-3 text-sm text-muted-foreground">Menghitung indeks…</p>
+      ) : (
+        <dl className="mt-3 grid grid-cols-1 gap-2 min-[700px]:grid-cols-2">
+          {sources.map((source) => (
+            <div key={source.key} className="min-w-0 rounded-lg border px-3 py-2">
+              <dt className="truncate text-xs text-muted-foreground">{source.label}</dt>
+              <dd className="mt-0.5 text-sm font-medium leading-snug">
+                {source.active} aktif / {source.indexed} sudah terindeks
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  );
+}
+
 function CuratedTab() {
   const listFn = useServerFn(listTrainingExamples);
   const uploadFn = useServerFn(uploadTrainingExamples);
   const updateFn = useServerFn(updateTrainingExample);
   const deleteFn = useServerFn(deleteTrainingExample);
-  const backfillFn = useServerFn(backfillCuratedEmbeddings);
   const qc = useQueryClient();
 
   const [filter, setFilter] = useState("");
@@ -138,8 +208,6 @@ function CuratedTab() {
     );
   }, [examples, filter]);
 
-  const pendingEmbedding = examples.filter((e) => !e.embedding_updated_at).length;
-
   const uploadMut = useMutation({
     mutationFn: (p: { sourceFile: string; examples: Record<string, unknown>[] }) =>
       uploadFn({ data: p as never }),
@@ -161,17 +229,6 @@ function CuratedTab() {
     mutationFn: (id: string) => deleteFn({ data: { id } }),
     onSuccess: () => {
       toast.success("Contoh dihapus");
-      qc.invalidateQueries({ queryKey: ["training-examples"] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  const backfillMut = useMutation({
-    mutationFn: () => backfillFn({ data: { maxRows: 50 } }),
-    onSuccess: (r) => {
-      toast.success(
-        `Backfill selesai: ${r.ok} berhasil, ${r.failed} gagal (dari ${r.processed}).`,
-      );
       qc.invalidateQueries({ queryKey: ["training-examples"] });
     },
     onError: (e) => toast.error((e as Error).message),
@@ -216,16 +273,7 @@ function CuratedTab() {
               if (f) void handleFile(f);
             }}
           />
-          {pendingEmbedding > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => backfillMut.mutate()}
-              disabled={backfillMut.isPending}
-            >
-              Backfill embedding ({pendingEmbedding})
-            </Button>
-          )}
-          <Button onClick={() => fileRef.current?.click()} disabled={uploadMut.isPending}>
+          <Button className="h-11" onClick={() => fileRef.current?.click()} disabled={uploadMut.isPending}>
             <Upload className="mr-1.5 h-4 w-4" />
             Upload .jsonl
           </Button>

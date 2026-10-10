@@ -53,31 +53,45 @@ async function checkSupabase(): Promise<CheckResult> {
 }
 
 
+function pgvectorRpcMissing(message: string): boolean {
+  return /has_pgvector_extension|PGRST202|could not find the function|schema cache/i.test(message);
+}
+
 async function checkPgvector(): Promise<CheckResult> {
+  const started = Date.now();
   try {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
-    const { value, ms } = await timed(async () => {
-      const { data, error } = await supabaseAdmin.rpc("has_pgvector_extension");
-      if (error) throw new Error(error.message);
-      return data as boolean | null;
-    });
-    if (value !== true) {
-      return {
-        status: "fail",
-        latencyMs: ms,
-        detail: "pgvector extension not installed",
-      };
+    const rpc = await supabaseAdmin.rpc("has_pgvector_extension");
+    const latencyMs = Date.now() - started;
+    if (!rpc.error) {
+      if (rpc.data === true) return { status: "ok", latencyMs };
+      return { status: "fail", latencyMs, detail: "pgvector extension not installed" };
     }
-    return { status: "ok", latencyMs: ms };
+
+    const rpcMessage = rpc.error.message ?? "";
+    if (!pgvectorRpcMissing(rpcMessage)) {
+      return { status: "fail", latencyMs, detail: rpcMessage };
+    }
+
+    // Fungsi belum terpasang (migrasi belum dijalankan). Kolom vector hanya
+    // terbaca kalau ekstensi pgvector ada, jadi health check tidak berhenti di status skipped.
+    const probe = await supabaseAdmin
+      .from("sop_chunks")
+      .select("embedding", { head: true, count: "exact" })
+      .limit(1);
+    const probedMs = Date.now() - started;
+    if (!probe.error) {
+      return { status: "ok", latencyMs: probedMs, detail: "pgvector column readable" };
+    }
+    return { status: "fail", latencyMs: probedMs, detail: probe.error.message };
   } catch (e) {
-    // Fallback: jika RPC belum ada, kembalikan skipped agar tidak memblokir webhook.
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes("has_pgvector_extension")) {
-      return { status: "skipped", latencyMs: 0, detail: "RPC missing" };
-    }
-    return { status: "fail", latencyMs: 0, detail: msg };
+    return {
+      status: "fail",
+      latencyMs: Date.now() - started,
+      detail: e instanceof Error ? e.message : String(e),
+    };
   }
 }
 

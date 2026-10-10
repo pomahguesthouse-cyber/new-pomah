@@ -2,78 +2,28 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { generateEmbedding } from "@/ai/embedding.service";
-import { embedWaCorrectionExample } from "@/ai/training-rag.service";
+import { embedWaCorrectionExample, embedWaCorrectionSession } from "@/ai/training-rag.service";
+import { loadTrainingAiConfig } from "@/services/training-ai-config";
+import { embedInline, updateRowTolerant } from "@/services/training-embedding";
 
-async function getTrainingAiConfig() {
-  const { data: prop } = await supabaseAdmin
-    .from("properties")
-    .select("ai_api_key, ai_base_url, ai_model")
-    .limit(1)
-    .maybeSingle();
-  const p = (prop ?? {}) as { ai_api_key?: string; ai_base_url?: string; ai_model?: string };
-  const explicitKey = p.ai_api_key?.trim();
-  const lovableKey = process.env.LOVABLE_API_KEY?.trim();
-  const useLovable = !explicitKey && !!lovableKey;
-  const apiKey = explicitKey || lovableKey || null;
-  if (!apiKey) return null;
-  const baseUrl = useLovable
-    ? "https://ai.gateway.lovable.dev/v1"
-    : (p.ai_base_url || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
-  const cfgModel = p.ai_model?.trim();
-  const model = useLovable
-    ? cfgModel?.includes("/")
-      ? cfgModel
-      : "google/gemini-2.5-flash"
-    : cfgModel || "gpt-4o-mini";
-  return { apiKey, baseUrl, model };
+async function embedCorrectionInline(correctionId: string): Promise<void> {
+  await embedInline(`correction:${correctionId}`, async (signal) => {
+    const config = await loadTrainingAiConfig();
+    if (!config) return false;
+    const result = await embedWaCorrectionExample(supabaseAdmin, correctionId, config, { signal });
+    if (!result.ok) console.warn("[wa-correction.embed] skipped:", result.reason);
+    return result.ok;
+  });
 }
 
-async function embedCorrectionAsync(correctionId: string): Promise<void> {
-  try {
-    const cfg = await getTrainingAiConfig();
-    if (!cfg) return;
-    const res = await embedWaCorrectionExample(supabaseAdmin, correctionId, cfg);
-    if (!res.ok) console.warn("[wa-correction.embed] skipped:", res.reason);
-  } catch (e) {
-    console.warn("[wa-correction.embed] failed:", e);
-  }
-}
-
-function transcriptToEmbeddingText(summary: string | null | undefined, transcript: unknown): string {
-  const rows = Array.isArray(transcript) ? transcript : [];
-  const lines = rows.slice(-60).map((m) => {
-    const row = m as { direction?: string; body?: string };
-    const who = row.direction === "in" ? "Tamu" : "Asisten";
-    const body = String(row.body ?? "").trim();
-    return body ? `${who}: ${body}` : "";
-  }).filter(Boolean);
-  return [
-    summary?.trim() ? `Ringkasan percakapan: ${summary.trim()}` : "",
-    "Transcript terkoreksi:",
-    lines.join("\n"),
-  ].filter(Boolean).join("\n").slice(0, 12000);
-}
-
-async function embedSessionAsync(sessionId: string, summary: string | null | undefined, transcript: unknown): Promise<void> {
-  try {
-    const cfg = await getTrainingAiConfig();
-    if (!cfg) return;
-    const text = transcriptToEmbeddingText(summary, transcript);
-    if (!text.trim()) return;
-    const embedding = await generateEmbedding(cfg, text);
-    if (!embedding) return;
-    const { error } = await supabaseAdmin
-      .from("wa_correction_sessions")
-      .update({
-        embedding: embedding as unknown as string,
-        embedding_updated_at: new Date().toISOString(),
-      })
-      .eq("id", sessionId);
-    if (error) console.warn("[wa-correction-session.embed] update failed:", error.message);
-  } catch (e) {
-    console.warn("[wa-correction-session.embed] failed:", e);
-  }
+export async function embedSessionInline(sessionId: string): Promise<void> {
+  await embedInline(`session:${sessionId}`, async (signal) => {
+    const config = await loadTrainingAiConfig();
+    if (!config) return false;
+    const result = await embedWaCorrectionSession(supabaseAdmin, sessionId, config, { signal });
+    if (!result.ok) console.warn("[wa-correction-session.embed] skipped:", result.reason);
+    return result.ok;
+  });
 }
 
 function normalizeWaIdentity(raw: unknown): string | null {
@@ -190,7 +140,7 @@ export const createWhatsappCorrectionFromMessages = createServerFn({ method: "PO
       p_status: data.status,
     });
     if (error) throw error;
-    if (id && data.status === "approved") await embedCorrectionAsync(id as string);
+    if (id && data.status === "approved") await embedCorrectionInline(id as string);
     return { ok: true, id: id as string };
   });
 
@@ -231,6 +181,9 @@ export const updateWhatsappCorrection = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data }) => {
+    const textChanged =
+      data.userMessage !== undefined || data.botWrongReply !== undefined || data.idealReply !== undefined;
+    const leavesApproved = data.status !== undefined && data.status !== "approved";
     const patch: Record<string, unknown> = {};
     if (data.userMessage !== undefined) patch.user_message = data.userMessage;
     if (data.botWrongReply !== undefined) patch.bot_wrong_reply = data.botWrongReply;
@@ -241,15 +194,18 @@ export const updateWhatsappCorrection = createServerFn({ method: "POST" })
     if (data.severity !== undefined) patch.severity = data.severity;
     if (data.status !== undefined) patch.status = data.status;
     if (data.notes !== undefined) patch.notes = data.notes;
+    if (textChanged || leavesApproved) {
+      patch.embedding = null;
+      patch.embedding_updated_at = null;
+    }
 
-    const { error } = await supabaseAdmin
-      .from("wa_correction_dataset")
-      .update(patch)
-      .eq("id", data.id);
-    if (error) throw error;
+    await updateRowTolerant(
+      (next) => supabaseAdmin.from("wa_correction_dataset").update(next).eq("id", data.id),
+      patch,
+    );
 
-    if (data.status === "approved" || data.idealReply !== undefined || data.userMessage !== undefined || data.botWrongReply !== undefined) {
-      await embedCorrectionAsync(data.id);
+    if (data.status === "approved" || (data.status === undefined && textChanged)) {
+      await embedCorrectionInline(data.id);
     }
     return { ok: true };
   });
@@ -281,12 +237,14 @@ export const backfillWhatsappCorrectionEmbeddings = createServerFn({ method: "PO
     let ok = 0;
     let failed = 0;
     for (const row of rows ?? []) {
-      try {
-        await embedCorrectionAsync(row.id);
-        ok++;
-      } catch {
-        failed++;
-      }
+      await embedCorrectionInline(row.id);
+      const { data: saved } = await supabaseAdmin
+        .from("wa_correction_dataset")
+        .select("embedding")
+        .eq("id", row.id)
+        .maybeSingle();
+      if ((saved as { embedding?: string | null } | null)?.embedding) ok++;
+      else failed++;
     }
     return { processed: rows?.length ?? 0, ok, failed };
   });
@@ -357,7 +315,7 @@ export const createWhatsappCorrectionSession = createServerFn({ method: "POST" }
     });
     if (error) throw error;
     if (id && data.status === "approved") {
-      await embedSessionAsync(id as string, data.summary, data.correctedTranscript);
+      await embedSessionInline(id as string);
     }
     return { ok: true, id: id as string };
   });
