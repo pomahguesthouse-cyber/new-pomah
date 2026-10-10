@@ -94,9 +94,10 @@ import {
   looksLikeBookingInquiry,
   mentionsExplicitDateSignal,
   messageOpensWithGreeting,
+  availabilityCheckoutWasAssumed,
   parseAvailabilityDateRange,
-  guestsFromStoredSlots,
   parseGuestCountFollowup,
+  resolveDisplayedGuests,
   shouldUseDeterministicAvailability,
   type ParsedGuestCount,
 } from "@/services/wa-autoreply/message-parsers";
@@ -234,7 +235,7 @@ type FastFaqResult = {
   /** Tanggal yang di-parse (untuk jalur ketersediaan) — dipersist ke
    *  conversation-state agar turn berikutnya (mis. tanya harga) tidak
    *  menanyakan tanggal lagi. */
-  dates?: { checkIn: string; checkOut: string };
+  dates?: { checkIn: string; checkOut: string; checkoutAssumed?: boolean };
 };
 
 /**
@@ -357,8 +358,7 @@ async function buildDeterministicAvailabilityReply(params: {
     params.message,
     (params.rooms ?? []).map((r: any) => String(r?.name ?? "")),
   );
-  const guests =
-    parseGuestCountFollowup(params.message) ?? guestsFromStoredSlots(params.bookingSlots);
+  const guests = resolveDisplayedGuests(params.message, params.bookingSlots);
   const result = formatAvailabilityReply(
     raw,
     messageOpensWithGreeting(params.message),
@@ -369,7 +369,11 @@ async function buildDeterministicAvailabilityReply(params: {
   // conversation-state. Tanpa ini, tanggal hilang karena jalur deterministik
   // melewati orchestrator (satu-satunya tempat slot biasanya disimpan).
   if (result) {
-    result.dates = { checkIn: range.checkIn, checkOut: range.checkOut };
+    result.dates = {
+      checkIn: range.checkIn,
+      checkOut: range.checkOut,
+      checkoutAssumed: availabilityCheckoutWasAssumed(params.message, today),
+    };
     if (guests) result.guests = guests;
   }
   return result;
@@ -425,7 +429,7 @@ async function buildContextualBookingInquiryReply(params: {
   // Sebelumnya kita ikut mengambil guest_count dari ringkasan sesi lama,
   // sehingga daftar tipe kamar difilter kapasitas prematur (mis. hanya
   // Deluxe untuk 2 tamu) dan tamu tidak diberi tahu tipe lain yang ada.
-  const guests = parseGuestCountFollowup(params.message) ?? guestsFromStoredSlots(params.bookingSlots);
+  const guests = resolveDisplayedGuests(params.message, params.bookingSlots);
   const adults = guests?.adults;
   const children = guests?.children ?? 0;
 
@@ -462,19 +466,34 @@ async function buildContextualBookingInquiryReply(params: {
       );
 
   if (result) {
-    result.dates = { checkIn, checkOut };
+    result.dates = {
+      checkIn,
+      checkOut,
+      ...(explicitRange
+        ? { checkoutAssumed: availabilityCheckoutWasAssumed(params.message, today) }
+        : {}),
+    };
     result.intent = `${result.intent}_contextual`;
     if (guests) result.guests = guests;
   }
   return result;
 }
 
-function availabilitySlotPatch(result: { dates?: { checkIn: string; checkOut: string }; guests?: ParsedGuestCount }) {
+function availabilitySlotPatch(result: {
+  dates?: { checkIn: string; checkOut: string; checkoutAssumed?: boolean };
+  guests?: ParsedGuestCount;
+}) {
   if (!result.dates) return null;
   const patch: Record<string, unknown> = {
     checkIn: result.dates.checkIn,
     checkOut: result.dates.checkOut,
   };
+  // jsonb || tidak menghapus kunci lama. Rentang eksplisit harus mematikan
+  // asumsi 1 malam; satu tanggal harus menyalakannya supaya ringkasan
+  // berikutnya menanyakan check-out.
+  if (typeof result.dates.checkoutAssumed === "boolean") {
+    patch.checkoutAssumed = result.dates.checkoutAssumed;
+  }
   if (result.guests) {
     patch.partialAdults = result.guests.adults;
     patch.partialChildren = result.guests.children;

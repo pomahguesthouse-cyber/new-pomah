@@ -31,6 +31,16 @@ import {
 import { todayWIB } from "@/lib/date";
 import { nowForStayParsing, resolveRelativeDayRange } from "@/lib/id-date";
 import { extractRequestedExtraBeds, messageMentionsExtraBed } from "./extra-bed-parser";
+import {
+  buildBookingChangeHandoffReply,
+  formatRoomsDisplay,
+  formatStayConfirmQuestion,
+  planStayCorrection,
+  snapshotFromStay,
+  staySnapshotsMatch,
+  stripLeadingQuantity,
+  type BookingSummarySnapshot,
+} from "./booking-stay-guard";
 
 export type BookingState =
   | "IDLE"
@@ -117,6 +127,16 @@ export interface BookingContext {
   pendingOverride?: import("./flexible-slot-extractor").ExtractedSlots;
   /** Total (integer rupiah) yang ditampilkan di ringkasan konfirmasi terakhir. Dicocokkan dengan hitungan server sebelum write. */
   quotedTotal?: number;
+  /** Check-out ditebak +1 hari dari satu tanggal. Ringkasan final menunggu konfirmasi. */
+  checkoutAssumed?: boolean;
+  /** Tamu sudah mengiyakan pasangan check-in/check-out. */
+  datesConfirmed?: boolean;
+  /** Rentang usulan (malam dipertahankan) belum diiyakan. */
+  pendingDateConfirm?: boolean;
+  /** Ketersediaan terakhir untuk draft ini gagal. "Ya" tidak boleh membuat booking. */
+  availabilityBlocked?: boolean;
+  /** Sidik ringkasan terakhir yang BENAR-BENAR ditampilkan. create_booking wajib sama. */
+  lastSummary?: BookingSummarySnapshot;
   /** Nomor lain yang disebut tamu dan MENUNGGU konfirmasi aktif-WhatsApp (belum dipakai sebagai guestPhone). */
   pendingPhone?: string;
   /** ISO waktu write booking terakhir GAGAL (belum tercatat). Dihapus saat sukses. */
@@ -186,6 +206,21 @@ const USE_THIS_PHONE_PATTERN =
 // dikenali dan flow booking terasa macet.
 const CONFIRM_PATTERN =
   /\b(ya|iya|iyaa+|yes|yess+|yup|yoi|lanjut|lanjutkan|benar|bener|bnr|bner|betul|btul|setuju|oke|okey|okay|ok+|sip|siap|mantap|gas|fix|deal|cocok|boleh|monggo|correct)\b/i;
+
+/** Persetujuan singkat, bukan pertanyaan yang kebetulan memuat kata "ya". */
+function affirmsRecordedStay(message: string): boolean {
+  const text = message.trim();
+  if (!text || text.includes("?")) return false;
+  if (
+    /^(oke|ok|ya|iya|iyaa+|yes)\s+kak\s+sudah\s+(benar|bener)[\s.!,]*$/i.test(text) ||
+    /^sudah\s+(benar|bener)[\s.!,]*$/i.test(text)
+  ) {
+    return true;
+  }
+  return /^(ya|iya|iyaa+|yes|yess+|yup|yoi|oke|ok+|okey|okay|betul|benar|bener|bnr|bner|sip|siap|lanjut|lanjutkan|setuju)(\s+(kak|ka|ya|betul|benar|bener|sudah|aja|saja|dong|deh))*[\s.!,]*$/i.test(
+    text,
+  );
+}
 const CANCEL_PATTERN = /\b(tidak|batal|salah|ubah|ganti|cancel|no|nggak|ngga)\b/i;
 
 /**
@@ -505,12 +540,7 @@ function buildBookingSummary(
 ): StateMachineResult {
   // --- Room line ---
   const summaryRooms = overrides?.rooms ?? context.rooms;
-  let roomsDisplay: string;
-  if (summaryRooms && summaryRooms.length > 0) {
-    roomsDisplay = summaryRooms.map((r) => `${r.quantity}x ${r.roomTypeName}`).join(", ");
-  } else {
-    roomsDisplay = context.roomName ?? "—";
-  }
+  const roomsDisplay = formatRoomsDisplay(summaryRooms, context.roomName);
 
   // --- Price per night (prefer dynamic average bila tersedia) ---
   const pricePerNight =
@@ -562,6 +592,21 @@ function buildBookingSummary(
   });
   // Catat angka yang DITAMPILKAN ke tamu; dicocokkan dengan hitungan server sebelum write.
   context.quotedTotal = grandTotal > 0 ? grandTotal : undefined;
+  const shown = snapshotFromStay({
+    checkIn: context.checkIn,
+    checkOut: context.checkOut,
+    rooms: summaryRooms,
+    adults,
+    children,
+    total: grandTotal,
+  });
+  if (shown) {
+    context.lastSummary = shown;
+    context.availabilityBlocked = false;
+    context.pendingDateConfirm = false;
+    context.checkoutAssumed = false;
+    context.datesConfirmed = true;
+  }
 
   const ratePrefix = overrides?.hasDynamicBreakdown ? "rata-rata " : "";
   const transfer = formatTransferAccountLine();
@@ -704,7 +749,7 @@ async function buildBookingSummaryFromResolved(
   // Simpan total yang ditampilkan agar langkah konfirmasi bisa membandingkannya
   // dengan hitungan server (context dipersist SEBELUM ringkasan dibangun di
   // banyak jalur, jadi quotedTotal harus dipersist ulang di sini bila berubah).
-  if (ctx.phone && context.quotedTotal !== previousQuote) {
+  if (ctx.phone && (context.quotedTotal !== previousQuote || context.lastSummary)) {
     try {
       await updateBookingState(ctx.supabaseAdmin, ctx.phone, "CONFIRMING_BOOKING", context);
     } catch (e) {
@@ -1668,6 +1713,125 @@ async function respondToOverCapacity(
   };
 }
 
+async function ensureStayAvailable(
+  ctx: ToolContext,
+  context: BookingContext,
+): Promise<{ ok: true } | { ok: false; reply: string }> {
+  if (!context.checkIn || !context.checkOut) return { ok: true };
+  const map = await loadRoomAvailability(ctx.supabaseAdmin, context.checkIn, context.checkOut);
+  if (!map) return { ok: true };
+  const requested =
+    context.rooms && context.rooms.length > 0
+      ? context.rooms
+      : context.roomId
+        ? [{ roomTypeId: context.roomId, roomTypeName: context.roomName ?? "kamar", quantity: 1, pricePerNight: context.pricePerNight ?? 0 }]
+        : [];
+  if (requested.length === 0) return { ok: true };
+  const short = requested.filter((item) => {
+    const available = map.get(item.roomTypeId);
+    if (available == null) return false;
+    return available < item.quantity;
+  });
+  if (short.length === 0) return { ok: true };
+
+  const altLines: string[] = [];
+  for (const room of ctx.rooms) {
+    const available = map.get(room.id);
+    if (available == null || available <= 0) continue;
+    const asked = requested.find((item) => item.roomTypeId === room.id);
+    if (asked && available < asked.quantity) {
+      altLines.push(`- ${room.name}: sisa ${available} kamar (diminta ${asked.quantity})`);
+    } else if (!asked) {
+      altLines.push(`- ${room.name}: ${available} kamar tersedia`);
+    }
+  }
+  const label = formatRoomsDisplay(context.rooms, context.roomName);
+  const reply =
+    `Mohon maaf Kak, ${label} untuk ${formatDateId(context.checkIn)} – ${formatDateId(context.checkOut)} sudah penuh.` +
+    (altLines.length > 0 ? `\n\nAlternatif yang masih ada:\n${altLines.join("\n")}` : "") +
+    `\n\nPemesanan belum saya catat. Sebut tanggal lain atau tipe kamar lain ya Kak.`;
+  return { ok: false, reply };
+}
+
+function rememberUnavailable(context: BookingContext): void {
+  context.availabilityBlocked = true;
+  context.lastSummary = undefined;
+  context.pendingDateConfirm = false;
+  context.quotedTotal = undefined;
+}
+
+async function showSummaryFromState(
+  ctx: ToolContext,
+  phone: string,
+  context: BookingContext,
+): Promise<StateMachineResult> {
+  const resolvedRates = await applyResolvedRatesToContext(ctx, context).catch(() => null);
+  await updateBookingState(ctx.supabaseAdmin, phone, "CONFIRMING_BOOKING", context);
+  return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
+}
+
+/**
+ * Koreksi tanggal menulis draft (satu sumber), lalu cek ketersediaan
+ * sebelum ada ringkasan baru. Hanya check-in tidak memperpanjang menginap.
+ */
+async function handleStayDateCorrection(
+  ctx: ToolContext,
+  phone: string,
+  context: BookingContext,
+  message: string,
+): Promise<StateMachineResult | null> {
+  const todayStr = ctx.today || todayWIB();
+  const plan = planStayCorrection(message, context, todayStr);
+  if (!plan) return null;
+
+  context.checkIn = plan.checkIn;
+  context.checkOut = plan.checkOut;
+  context.checkoutAssumed = false;
+  context.datesConfirmed = !plan.needsConfirm;
+  context.pendingDateConfirm = plan.needsConfirm;
+  context.lastSummary = undefined;
+  context.availabilityBlocked = false;
+  context.quotedTotal = undefined;
+
+  const availability = await ensureStayAvailable(ctx, context);
+  if (!availability.ok) {
+    rememberUnavailable(context);
+    await updateBookingState(ctx.supabaseAdmin, phone, "CONFIRMING_BOOKING", context);
+    return { handled: true, reply: availability.reply };
+  }
+
+  if (plan.needsConfirm) {
+    await updateBookingState(ctx.supabaseAdmin, phone, "CONFIRMING_BOOKING", context);
+    return { handled: true, reply: formatStayConfirmQuestion(plan.checkIn, plan.checkOut) };
+  }
+
+  return showSummaryFromState(ctx, phone, context);
+}
+
+async function notifyStaffOfBookingChange(
+  ctx: ToolContext,
+  phone: string,
+  context: BookingContext,
+  message: string,
+): Promise<void> {
+  const code = context.bookingCode?.trim();
+  if (!code) return;
+  try {
+    const { notifyBookingChangeRequest } = await import("@/services/manager-notifier.service");
+    await notifyBookingChangeRequest(ctx.supabaseAdmin, {
+      phone,
+      bookingCode: code,
+      guestName: context.guestName,
+      recordedCheckIn: context.checkIn,
+      recordedCheckOut: context.checkOut,
+      requestedChange: message.trim().slice(0, 240),
+      dedupeKey: `${code}:${message.trim().slice(0, 80).toLowerCase()}`,
+    });
+  } catch (e) {
+    console.warn("[BookingState] notifikasi perubahan booking gagal (non-fatal):", e);
+  }
+}
+
 export async function processBookingState(
   ctx: ToolContext,
   phone: string,
@@ -1966,6 +2130,106 @@ export async function processBookingState(
     }
   }
 
+  const stayToday = ctx.today || todayWIB();
+  if (
+    (state === "PAYMENT_PENDING" || state === "COMPLETED") &&
+    context.bookingCode &&
+    !NEW_BOOKING_INTENT_PATTERN.test(message) &&
+    planStayCorrection(message, context, stayToday)
+  ) {
+    await notifyStaffOfBookingChange(ctx, phone, context, message);
+    return {
+      handled: true,
+      reply: buildBookingChangeHandoffReply({
+        bookingCode: context.bookingCode,
+        recordedCheckIn: context.checkIn,
+        recordedCheckOut: context.checkOut,
+      }),
+    };
+  }
+
+  if (isDataEntryState(state) && context.checkIn && context.checkOut) {
+    const corrected = await handleStayDateCorrection(ctx, phone, context, message);
+    if (corrected) return corrected;
+  }
+
+  if (state === "CONFIRMING_BOOKING" && context.availabilityBlocked && affirmsRecordedStay(message)) {
+    return {
+      handled: true,
+      reply:
+        "Tanggal yang tadi dikoreksi belum tersedia, jadi pemesanan belum saya catat. " +
+        "Sebut tanggal lain atau tipe kamar lain ya Kak.",
+    };
+  }
+
+  if (
+    state === "CONFIRMING_BOOKING" &&
+    context.pendingDateConfirm &&
+    context.checkIn &&
+    context.checkOut &&
+    affirmsRecordedStay(message)
+  ) {
+    context.pendingDateConfirm = false;
+    context.datesConfirmed = true;
+    const availability = await ensureStayAvailable(ctx, context);
+    if (!availability.ok) {
+      rememberUnavailable(context);
+      await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+      return { handled: true, reply: availability.reply };
+    }
+    return showSummaryFromState(ctx, phone, context);
+  }
+
+  if (
+    state === "CONFIRMING_BOOKING" &&
+    context.checkoutAssumed &&
+    context.datesConfirmed !== true &&
+    context.checkIn &&
+    context.checkOut
+  ) {
+    if (affirmsRecordedStay(message)) {
+      context.datesConfirmed = true;
+      context.checkoutAssumed = false;
+      context.pendingDateConfirm = false;
+      const availability = await ensureStayAvailable(ctx, context);
+      if (!availability.ok) {
+        rememberUnavailable(context);
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+        return { handled: true, reply: availability.reply };
+      }
+      return showSummaryFromState(ctx, phone, context);
+    }
+    const revised = resolveRelativeDayRange(message, nowForStayParsing(stayToday));
+    if (
+      revised &&
+      !revised.needsConfirm &&
+      (revised.checkIn !== context.checkIn || revised.checkOut !== context.checkOut)
+    ) {
+      context.checkIn = revised.checkIn;
+      context.checkOut = revised.checkOut;
+      context.checkoutAssumed = revised.checkoutAssumed === true;
+      context.datesConfirmed = revised.checkoutAssumed !== true;
+      context.pendingDateConfirm = false;
+      context.lastSummary = undefined;
+      context.availabilityBlocked = false;
+      if (context.checkoutAssumed) {
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+        return { handled: true, reply: formatStayConfirmQuestion(revised.checkIn, revised.checkOut) };
+      }
+      const availability = await ensureStayAvailable(ctx, context);
+      if (!availability.ok) {
+        rememberUnavailable(context);
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+        return { handled: true, reply: availability.reply };
+      }
+      return showSummaryFromState(ctx, phone, context);
+    }
+    return {
+      handled: true,
+      reply: formatStayConfirmQuestion(context.checkIn, context.checkOut),
+    };
+  }
+
   // Mid-booking interruption: the guest asks something unrelated instead of
   // answering the current prompt. Hand the turn to the LLM / specialist agents
   // to answer, but KEEP the booking state so the flow resumes on the next
@@ -2191,7 +2455,9 @@ export async function processBookingState(
     }
 
     // Merge extracted values to context
-    if (extracted.check_in) {
+      const previousCheckIn = context.checkIn;
+      const previousCheckOut = context.checkOut;
+      if (extracted.check_in) {
       if (new Date(extracted.check_in) < new Date(todayStr)) {
         context.checkIn = undefined;
         context.checkOut = undefined;
@@ -2204,6 +2470,19 @@ export async function processBookingState(
       context.checkIn = extracted.check_in;
     }
     if (extracted.check_out) context.checkOut = extracted.check_out;
+    if (extracted.checkout_assumed) {
+      context.checkoutAssumed = true;
+      context.datesConfirmed = false;
+      context.lastSummary = undefined;
+    } else if (
+      extracted.check_in &&
+      extracted.check_out &&
+      (extracted.check_in !== previousCheckIn || extracted.check_out !== previousCheckOut)
+    ) {
+      context.checkoutAssumed = false;
+      context.datesConfirmed = true;
+      context.lastSummary = undefined;
+    }
 
     if (extracted.room_type) {
       context.roomName = extracted.room_type;
@@ -2219,7 +2498,7 @@ export async function processBookingState(
         context.rooms = [
           {
             roomTypeId: context.roomId,
-            roomTypeName: context.roomName,
+            roomTypeName: stripLeadingQuantity(context.roomName) || context.roomName,
             quantity: extracted.room_quantity,
             pricePerNight: context.pricePerNight ?? 0,
           },
@@ -2410,6 +2689,19 @@ export async function processBookingState(
       // atas permintaan owner karena menyebabkan pesan berulang dan booking
       // ter-generate tanpa persetujuan eksplisit tamu. Selalu tampilkan
       // ringkasan dan minta konfirmasi "Ya/Batal" dulu.
+      if (context.checkoutAssumed && context.datesConfirmed !== true && context.checkIn && context.checkOut) {
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+        return {
+          handled: true,
+          reply: `${inlineAnswerPrefix}${formatStayConfirmQuestion(context.checkIn, context.checkOut)}`,
+        };
+      }
+      const stayAvailability = await ensureStayAvailable(ctx, context);
+      if (!stayAvailability.ok) {
+        rememberUnavailable(context);
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+        return { handled: true, reply: `${inlineAnswerPrefix}${stayAvailability.reply}` };
+      }
       try {
         const resolvedRates = await applyResolvedRatesToContext(ctx, context).catch(() => null);
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
@@ -2569,6 +2861,13 @@ export async function processBookingState(
         if (patch.rooms && patch.rooms.length > 0) {
           context.rooms = patch.rooms;
         }
+        context.lastSummary = undefined;
+        const correctionAvailability = await ensureStayAvailable(ctx, context);
+        if (!correctionAvailability.ok) {
+          rememberUnavailable(context);
+          await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+          return { handled: true, reply: correctionAvailability.reply };
+        }
         // Recompute extra bed otomatis + tarif dari DB (room_types.extrabed_*).
         const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
         const recomputePolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
@@ -2651,6 +2950,19 @@ export async function processBookingState(
     }
 
     if (CONFIRM_PATTERN.test(message)) {
+      const shown = context.lastSummary;
+      const latest = snapshotFromStay({
+        checkIn: context.checkIn,
+        checkOut: context.checkOut,
+        rooms: context.rooms,
+        adults: context.adults,
+        children: context.children,
+        total: context.quotedTotal ?? context.totalPrice ?? 0,
+      });
+      if (shown && latest && !staySnapshotsMatch(shown, latest)) {
+        console.warn("[BookingWrite] ringkasan terakhir tidak sama dengan draft — write dihentikan.");
+        return showSummaryFromState(ctx, phone, context);
+      }
       // GATING INVOICE: validasi semua slot wajib sebelum buat booking.
       // guestPhone diisi otomatis dari nomor WA sesi — tidak perlu divalidasi di sini.
       // Nomor wajib aktif WhatsApp: default nomor WA thread; nomor lain hanya
@@ -2748,6 +3060,9 @@ export async function processBookingState(
             // menulis bila hitungan server berbeda. Tanpa nilai (state lama sebelum
             // fitur ini) guard dilewati.
             expected_total: context.quotedTotal,
+            // Sidik ringkasan terakhir. Tool menolak menulis bila tanggal, kamar,
+            // jumlah, atau total tidak sama dengan yang baru saja ditampilkan.
+            expected_summary: context.lastSummary,
           },
           writeCtx,
         );
@@ -2763,6 +3078,19 @@ export async function processBookingState(
 
       // Total terkonfirmasi != hitungan server: BELUM ada yang ditulis. Hentikan,
       // pakai angka sistem, dan minta tamu mengonfirmasi ulang (bukan kegagalan write).
+      if (!writeError && result?.summary_mismatch === true) {
+        console.warn("[BookingWrite] draft tidak sama dengan ringkasan terakhir — write dihentikan.");
+        context.lastSummary = undefined;
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+        const again = await showSummaryFromState(ctx, phone, context);
+        return {
+          handled: true,
+          reply:
+            `Mohon maaf Kak, data yang akan dicatat tidak sama dengan ringkasan terakhir. ` +
+            `Pemesanan belum saya catat.\n\n${again.reply ?? "Berikut ringkasan terbaru dari data yang tersimpan."}`,
+        };
+      }
+
       if (!writeError && result?.total_mismatch === true) {
         const serverTotal = toRupiah(result.server_total);
         const confirmedTotal = toRupiah(result.confirmed_total);

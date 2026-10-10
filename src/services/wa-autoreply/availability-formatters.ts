@@ -7,7 +7,7 @@ import { formatOptionalExtraBedOffer } from "@/ai/state-machine/extra-bed-parser
 type FastFaqResult = {
   reply: string;
   intent: string;
-  dates?: { checkIn: string; checkOut: string };
+  dates?: { checkIn: string; checkOut: string; checkoutAssumed?: boolean };
   guests?: ParsedGuestCount;
 };
 

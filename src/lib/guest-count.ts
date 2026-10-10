@@ -75,6 +75,31 @@ export function guestCountWasStated(value: unknown): boolean {
  * @param children      Jumlah anak — ikut dihitung agar total tamu tidak
  *                      melebihi kapasitas saat memakai default.
  */
+/**
+ * Jangan turunkan jumlah tamu yang sudah disebut ke kapasitas satu kamar.
+ * Insiden 10 Okt 2026: tamu 4 orang, bot menulis "dengan 2 tamu" karena
+ * Deluxe berkapasitas 2. Koreksi eksplisit ke angka lain (bukan kapasitas
+ * kamar) tetap menang.
+ */
+export function protectStatedGuestCount(
+  incoming: { adults?: number; children?: number },
+  stored: { adults?: number; children?: number },
+  rooms: Array<{ capacity?: number | null }>,
+): { adults?: number; children?: number } {
+  if (incoming.adults === undefined || stored.adults === undefined) return incoming;
+  const storedChildren = Math.max(0, Math.floor(Number(stored.children ?? 0) || 0));
+  const incomingChildren = Math.max(0, Math.floor(Number(incoming.children ?? 0) || 0));
+  const storedTotal = stored.adults + storedChildren;
+  const incomingTotal = incoming.adults + incomingChildren;
+  if (incomingTotal >= storedTotal) return incoming;
+  const looksLikeOneRoomCapacity = rooms.some((room) => {
+    const capacity = Math.floor(Number(room.capacity ?? 0));
+    return capacity > 0 && capacity === incoming.adults && incomingChildren === 0;
+  });
+  if (!looksLikeOneRoomCapacity) return incoming;
+  return { adults: stored.adults, children: storedChildren };
+}
+
 export function resolveAdultsForBooking(
   statedAdults: unknown,
   selections: RoomSelection[],

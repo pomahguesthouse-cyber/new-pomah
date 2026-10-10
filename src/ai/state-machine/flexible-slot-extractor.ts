@@ -37,6 +37,8 @@ export interface ExtractedSlots {
   childAges?: number[];
   check_in?: string;   // YYYY-MM-DD
   check_out?: string;  // YYYY-MM-DD
+  /** Check-out ditebak +1 hari dari satu tanggal. Jangan langsung jadi ringkasan. */
+  checkout_assumed?: boolean;
   room_type?: string;  // matched room type name
   room_type_id?: string;
   room_quantity?: number;
@@ -395,6 +397,7 @@ export function extractAllSlots(
   if (resolvedStay && !resolvedStay.needsConfirm) {
     result.check_in = resolvedStay.checkIn;
     result.check_out = resolvedStay.checkOut;
+    if (resolvedStay.checkoutAssumed) result.checkout_assumed = true;
   }
   const dates: string[] = [];
 

@@ -15,6 +15,7 @@
  */
 
 import { isDateString } from "@/lib/date";
+import { protectStatedGuestCount } from "@/lib/guest-count";
 import type { ToolContext, ToolHandler } from "./types";
 
 function num(v: unknown): number | undefined {
@@ -58,11 +59,24 @@ export const updateBookingSlots: ToolHandler = async (args, ctx: ToolContext) =>
   }
 
   const merged: Record<string, unknown> = { ...current };
+  const storedAdults = num(current.partialAdults) ?? num(current.adults);
+  const storedChildren = num(current.partialChildren) ?? num(current.children) ?? 0;
+  const guardedGuests = protectStatedGuestCount(
+    { adults: partialAdults, children: partialChildren },
+    { adults: storedAdults, children: storedChildren },
+    ctx.rooms ?? [],
+  );
   if (partialRoomType) merged.partialRoomType = partialRoomType;
-  if (partialAdults   !== undefined) merged.partialAdults   = partialAdults;
-  if (partialChildren !== undefined) merged.partialChildren = partialChildren;
+  if (guardedGuests.adults !== undefined) merged.partialAdults = guardedGuests.adults;
+  if (guardedGuests.children !== undefined && partialChildren !== undefined) {
+    merged.partialChildren = guardedGuests.children;
+  }
   if (checkIn)  merged.checkIn  = checkIn;
   if (checkOut) merged.checkOut = checkOut;
+  // Hanya check-in: check-out belum disebut. Jangan biarkan ringkasan
+  // berikutnya menganggap 1 malam sudah disetujui.
+  if (checkIn && !checkOut) merged.checkoutAssumed = true;
+  else if (checkIn && checkOut && args.checkout_assumed === false) merged.checkoutAssumed = false;
 
   // Keep dates in toolCtx scratchpad so the orchestrator's slot persistence
   // sees them and the next turn keeps the agreed dates.

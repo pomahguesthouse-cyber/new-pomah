@@ -764,9 +764,20 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "Jangan menunggu sampai semua info baru lalu ekstrak — simpan tiap potongan langsung."),
 
     when(g.booking, "KOREKSI MIDFLIGHT: Jika tamu mengoreksi data (mis. 'jumlah tamu 5 kak', 'tanggal 22 Juni', " +
-      "'ganti Family Suite'), JANGAN minta konfirmasi Ya/Batal kaku — langsung update slot via " +
-      "`update_booking_slots`, hitung ulang harga memakai kapasitas dan `extrabed_rate` dari data kamar / `get_room_specifications`, lalu tampilkan " +
-      "ringkasan baru. State machine sudah menangani ini secara otomatis di state CONFIRMING_BOOKING."),
+      "'ganti Family Suite', 'ralat check-in 20 November check-out 21 November'), JANGAN menulis ringkasan dari ingatan. " +
+      "State booking adalah satu-satunya sumber. Panggil `update_booking_slots` / biarkan state machine memperbarui draft, " +
+      "lalu ulangi `check_room_availability` untuk tanggal BARU sebelum ada ringkasan. " +
+      "Jika kamar tidak tersedia, katakan penuh dan tawarkan alternatif — JANGAN kirim ringkasan seolah bisa dipesan. " +
+      "Satu tanggal tanpa check-out ('tanggal 21 Nov') boleh dicek sebagai 1 malam, tetapi sebelum ringkasan WAJIB tanya: " +
+      "'Check-in 21 Nov, check-out 22 Nov (1 malam) ya Kak?'. " +
+      "Jangan gabungkan check-in baru dengan check-out lama bila itu memperpanjang menginap (20–22). Tanyakan. " +
+      "Jumlah tamu yang sudah disebut (mis. 4) tidak boleh diganti kapasitas satu kamar (Deluxe = 2). " +
+      "Label kamar '2x Deluxe', bukan '2x 2x Deluxe'."),
+
+    when(g.booking, "SETELAH BOOKING TERCATAT: JANGAN pernah bilang tanggal/kamar sudah diubah, diperbarui, atau diganti " +
+      "kecuali tool perubahan benar-benar mengembalikan ok:true SETELAH cek ketersediaan. " +
+      "Di mode tamu tidak ada tool ubah tanggal yang aman. Jika tamu minta ubah booking yang sudah punya kode, " +
+      "katakan pemesanan BELUM diubah dan staf akan membantu. Jangan mengarang tanggal gabungan."),
 
     when(g.roomFacts, "EXTRA BED MULTI-KAMAR: Untuk pesanan lebih dari satu kamar, hitung kapasitas standar " +
       "sebagai kapasitas kamar × jumlah kamar. Jika jumlah tamu melebihi kapasitas standar tetapi " +
