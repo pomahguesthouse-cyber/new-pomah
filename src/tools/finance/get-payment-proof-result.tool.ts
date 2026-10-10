@@ -43,6 +43,7 @@ interface MatchShape {
   received_amount?:  number | null;
   dp_amount?:        number | null;
   remaining_amount?: number | null;
+  transfer_fee_surplus?: number | null;
 }
 
 function shape(ocr: OcrShape, match: MatchShape | null | undefined) {
@@ -79,6 +80,7 @@ function shape(ocr: OcrShape, match: MatchShape | null | undefined) {
       amount_diff_tampil:    safe.amount_diff != null ? formatRupiahOcr(safe.amount_diff) : null,
       match_reason:          safe.match_reason ?? null,
       destination_ok:        safe.destination_ok ?? null,
+      transfer_fee_surplus:  safe.transfer_fee_surplus ?? null,
       summary,
     },
   };

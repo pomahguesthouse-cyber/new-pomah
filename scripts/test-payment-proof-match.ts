@@ -7,8 +7,10 @@ import {
   formatPaymentProofSummary,
   isOpenPaymentCandidate,
   matchProofToCandidates,
+  paymentAmountFit,
   paymentAmountsClose,
   paymentAmountTolerance,
+  TRANSFER_FEE_SURPLUS_TOLERANCE,
   paymentDestinationOk,
   receivedTransferAmount,
   roomTypeMentioned,
@@ -267,8 +269,18 @@ const firstDeluxe = booking({
   assert.equal(edge.status, "matched_full");
   assert.equal(edge.expected_amount, 200_000);
 
-  const over = matchProofToCandidates(ocr({ nominal: 201_001, raw_text: "BCA 0095584379 Faizal Abdurachman" }), [oneNight], { now: NOW });
+  // Lebih sedikit di atas toleransi kecil kini dianggap biaya transfer.
+  const smallFee = matchProofToCandidates(ocr({ nominal: 201_001, raw_text: "BCA 0095584379 Faizal Abdurachman" }), [oneNight], { now: NOW });
+  assert.equal(smallFee.status, "matched_full");
+  assert.equal(smallFee.transfer_fee_surplus, 1001);
+
+  const feeEdge = matchProofToCandidates(ocr({ nominal: 206_500, raw_text: "BCA 0095584379 Faizal Abdurachman" }), [oneNight], { now: NOW });
+  assert.equal(feeEdge.status, "matched_full");
+  assert.equal(feeEdge.summary, "Cocok lunas PG-1N (Rp200.000, lebih Rp6.500, kemungkinan biaya transfer)");
+
+  const over = matchProofToCandidates(ocr({ nominal: 206_501, raw_text: "BCA 0095584379 Faizal Abdurachman" }), [oneNight], { now: NOW });
   assert.equal(over.status, "overpaid");
+  assert.equal(over.transfer_fee_surplus, null);
   assert.match(over.summary, /Lebih bayar/);
 
   const halfOfOneNight = matchProofToCandidates(
@@ -307,12 +319,129 @@ const firstDeluxe = booking({
     { now: NOW },
   );
   assert.equal(dpEdge.status, "matched_dp");
-  const dpMiss = matchProofToCandidates(
+  const dpFee = matchProofToCandidates(
     ocr({ nominal: 237_500 + 1189, raw_text: "BCA 0095584379 Faizal Abdurachman" }),
     [rita],
     { now: NOW },
   );
+  assert.equal(dpFee.status, "matched_dp");
+  assert.equal(dpFee.transfer_fee_surplus, 1189);
+  const dpUnder = matchProofToCandidates(
+    ocr({ nominal: 237_500 - 1189, raw_text: "BCA 0095584379 Faizal Abdurachman" }),
+    [rita],
+    { now: NOW },
+  );
+  assert.notEqual(dpUnder.status, "matched_dp");
+  const dpMiss = matchProofToCandidates(
+    ocr({ nominal: 237_500 + 6501, raw_text: "BCA 0095584379 Faizal Abdurachman" }),
+    [rita],
+    { now: NOW },
+  );
   assert.notEqual(dpMiss.status, "matched_dp");
+}
+
+// ─── Kelebihan biaya transfer (BI-FAST Rp2.500, antarbank Rp6.500) ──────────
+
+{
+  const BCA = "BCA 0095584379 Faizal Abdurachman";
+  assert.equal(TRANSFER_FEE_SURPLUS_TOLERANCE, 6500);
+  assert.equal(paymentAmountFit(230_000, 230_000), "exact");
+  assert.equal(paymentAmountFit(230_500, 230_000), "tolerance");
+  assert.equal(paymentAmountFit(229_000, 230_000), "tolerance");
+  assert.equal(paymentAmountFit(232_500, 230_000), "transfer_fee");
+  assert.equal(paymentAmountFit(236_500, 230_000), "transfer_fee");
+  assert.equal(paymentAmountFit(237_000, 230_000), null);
+  assert.equal(paymentAmountFit(227_500, 230_000), null);
+
+  // DP 50%: 230.000 diharapkan, 232.500 masuk → cocok dengan catatan biaya transfer.
+  const dpFee = matchProofToCandidates(ocr({ nominal: 232_500, raw_text: BCA }), [firstDeluxe], { now: NOW });
+  assert.equal(dpFee.status, "matched_dp");
+  assert.equal(dpFee.booking_code, "PG-2WA7S");
+  assert.equal(dpFee.expected_amount, 230_000);
+  assert.equal(dpFee.amount_diff, 2500);
+  assert.equal(dpFee.transfer_fee_surplus, 2500);
+  assert.equal(dpFee.summary, "Cocok DP 50% PG-2WA7S (Rp230.000, lebih Rp2.500, kemungkinan biaya transfer)");
+  assert.match(dpFee.match_reason, /toleransi biaya transfer/);
+  assert.match(dpFee.match_reason, /lebih Rp2\.500, kemungkinan biaya transfer/);
+  assert.equal(formatPaymentProofSummary(dpFee), dpFee.summary);
+
+  const dpFeeMax = matchProofToCandidates(ocr({ nominal: 236_500, raw_text: BCA }), [firstDeluxe], { now: NOW });
+  assert.equal(dpFeeMax.status, "matched_dp");
+  assert.equal(dpFeeMax.transfer_fee_surplus, 6500);
+
+  const dpTooMuch = matchProofToCandidates(ocr({ nominal: 237_000, raw_text: BCA }), [firstDeluxe], { now: NOW });
+  assert.notEqual(dpTooMuch.status, "matched_dp");
+  assert.equal(dpTooMuch.transfer_fee_surplus, null);
+
+  const dpUnder = matchProofToCandidates(ocr({ nominal: 227_500, raw_text: BCA }), [firstDeluxe], { now: NOW });
+  assert.equal(dpUnder.status, "partial");
+  assert.equal(dpUnder.transfer_fee_surplus, null);
+
+  // Lunas satu malam 230.000.
+  const oneNight = booking({
+    bookingCode: "PG-1N230",
+    total: 230_000,
+    nights: 1,
+    checkIn: "2026-10-11",
+    checkOut: "2026-10-12",
+    roomTypes: ["Standard"],
+  });
+  const fullFee = matchProofToCandidates(ocr({ nominal: 232_500, raw_text: BCA }), [oneNight], { now: NOW });
+  assert.equal(fullFee.status, "matched_full");
+  assert.equal(fullFee.summary, "Cocok lunas PG-1N230 (Rp230.000, lebih Rp2.500, kemungkinan biaya transfer)");
+  const fullMax = matchProofToCandidates(ocr({ nominal: 236_500, raw_text: BCA }), [oneNight], { now: NOW });
+  assert.equal(fullMax.status, "matched_full");
+  const fullOver = matchProofToCandidates(ocr({ nominal: 237_000, raw_text: BCA }), [oneNight], { now: NOW });
+  assert.equal(fullOver.status, "overpaid");
+  assert.match(fullOver.summary, /Lebih bayar/);
+  const fullUnder = matchProofToCandidates(ocr({ nominal: 227_500, raw_text: BCA }), [oneNight], { now: NOW });
+  assert.equal(fullUnder.status, "partial");
+
+  // Sisa tagihan setelah DP 230.000 tercatat.
+  const halfPaid = booking({ ...firstDeluxe, paid: 230_000, paymentStatus: "partial" });
+  const remainingFee = matchProofToCandidates(ocr({ nominal: 232_500, raw_text: BCA }), [halfPaid], { now: NOW });
+  assert.equal(remainingFee.status, "matched_remaining");
+  assert.equal(remainingFee.transfer_fee_surplus, 2500);
+  assert.equal(remainingFee.summary, "Cocok sisa PG-2WA7S (Rp230.000, lebih Rp2.500, kemungkinan biaya transfer)");
+  const remainingUnder = matchProofToCandidates(ocr({ nominal: 227_500, raw_text: BCA }), [halfPaid], { now: NOW });
+  assert.equal(remainingUnder.status, "partial");
+
+  // Data lama tanpa transfer_fee_surplus: ringkasan tetap memakai amount_diff.
+  assert.equal(
+    formatPaymentProofSummary({ status: "matched_dp", booking_code: "PG-OLD", expected_amount: 230_000, amount_diff: 2500 }),
+    "Cocok DP 50% PG-OLD (Rp230.000, lebih Rp2.500, kemungkinan biaya transfer)",
+  );
+  assert.equal(
+    formatPaymentProofSummary({ status: "matched_dp", booking_code: "PG-OLD", expected_amount: 230_000, amount_diff: 0 }),
+    "Cocok DP 50% PG-OLD (Rp230.000)",
+  );
+
+  // Beberapa kandidat: persis > toleransi kecil > toleransi biaya transfer.
+  const feeNewer = booking({
+    bookingCode: "PG-FEE",
+    total: 230_000,
+    nights: 1,
+    checkIn: "2026-10-11",
+    checkOut: "2026-10-12",
+    roomTypes: ["Standard"],
+    createdAt: "2026-10-09T03:00:00.000Z",
+  });
+  const exactOlder = booking({ ...feeNewer, bookingCode: "PG-EXACT", total: 232_500, createdAt: "2026-10-01T03:00:00.000Z" });
+  const closeOlder = booking({ ...feeNewer, bookingCode: "PG-CLOSE", total: 233_000, createdAt: "2026-10-01T03:00:00.000Z" });
+  const exactWins = matchProofToCandidates(ocr({ nominal: 232_500, raw_text: BCA }), [feeNewer, exactOlder], { now: NOW });
+  assert.equal(exactWins.booking_code, "PG-EXACT");
+  assert.equal(exactWins.transfer_fee_surplus, null);
+  assert.equal(exactWins.summary, "Cocok lunas PG-EXACT (Rp232.500)");
+  const closeWins = matchProofToCandidates(ocr({ nominal: 232_500, raw_text: BCA }), [feeNewer, closeOlder], { now: NOW });
+  assert.equal(closeWins.booking_code, "PG-CLOSE");
+  const feeAlone = matchProofToCandidates(ocr({ nominal: 232_500, raw_text: BCA }), [feeNewer], { now: NOW });
+  assert.equal(feeAlone.booking_code, "PG-FEE");
+
+  // Dalam satu booking: DP persis lebih diutamakan daripada sisa + biaya transfer.
+  const dpVsRemaining = booking({ ...firstDeluxe, bookingCode: "PG-DPR", total: 460_000, paid: 225_000, paymentStatus: "partial" });
+  const dpExact = matchProofToCandidates(ocr({ nominal: 230_000, raw_text: BCA }), [dpVsRemaining], { now: NOW });
+  assert.equal(dpExact.status, "matched_dp");
+  assert.equal(dpExact.amount_diff, 0);
 }
 
 // ─── Checkout, batal, lunas, draft ───────────────────────────────────────────
