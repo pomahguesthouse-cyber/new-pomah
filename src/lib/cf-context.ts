@@ -12,7 +12,7 @@
  * promise in production (inbound media and chat summaries never finished).
  */
 
-import { AsyncLocalStorage } from "node:async_hooks";
+import type { AsyncLocalStorage } from "node:async_hooks";
 
 type WaitUntil = (promise: Promise<unknown>) => void;
 
@@ -20,7 +20,17 @@ interface CfRequestContext {
   waitUntil?: WaitUntil;
 }
 
-const storage = new AsyncLocalStorage<CfRequestContext>();
+// Import dinamis: `node:async_hooks` tidak boleh di-import statis karena modul
+// ini ikut ter-bundle ke browser (dynamic import di-externalize Vite, bukan error build).
+let storage: AsyncLocalStorage<CfRequestContext> | undefined;
+try {
+  const { AsyncLocalStorage: ALS } = (await import("node:async_hooks")) as {
+    AsyncLocalStorage: typeof AsyncLocalStorage;
+  };
+  storage = new ALS<CfRequestContext>();
+} catch {
+  // Browser bundle / runtime tanpa async_hooks: getWaitUntil() tetap aman (undefined).
+}
 
 /** Run `fn` with the given Worker context bound for the duration of the request. */
 export function runWithCfContext<T>(ctx: CfRequestContext, fn: () => T): T {
