@@ -22,12 +22,16 @@ export function parseAvailabilityDateRange(
   message: string,
   today: string,
   now?: Date | string,
-): { checkIn: string; checkOut: string } | null {
+): { checkIn: string; checkOut: string; checkoutAssumed?: boolean } | null {
   const resolved = resolveRelativeDayRange(message, nowForStayParsing(today, now));
   // Tanggal ambigu ("minggu depan", "besok" dini hari) tidak boleh dipakai
   // diam-diam oleh fast-path. Biarkan agent mengonfirmasi.
   if (!resolved || resolved.needsConfirm) return null;
-  return { checkIn: resolved.checkIn, checkOut: resolved.checkOut };
+  return {
+    checkIn: resolved.checkIn,
+    checkOut: resolved.checkOut,
+    ...(resolved.checkoutAssumed ? { checkoutAssumed: true as const } : {}),
+  };
 }
 
 /**
@@ -156,6 +160,23 @@ export function parseGuestCountFollowup(message: string): ParsedGuestCount | nul
   if (total < 1 || total > 20) return null;
 
   return { adults, children, total };
+}
+
+/**
+ * Jumlah tamu untuk balasan ketersediaan.
+ * "2 kamar" tidak boleh menimpa 4 tamu yang sudah tersimpan.
+ */
+export function resolveDisplayedGuests(
+  message: string,
+  slots?: Record<string, unknown> | null,
+): ParsedGuestCount | null {
+  const parsed = parseGuestCountFollowup(message);
+  const stored = guestsFromStoredSlots(slots);
+  if (!parsed) return stored;
+  if (!stored || parsed.total >= stored.total) return parsed;
+  const roomCount = parseRequestedRoomCount(message);
+  if (roomCount != null && parsed.total === roomCount && stored.total > parsed.total) return stored;
+  return parsed;
 }
 
 /** Jumlah tamu yang sudah ada di slot percakapan. Tidak memakai ringkasan sesi lama. */

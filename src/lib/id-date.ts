@@ -182,6 +182,12 @@ export interface ResolvedStayRange {
   checkOut: string;
   /** Bot harus mengonfirmasi, bukan memakai tanggal ini sebagai fakta. */
   needsConfirm?: boolean;
+  /**
+   * Check-out = check-in + 1 hari karena tamu hanya menyebut satu tanggal.
+   * Lookup ketersediaan untuk malam itu boleh. Ringkasan/booking belum boleh
+   * sebelum tamu mengiyakan ("Check-in 21 Nov, check-out 22 Nov (1 malam) ya Kak?").
+   */
+  checkoutAssumed?: boolean;
   reason?: string;
   /** Label untuk tamu, mis. "Sabtu–Minggu, 10–11 Oktober 2026". */
   echo: string;
@@ -406,7 +412,39 @@ function followingWord(text: string, end: number): string {
   return /^[\s,.:;!?-]*([a-z]+)/i.exec(text.slice(end))?.[1]?.toLowerCase() ?? "";
 }
 
-function tryExplicitStay(text: string, today: string): { checkIn: string; checkOut: string } | null {
+type ExplicitStay = { checkIn: string; checkOut: string; checkoutAssumed?: boolean };
+
+function assumedOneNight(checkIn: string): ExplicitStay {
+  return { checkIn, checkOut: nextDay(checkIn), checkoutAssumed: true };
+}
+
+function precededByCheckoutLabel(text: string, index: number): boolean {
+  const before = text.slice(Math.max(0, index - 32), index);
+  return /(?:check[\s-]*out|cek[\s-]*out|checkout|cekout)\s+(?:nya\s+)?(?:tanggal\s+|tgl\s+)?$/i.test(before);
+}
+
+function labeledStayDate(text: string, label: RegExp, today: string): string | null {
+  const re = new RegExp(
+    `(?:${label.source})(?:\\s*(?:nya|tanggal|tgl|pada|di|:|jadi|ke|menjadi))*\\s*(\\d{1,2})(?:\\s+([a-z]{3,}))?(?:\\s+(\\d{2,4}))?`,
+    "i",
+  );
+  const match = text.match(re);
+  if (!match) return null;
+  const month = resolveMonthName(match[2] ?? "");
+  if (!month) return null;
+  return makeIsoDate(Number(match[1]), month, resolveYear(month, match[3], today));
+}
+
+function tryExplicitStay(text: string, today: string): ExplicitStay | null {
+  const labeledIn = labeledStayDate(text, /check[\s-]*in|cek[\s-]*in|checkin|cekin/i, today);
+  const labeledOut = labeledStayDate(text, /check[\s-]*out|cek[\s-]*out|checkout|cekout/i, today);
+  if (labeledIn && labeledOut && labeledOut > labeledIn) {
+    return { checkIn: labeledIn, checkOut: labeledOut };
+  }
+  // Hanya check-out: jangan jadikan tanggal itu check-in + 1 malam.
+  if (labeledOut && !labeledIn) return null;
+  if (labeledIn && !labeledOut) return assumedOneNight(labeledIn);
+
   const monthRange =
     /\b(\d{1,2})(?:\s*(?:-|–|—|sampai|sd|s\/d|to|dan)\s*|\s+)(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/gi;
   for (const match of text.matchAll(monthRange)) {
@@ -431,15 +469,16 @@ function tryExplicitStay(text: string, today: string): { checkIn: string; checkO
       if (checkOut && checkOut > checkIn) return { checkIn, checkOut };
       continue;
     }
-    return { checkIn, checkOut: nextDay(checkIn) };
+    return assumedOneNight(checkIn);
   }
 
   const dayMonth = /\b(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/gi;
   for (const match of text.matchAll(dayMonth)) {
+    if (match.index !== undefined && precededByCheckoutLabel(text, match.index)) continue;
     const month = resolveMonthName(match[2] ?? "");
     if (!month) continue;
     const checkIn = makeIsoDate(Number(match[1]), month, resolveYear(month, match[3], today));
-    if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
+    if (checkIn) return assumedOneNight(checkIn);
   }
 
   const slash = /\b(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2,4}))?\b/gi;
@@ -447,7 +486,7 @@ function tryExplicitStay(text: string, today: string): { checkIn: string; checkO
     const month = Number(match[2]);
     if (month < 1 || month > 12) continue;
     const checkIn = makeIsoDate(Number(match[1]), month, resolveYear(month, match[3], today));
-    if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
+    if (checkIn) return assumedOneNight(checkIn);
   }
 
   const labeled =
@@ -493,7 +532,7 @@ function tryExplicitStay(text: string, today: string): { checkIn: string; checkO
 
   const iso = text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
   if (iso && makeIsoDate(Number(iso[1]!.slice(8, 10)), Number(iso[1]!.slice(5, 7)), Number(iso[1]!.slice(0, 4)))) {
-    return { checkIn: iso[1]!, checkOut: nextDay(iso[1]!) };
+    return assumedOneNight(iso[1]!);
   }
 
   return null;
@@ -517,24 +556,34 @@ export function resolveRelativeDayRange(
     checkIn: string,
     checkOut: string,
     reason: string,
-    opts?: { needsConfirm?: boolean; nights?: boolean },
+    opts?: { needsConfirm?: boolean; nights?: boolean; checkoutAssumed?: boolean },
   ): ResolvedStayRange => {
     let out = checkOut;
-    if (opts?.nights) {
+    let assumed = opts?.checkoutAssumed === true;
+    if (opts?.nights || assumed) {
       const nights = nightCount(text);
-      if (nights && nights !== 1) out = addDaysIso(checkIn, nights);
+      if (nights && nights !== 1) {
+        out = addDaysIso(checkIn, nights);
+        assumed = false;
+      }
     }
     return {
       checkIn,
       checkOut: out,
       needsConfirm: opts?.needsConfirm || undefined,
+      checkoutAssumed: assumed || undefined,
       reason,
       echo: formatStayEcho(checkIn, out),
     };
   };
 
   const explicit = tryExplicitStay(text, today);
-  if (explicit) return done(explicit.checkIn, explicit.checkOut, "explicit");
+  if (explicit) {
+    return done(explicit.checkIn, explicit.checkOut, "explicit", {
+      checkoutAssumed: explicit.checkoutAssumed,
+      nights: explicit.checkoutAssumed === true,
+    });
+  }
 
   if (/\bmalming\b/i.test(text)) {
     const span = rangeFromDows(today, 6, 0, clock.hour, clock.minute);
