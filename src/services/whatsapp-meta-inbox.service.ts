@@ -21,6 +21,7 @@ import {
   type InboundMediaJobInput,
   type InboundMediaRef,
 } from "@/services/wa-inbound-media";
+import { applyNotificationLogDeliveryStatus } from "@/services/staff-booking-alert";
 import {
   assessInboundCoverage,
   formatInboundSkipNote,
@@ -354,6 +355,17 @@ async function handleStatus(admin: Admin, s: MetaStatus) {
   });
   if (error) throw new Error(`status gagal: ${error.message}`);
   if (data !== true) throw new DeferredError(`outbound ${s.id} belum tersimpan`);
+  // Log staf yang menyimpan wamid ikut status Meta (delivered / read / failed).
+  // Kegagalan update log tidak boleh menggagalkan status outbound tamu.
+  try {
+    await applyNotificationLogDeliveryStatus(admin, {
+      wamid: s.id,
+      status: s.status,
+      errors: s.errors,
+    });
+  } catch (e) {
+    console.warn("[MetaInbox] notification_logs status:", e instanceof Error ? e.message : e);
+  }
 }
 
 /** Proses satu event tersimpan. Melempar error bila harus diulang. */

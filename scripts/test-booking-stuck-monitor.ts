@@ -332,7 +332,7 @@ const baseOpts = {
   const attempts: string[] = [];
   const sent = await sendWithRetry(db as any, "wa-token", baseOpts, async (opts) => {
     attempts.push(opts.channel);
-    return { ok: true };
+    return { ok: true, messageId: "wamid.stuck" };
   });
   assert.equal(sent, true);
   assert.deepEqual(attempts, ["wa"]);

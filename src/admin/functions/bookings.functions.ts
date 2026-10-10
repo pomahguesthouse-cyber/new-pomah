@@ -568,12 +568,10 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
       skipWhatsApp: false,
     });
 
-    // Alert ke manager (WhatsApp) — sama seperti booking via web/admin calendar
-    const { runDeferred } = await import("@/lib/cf-context");
-    runDeferred("createMultiRoomBooking.notifyNewBooking", async () => {
-      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
-      await notifyNewBooking(context.supabase, booking.id);
-    });
+    // Alert staf di request ini. runDeferred/waitUntil terputus di Workers
+    // sehingga tidak ada baris log. Timeout tidak membatalkan booking.
+    const { awaitNotifyNewBooking } = await import("@/services/manager-notifier.service");
+    await awaitNotifyNewBooking(context.supabase, booking.id);
 
     return { guest_id: guestId, booking, nights, grand_total: grandTotal, invoice };
   });

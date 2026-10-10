@@ -1370,6 +1370,7 @@ export type Database = {
           event_type: string
           id: string
           message: string
+          provider_message_id: string | null
           recipient_phone: string
           recipient_role: string | null
           related_id: string | null
@@ -1386,6 +1387,7 @@ export type Database = {
           event_type: string
           id?: string
           message: string
+          provider_message_id?: string | null
           recipient_phone: string
           recipient_role?: string | null
           related_id?: string | null
@@ -1402,6 +1404,7 @@ export type Database = {
           event_type?: string
           id?: string
           message?: string
+          provider_message_id?: string | null
           recipient_phone?: string
           recipient_role?: string | null
           related_id?: string | null

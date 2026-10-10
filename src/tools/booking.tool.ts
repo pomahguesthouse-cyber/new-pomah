@@ -890,17 +890,14 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   if (waitUntil) waitUntil(upsertInvoiceRecord());
   else await upsertInvoiceRecord();
 
-  // Notifikasi manager (fire-and-forget, tidak memblokir balasan AI).
-  const notifyManager = async () => {
-    try {
-      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
-      await notifyNewBooking(ctx.supabaseAdmin as any, booking.id);
-    } catch (e) {
-      console.error(`[create_booking] notifyNewBooking gagal untuk ${booking.id}:`, e);
-    }
-  };
-  if (waitUntil) waitUntil(notifyManager());
-  else void notifyManager();
+  // Alert staf di turn yang sama, dengan batas waktu. waitUntil terputus
+  // sebelum attempt tercatat (baris pending, 0 attempt).
+  try {
+    const { awaitNotifyNewBooking } = await import("@/services/manager-notifier.service");
+    await awaitNotifyNewBooking(ctx.supabaseAdmin as any, booking.id);
+  } catch (e) {
+    console.error(`[create_booking] notifyNewBooking gagal untuk ${booking.id}:`, e);
+  }
 
   // Format room type display for returned JSON
   const finalRoomTypeDisplay =
