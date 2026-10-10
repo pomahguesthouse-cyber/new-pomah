@@ -42,12 +42,14 @@ export function calendarGridMetrics(containerWidth: number): CalendarGridMetrics
     return { labelWidth, cellWidth, rowHeight: 46 };
   }
 
-  if (width < 1200) {
+  if (width < 1000) {
     const labelWidth = width < 900 ? 112 : 140;
-    const days = width >= 1000 ? 14 : width >= 860 ? 13 : 12;
+    const days = width >= 860 ? 13 : 12;
     const cellWidth = clamp(Math.floor((width - labelWidth) / days), 52, 76);
     return { labelWidth, cellWidth, rowHeight: 48 };
   }
 
+  // Desktop content: historical 72px days and 60px rows, so a 1280px window
+  // shows at least as many days as the padded layout did.
   return { labelWidth: 160, cellWidth: 72, rowHeight: 60 };
 }

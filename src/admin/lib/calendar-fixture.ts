@@ -33,8 +33,8 @@ const SUPERIOR = "11111111-1111-4111-8111-111111111102";
 const FAMILY = "11111111-1111-4111-8111-111111111103";
 
 const TYPES = [
-  { id: DELUXE, name: "Deluxe", base_rate: 450_000, numbers: ["101", "102", "103"] },
-  { id: SUPERIOR, name: "Superior", base_rate: 350_000, numbers: ["201", "202", "203", "204"] },
+  { id: DELUXE, name: "Deluxe", base_rate: 450_000, numbers: ["101", "102", "103", "104"] },
+  { id: SUPERIOR, name: "Superior", base_rate: 350_000, numbers: ["201", "202", "203", "204", "205"] },
   { id: FAMILY, name: "Family", base_rate: 650_000, numbers: ["301", "302", "303"] },
 ] as const;
 
