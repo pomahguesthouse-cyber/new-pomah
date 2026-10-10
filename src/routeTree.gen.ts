@@ -64,6 +64,7 @@ import { Route as TourSlugRouteImport } from './routes/tour.$slug'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
+import { Route as ApiCronBackfillTrainingEmbeddingsRouteImport } from './routes/api.cron.backfill-training-embeddings'
 import { Route as ApiCronBookingFormFollowupRouteImport } from './routes/api.cron.booking-form-followup'
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
 import { Route as ApiCronExpireBookingsRouteImport } from './routes/api.cron.expire-bookings'
@@ -361,6 +362,12 @@ const ApiBookingInvoiceIdRoute = ApiBookingInvoiceIdRouteImport.update({
   path: '/api/booking-invoice/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronBackfillTrainingEmbeddingsRoute =
+  ApiCronBackfillTrainingEmbeddingsRouteImport.update({
+    id: '/api/cron/backfill-training-embeddings',
+    path: '/api/cron/backfill-training-embeddings',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCronBookingFormFollowupRoute =
   ApiCronBookingFormFollowupRouteImport.update({
     id: '/api/cron/booking-form-followup',
@@ -510,6 +517,7 @@ export interface FileRoutesByFullPath {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
+  '/api/cron/backfill-training-embeddings': typeof ApiCronBackfillTrainingEmbeddingsRoute
   '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
@@ -582,6 +590,7 @@ export interface FileRoutesByTo {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
+  '/api/cron/backfill-training-embeddings': typeof ApiCronBackfillTrainingEmbeddingsRoute
   '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
@@ -657,6 +666,7 @@ export interface FileRoutesById {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
+  '/api/cron/backfill-training-embeddings': typeof ApiCronBackfillTrainingEmbeddingsRoute
   '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
@@ -733,6 +743,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
+    | '/api/cron/backfill-training-embeddings'
     | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
@@ -805,6 +816,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
+    | '/api/cron/backfill-training-embeddings'
     | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
@@ -879,6 +891,7 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
+    | '/api/cron/backfill-training-embeddings'
     | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
@@ -924,6 +937,7 @@ export interface RootRouteChildren {
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRouteWithChildren
+  ApiCronBackfillTrainingEmbeddingsRoute: typeof ApiCronBackfillTrainingEmbeddingsRoute
   ApiCronBookingFormFollowupRoute: typeof ApiCronBookingFormFollowupRoute
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
   ApiCronExpireBookingsRoute: typeof ApiCronExpireBookingsRoute
@@ -1328,6 +1342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBookingInvoiceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/backfill-training-embeddings': {
+      id: '/api/cron/backfill-training-embeddings'
+      path: '/api/cron/backfill-training-embeddings'
+      fullPath: '/api/cron/backfill-training-embeddings'
+      preLoaderRoute: typeof ApiCronBackfillTrainingEmbeddingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/booking-form-followup': {
       id: '/api/cron/booking-form-followup'
       path: '/api/cron/booking-form-followup'
@@ -1576,6 +1597,7 @@ const rootRouteChildren: RootRouteChildren = {
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRouteWithChildren,
+  ApiCronBackfillTrainingEmbeddingsRoute: ApiCronBackfillTrainingEmbeddingsRoute,
   ApiCronBookingFormFollowupRoute: ApiCronBookingFormFollowupRoute,
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
   ApiCronExpireBookingsRoute: ApiCronExpireBookingsRoute,

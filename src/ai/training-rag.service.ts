@@ -14,6 +14,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateEmbedding } from "./embedding.service";
 import type { AiClientConfig } from "./types";
+import {
+  buildCorrectionEmbeddingText,
+  buildLogEmbeddingText,
+  buildSessionEmbeddingText,
+  clearEmbedding,
+  effectiveLogAnswer,
+  writeEmbedding,
+  type EmbedOutcome,
+} from "@/services/training-embedding";
 
 export interface LogTrainingExample {
   id: string;
@@ -27,21 +36,12 @@ export type TrainingExample = LogTrainingExample;
 
 /** Susun teks gabungan yang di-embed: pertanyaan + jawaban final yang dipakai. */
 function composeEmbeddingText(userMessage: string, effectiveAnswer: string): string {
-  const q = (userMessage ?? "").trim().slice(0, 1500);
-  const a = (effectiveAnswer ?? "").trim().slice(0, 2500);
-  return `Tamu: ${q}\nAsisten: ${a}`;
+  return buildLogEmbeddingText(userMessage, effectiveAnswer);
 }
 
 /** Susun teks embedding untuk koreksi: konteks error + jawaban ideal. */
 function composeCorrectionEmbeddingText(userMessage: string, badReply: string, idealReply: string): string {
-  const q = (userMessage ?? "").trim().slice(0, 1500);
-  const bad = (badReply ?? "").trim().slice(0, 1200);
-  const ideal = (idealReply ?? "").trim().slice(0, 2500);
-  return [
-    `Tamu: ${q}`,
-    bad ? `Jawaban salah yang pernah terjadi: ${bad}` : "",
-    `Jawaban benar: ${ideal}`,
-  ].filter(Boolean).join("\n");
+  return buildCorrectionEmbeddingText(userMessage, badReply, idealReply);
 }
 
 /**
@@ -52,7 +52,8 @@ export async function embedTrainingExample(
   supabaseAdmin: SupabaseClient,
   logId: string,
   llmConfig: AiClientConfig,
-): Promise<{ ok: boolean; reason?: string }> {
+  options?: { signal?: AbortSignal },
+): Promise<EmbedOutcome> {
   if (!llmConfig.apiKey) {
     return { ok: false, reason: "missing-api-key" };
   }
@@ -67,12 +68,19 @@ export async function embedTrainingExample(
     return { ok: false, reason: readErr?.message ?? "not-found" };
   }
 
+  const record = row as Record<string, unknown>;
+  if (record.rating !== "good" || record.used !== true) {
+    await clearEmbedding(supabaseAdmin, "ai_conversation_logs", logId);
+    return { ok: false, reason: "not-eligible" };
+  }
+
   // `effective_answer` adalah generated column — hitung ulang di sini agar
-  // kita tidak perlu round-trip kedua kali.
-  const correction = ((row as Record<string, unknown>).correction as string | null) ?? null;
-  const aiResponse = ((row as Record<string, unknown>).ai_response as string | null) ?? null;
-  const effective = correction?.trim() ? correction.trim() : (aiResponse ?? "").trim();
-  const userMessage = (((row as Record<string, unknown>).user_message as string | null) ?? "").trim();
+  // kita tidak perlu round-trip kedua kali. Correction menang atas ai_response.
+  const effective = effectiveLogAnswer(
+    record.correction as string | null,
+    record.ai_response as string | null,
+  );
+  const userMessage = ((record.user_message as string | null) ?? "").trim();
 
   if (!effective || !userMessage) {
     return { ok: false, reason: "empty-content" };
@@ -81,23 +89,13 @@ export async function embedTrainingExample(
   const embedding = await generateEmbedding(
     llmConfig,
     composeEmbeddingText(userMessage, effective),
+    { signal: options?.signal },
   );
   if (!embedding) {
     return { ok: false, reason: "embedding-failed" };
   }
 
-  const { error: updErr } = await supabaseAdmin
-    .from("ai_conversation_logs")
-    .update({
-      embedding: embedding as unknown as string,
-      embedding_updated_at: new Date().toISOString(),
-    })
-    .eq("id", logId);
-
-  if (updErr) {
-    return { ok: false, reason: updErr.message };
-  }
-  return { ok: true };
+  return writeEmbedding(supabaseAdmin, "ai_conversation_logs", logId, embedding);
 }
 
 /**
@@ -109,7 +107,8 @@ export async function embedWaCorrectionExample(
   supabaseAdmin: SupabaseClient,
   correctionId: string,
   llmConfig: AiClientConfig,
-): Promise<{ ok: boolean; reason?: string }> {
+  options?: { signal?: AbortSignal },
+): Promise<EmbedOutcome> {
   if (!llmConfig.apiKey) {
     return { ok: false, reason: "missing-api-key" };
   }
@@ -124,9 +123,15 @@ export async function embedWaCorrectionExample(
     return { ok: false, reason: readErr?.message ?? "not-found" };
   }
 
-  const userMessage = (((row as Record<string, unknown>).user_message as string | null) ?? "").trim();
-  const badReply = (((row as Record<string, unknown>).bot_wrong_reply as string | null) ?? "").trim();
-  const idealReply = (((row as Record<string, unknown>).ideal_reply as string | null) ?? "").trim();
+  const record = row as Record<string, unknown>;
+  if (record.status !== "approved") {
+    await clearEmbedding(supabaseAdmin, "wa_correction_dataset", correctionId);
+    return { ok: false, reason: "not-approved" };
+  }
+
+  const userMessage = ((record.user_message as string | null) ?? "").trim();
+  const badReply = ((record.bot_wrong_reply as string | null) ?? "").trim();
+  const idealReply = ((record.ideal_reply as string | null) ?? "").trim();
 
   if (!userMessage || !idealReply) {
     return { ok: false, reason: "empty-content" };
@@ -135,23 +140,60 @@ export async function embedWaCorrectionExample(
   const embedding = await generateEmbedding(
     llmConfig,
     composeCorrectionEmbeddingText(userMessage, badReply, idealReply),
+    { signal: options?.signal },
   );
   if (!embedding) {
     return { ok: false, reason: "embedding-failed" };
   }
 
-  const { error: updErr } = await supabaseAdmin
-    .from("wa_correction_dataset")
-    .update({
-      embedding: embedding as unknown as string,
-      embedding_updated_at: new Date().toISOString(),
-    })
-    .eq("id", correctionId);
+  return writeEmbedding(supabaseAdmin, "wa_correction_dataset", correctionId, embedding);
+}
 
-  if (updErr) {
-    return { ok: false, reason: updErr.message };
+/**
+ * Embedding sesi koreksi. Vektor disimpan di `wa_correction_sessions.embedding`,
+ * kolom yang dibaca `match_wa_correction_ideal_examples`.
+ */
+export async function embedWaCorrectionSession(
+  supabaseAdmin: SupabaseClient,
+  sessionId: string,
+  llmConfig: AiClientConfig,
+  options?: { signal?: AbortSignal },
+): Promise<EmbedOutcome> {
+  if (!llmConfig.apiKey) {
+    return { ok: false, reason: "missing-api-key" };
   }
-  return { ok: true };
+
+  const { data: row, error: readErr } = await supabaseAdmin
+    .from("wa_correction_sessions")
+    .select("id, conversation_summary, title, corrected_transcript, status")
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (readErr || !row) {
+    return { ok: false, reason: readErr?.message ?? "not-found" };
+  }
+
+  const record = row as Record<string, unknown>;
+  if (record.status !== "approved") {
+    await clearEmbedding(supabaseAdmin, "wa_correction_sessions", sessionId);
+    return { ok: false, reason: "not-approved" };
+  }
+
+  const text = buildSessionEmbeddingText({
+    conversationSummary: record.conversation_summary as string | null,
+    title: record.title as string | null,
+    correctedTranscript: record.corrected_transcript,
+  });
+  if (!text.trim()) {
+    return { ok: false, reason: "empty-content" };
+  }
+
+  const embedding = await generateEmbedding(llmConfig, text, { signal: options?.signal });
+  if (!embedding) {
+    return { ok: false, reason: "embedding-failed" };
+  }
+
+  return writeEmbedding(supabaseAdmin, "wa_correction_sessions", sessionId, embedding);
 }
 
 /** Retrieve top-K contoh training yang paling mirip dengan pesan tamu. */

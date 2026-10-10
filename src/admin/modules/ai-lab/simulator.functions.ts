@@ -19,6 +19,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { runMultiAgentOrchestration } from "@/ai/multi-agent-orchestrator";
 import { getBookingState, updateBookingState } from "@/ai/state-machine/booking-machine";
 import { embedTrainingExample } from "@/ai/training-rag.service";
+import { clearEmbedding, embedInline } from "@/services/training-embedding";
 import { todayWIB } from "@/lib/date";
 import {
   saveInboundMessage,
@@ -413,17 +414,18 @@ export const saveSimulationAsTraining = createServerFn({ method: "POST" })
       .single();
     if (error) throw error;
 
-    try {
-      const env = await buildEnv();
-      if (env.apiKey && inserted?.id) {
-        await embedTrainingExample(supabaseAdmin, inserted.id, {
+    if (inserted?.id) {
+      const logId = inserted.id;
+      await embedInline(`simulator-save:${logId}`, async (signal) => {
+        const env = await buildEnv();
+        if (!env.apiKey) return false;
+        const result = await embedTrainingExample(supabaseAdmin, logId, {
           apiKey: env.apiKey,
           baseUrl: env.baseUrl,
           model: env.model,
-        });
-      }
-    } catch (e) {
-      console.warn("[saveSimulationAsTraining] embedding gagal:", e);
+        }, { signal });
+        return result.ok;
+      });
     }
 
     return { ok: true, id: inserted?.id ?? null };
@@ -488,18 +490,17 @@ export const updateSimulatorTraining = createServerFn({ method: "POST" })
       .eq("id", data.id);
     if (error) throw error;
 
-    try {
+    await clearEmbedding(supabaseAdmin, "ai_conversation_logs", data.id);
+    await embedInline(`simulator-update:${data.id}`, async (signal) => {
       const env = await buildEnv();
-      if (env.apiKey) {
-        await embedTrainingExample(supabaseAdmin, data.id, {
-          apiKey: env.apiKey,
-          baseUrl: env.baseUrl,
-          model: env.model,
-        });
-      }
-    } catch (e) {
-      console.warn("[updateSimulatorTraining] re-embed gagal:", e);
-    }
+      if (!env.apiKey) return false;
+      const result = await embedTrainingExample(supabaseAdmin, data.id, {
+        apiKey: env.apiKey,
+        baseUrl: env.baseUrl,
+        model: env.model,
+      }, { signal });
+      return result.ok;
+    });
     return { ok: true };
   });
 

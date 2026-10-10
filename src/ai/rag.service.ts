@@ -12,34 +12,119 @@ export async function processSopDocumentChunks(
   documentId: string,
   content: string,
   sourceUrl: string | null,
-  llmConfig: AiClientConfig
-): Promise<void> {
+  llmConfig: AiClientConfig,
+  options?: { signal?: AbortSignal },
+): Promise<{ embedded: number; failed: number; complete: boolean }> {
   // 1. Delete existing chunks for this document
   await supabase.from("sop_chunks").delete().eq("document_id", documentId);
 
-  if (!content.trim()) return;
+  if (!content.trim()) return { embedded: 0, failed: 0, complete: true };
 
   // 2. Chunk the text
   const chunks = chunkText(content, { maxLength: 800, overlap: 100 });
 
-  // 3. Generate embeddings and save
-  for (const chunk of chunks) {
-    const embedding = await generateEmbedding(llmConfig, chunk);
-    if (embedding) {
-      const { error } = await supabase.from("sop_chunks").insert({
-        document_id: documentId,
-        content: chunk,
-        source_url: sourceUrl,
-        embedding: embedding,
-      });
+  // 3. Generate embeddings and save. A failed or skipped vector is stored as
+  // NULL so a later run can fill it without deleting chunks that already
+  // succeeded. Aborting mid-document still records the unread tail.
+  let embedded = 0;
+  let failed = 0;
+  let aborted = false;
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+    if (options?.signal?.aborted) {
+      aborted = true;
+      failed += await insertPlainSopChunks(supabase, documentId, sourceUrl, chunks.slice(index));
+      break;
+    }
+    const embedding = await generateEmbedding(llmConfig, chunk, { signal: options?.signal });
+    if (options?.signal?.aborted && !embedding) {
+      aborted = true;
+      failed += await insertPlainSopChunks(supabase, documentId, sourceUrl, chunks.slice(index));
+      break;
+    }
+    const { error } = await supabase.from("sop_chunks").insert({
+      document_id: documentId,
+      content: chunk,
+      source_url: sourceUrl,
+      embedding: embedding ?? null,
+    });
+    if (error) {
+      console.error(`[RAG] Chunk insert failed for doc ${documentId}:`, error);
+      failed += 1;
+      aborted = true;
+      break;
+    }
+    if (!embedding) failed += 1;
+    else embedded += 1;
+  }
 
-      if (error) {
-        console.error(`[RAG] Error inserting chunk for doc ${documentId}:`, error);
-      }
+  if (aborted) {
+    console.warn(`[RAG] Chunking doc ${documentId} stopped early; remaining chunks left for backfill`);
+  }
+  return { embedded, failed, complete: !aborted && failed === 0 };
+}
+
+async function insertPlainSopChunks(
+  supabase: SupabaseClient,
+  documentId: string,
+  sourceUrl: string | null,
+  chunks: string[],
+): Promise<number> {
+  let failed = 0;
+  for (const chunk of chunks) {
+    const { error } = await supabase.from("sop_chunks").insert({
+      document_id: documentId,
+      content: chunk,
+      source_url: sourceUrl,
+      embedding: null,
+    });
+    if (error) {
+      console.error(`[RAG] Null chunk insert failed for doc ${documentId}:`, error);
+      failed += 1;
     } else {
-      console.warn(`[RAG] Failed to generate embedding for chunk in doc ${documentId}`);
+      failed += 1;
     }
   }
+  return Math.max(failed, chunks.length > 0 ? 1 : 0);
+}
+
+/** Isi chunk yang sudah ada tetapi embedding-nya masih NULL. Tidak menghapus chunk lain. */
+export async function fillNullSopChunkEmbeddings(
+  supabase: SupabaseClient,
+  documentId: string,
+  llmConfig: AiClientConfig,
+  options?: { signal?: AbortSignal },
+): Promise<{ embedded: number; failed: number; complete: boolean }> {
+  const { data, error } = await supabase
+    .from("sop_chunks")
+    .select("id, content")
+    .eq("document_id", documentId)
+    .is("embedding", null);
+  if (error) {
+    console.error(`[RAG] Null chunk query failed for doc ${documentId}:`, error);
+    return { embedded: 0, failed: 1, complete: false };
+  }
+  const rows = (data ?? []) as Array<{ id: string; content: string }>;
+  let embedded = 0;
+  let failed = 0;
+  for (const row of rows) {
+    if (options?.signal?.aborted) {
+      return { embedded, failed: failed + 1, complete: false };
+    }
+    const embedding = await generateEmbedding(llmConfig, row.content, { signal: options?.signal });
+    if (!embedding) {
+      failed += 1;
+      continue;
+    }
+    const updated = await supabase.from("sop_chunks").update({ embedding }).eq("id", row.id);
+    if (updated.error) {
+      console.error(`[RAG] Null chunk update failed for doc ${documentId}:`, updated.error);
+      failed += 1;
+    } else {
+      embedded += 1;
+    }
+  }
+  return { embedded, failed, complete: failed === 0 };
 }
 
 /**

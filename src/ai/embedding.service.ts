@@ -16,8 +16,10 @@ function cacheKey(text: string): string {
 
 export async function generateEmbedding(
   config: AiClientConfig,
-  text: string
+  text: string,
+  options?: { signal?: AbortSignal },
 ): Promise<number[] | null> {
+  if (options?.signal?.aborted) return null;
   if (!text || text.trim().length === 0) return null;
 
   const key = cacheKey(text);
@@ -42,6 +44,7 @@ export async function generateEmbedding(
         model: "openai/text-embedding-3-small", // Lovable AI Gateway requires provider prefix
         input: text.trim(),
       }),
+      signal: options?.signal,
     });
 
     if (!res.ok) {
@@ -68,6 +71,7 @@ export async function generateEmbedding(
     }
     return embedding;
   } catch (e) {
+    if (options?.signal?.aborted || (e instanceof Error && e.name === "AbortError")) return null;
     console.error("[EmbeddingService] fetch error:", e);
     return null;
   }

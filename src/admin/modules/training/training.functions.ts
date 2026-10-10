@@ -3,38 +3,21 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { embedTrainingExample } from "@/ai/training-rag.service";
+import { loadTrainingAiConfig } from "@/services/training-ai-config";
+import { clearEmbedding, embedInline } from "@/services/training-embedding";
+import { runTrainingEmbeddingBackfill } from "@/services/training-embedding-backfill.service";
 
 /**
- * Best-effort re-embedding setelah admin mengubah rating/correction sebuah
- * contoh. Mengambil konfigurasi LLM dari tabel `properties` agar konsisten
- * dengan pipeline lain. Tidak menggagalkan request bila gagal.
+ * Embedding inline setelah rating/correction berubah. Timeout dan kegagalan
+ * gateway tidak menggagalkan simpan — baris dibiarkan embedding NULL.
  */
 async function reembedTrainingExampleAsync(logId: string): Promise<void> {
-  try {
-    const { data: prop } = await supabaseAdmin
-      .from("properties")
-      .select("ai_api_key, ai_base_url, ai_model")
-      .limit(1)
-      .maybeSingle();
-    const p = (prop ?? {}) as { ai_api_key?: string; ai_base_url?: string; ai_model?: string };
-    const explicitKey = p.ai_api_key?.trim();
-    const lovableKey = process.env.LOVABLE_API_KEY?.trim();
-    const useLovable = !explicitKey && !!lovableKey;
-    const apiKey = explicitKey || lovableKey || null;
-    if (!apiKey) return;
-    const baseUrl = useLovable
-      ? "https://ai.gateway.lovable.dev/v1"
-      : (p.ai_base_url || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
-    const cfgModel = p.ai_model?.trim();
-    const model = useLovable
-      ? cfgModel?.includes("/")
-        ? cfgModel
-        : "google/gemini-2.5-flash"
-      : cfgModel || "gpt-4o-mini";
-    await embedTrainingExample(supabaseAdmin, logId, { apiKey, baseUrl, model });
-  } catch (e) {
-    console.warn("[training.reembed] failed:", e);
-  }
+  await embedInline(`log:${logId}`, async (signal) => {
+    const config = await loadTrainingAiConfig();
+    if (!config) return false;
+    const result = await embedTrainingExample(supabaseAdmin, logId, config, { signal });
+    return result.ok;
+  });
 }
 
 export const listConversationLogs = createServerFn({ method: "GET" })
@@ -79,7 +62,7 @@ export const rateConversationLog = createServerFn({ method: "POST" })
       })
       .eq("id", data.id);
     if (error) throw error;
-    // Re-embed best-effort agar perubahan rating/correction langsung berdampak
+    await clearEmbedding(supabaseAdmin, "ai_conversation_logs", data.id);
     if (data.rating === "good") {
       await reembedTrainingExampleAsync(data.id);
     }
@@ -155,6 +138,7 @@ export const updateConversationLog = createServerFn({ method: "POST" })
       })
       .eq("id", data.id);
     if (error) throw error;
+    await clearEmbedding(supabaseAdmin, "ai_conversation_logs", data.id);
     if (data.rating === "good") {
       await reembedTrainingExampleAsync(data.id);
     }
@@ -183,23 +167,6 @@ export const backfillTrainingEmbeddings = createServerFn({ method: "POST" })
     z.object({ maxRows: z.number().int().min(1).max(200).default(50) }).parse(d ?? {}),
   )
   .handler(async ({ data }) => {
-    const { data: rows, error } = await supabaseAdmin
-      .from("ai_conversation_logs")
-      .select("id")
-      .eq("rating", "good")
-      .eq("used", true)
-      .is("embedding", null)
-      .limit(data.maxRows);
-    if (error) throw error;
-    let ok = 0;
-    let failed = 0;
-    for (const row of rows ?? []) {
-      try {
-        await reembedTrainingExampleAsync(row.id);
-        ok++;
-      } catch {
-        failed++;
-      }
-    }
-    return { processed: rows?.length ?? 0, ok, failed };
+    const result = await runTrainingEmbeddingBackfill(supabaseAdmin, { rowLimit: data.maxRows });
+    return { processed: result.checked, ok: result.embedded, failed: result.failed };
   });
