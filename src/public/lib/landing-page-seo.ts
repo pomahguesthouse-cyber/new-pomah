@@ -150,7 +150,11 @@ export function collectLandingFaqs(sections: readonly LandingSectionLike[]): Faq
 }
 
 export function landingNeedsGoogleReviews(sections: readonly LandingSectionLike[]): boolean {
-  return sections.some((section) => section.type === "testimonials" && section.source === "google");
+  return sections.some(
+    (section) =>
+      (section.type === "testimonials" && section.source === "google") ||
+      section.type === "filtered_reviews",
+  );
 }
 
 /**

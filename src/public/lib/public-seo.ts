@@ -298,8 +298,16 @@ export function isIndexableSitemapPath(pathname: string): boolean {
   // Staff MCP setup page. The route stays live, but it is not a public URL.
   if (path === "/connect" || path.startsWith("/connect/")) return false;
   if (path === "/explore-semarang" || path.startsWith("/explore-semarang/")) return false;
-  // Published row in seo_generated_pages. No route serves it; /lp/penginapan-dekat-unnes does.
-  if (path === "/guesthouse-dekat-unnes") return false;
+  // Rows left in seo_generated_pages. No public route serves them.
+  if (
+    path === "/guesthouse-dekat-unnes" ||
+    path === "/dekat-akpol-semarang" ||
+    path === "/lp/dekat-akpol-semarang" ||
+    path === "/hotel-rombongan-semarang" ||
+    path.startsWith("/faq/")
+  ) {
+    return false;
+  }
   if (path === "/" || path === "/book" || path === "/explore") return true;
   if (BARE_ROOMS_LISTING.test(path)) return false;
   if (ROOM_PATH.test(path)) return true;

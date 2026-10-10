@@ -56,6 +56,7 @@ export const Route = createFileRoute("/explore/$slug")({
         statusCode: 301,
       });
     }
+    const { findLandingForExploreSlug } = await import("@/public/lib/landing-catalog.server");
     const [places, site] = await Promise.all([loadCityGuidePlaces(), getPublicSiteData()]);
     const requested = slugifyPlaceName(params.slug);
     const article = cityGuideArticleForSlug(requested);
@@ -71,9 +72,17 @@ export const Route = createFileRoute("/explore/$slug")({
         places.find((item) => cityGuideArticleForSlug(item.name)?.canonicalSlug === article.canonicalSlug) ??
         findCityGuidePlace(places, requested)
       : findCityGuidePlace(places, params.slug);
+    const landingFor = async (slug: string) => {
+      try {
+        return await findLandingForExploreSlug(slug);
+      } catch {
+        return null;
+      }
+    };
     if (article) {
       const place = approvedCityGuidePlace(article, catalog);
-      return { place, article, rooms: site.roomTypes ?? [] };
+      const landing = await landingFor(place.slug);
+      return { place, article, rooms: site.roomTypes ?? [], landing };
     }
     if (!catalog) throw notFound();
     if (catalog.slug !== requested) {
@@ -83,7 +92,8 @@ export const Route = createFileRoute("/explore/$slug")({
         statusCode: 301,
       });
     }
-    return { place: catalog, article: null as CityGuideArticle | null, rooms: site.roomTypes ?? [] };
+    const landing = await landingFor(catalog.slug);
+    return { place: catalog, article: null as CityGuideArticle | null, rooms: site.roomTypes ?? [], landing };
   },
   head: ({ loaderData }) => {
     const place = loaderData?.place;
@@ -117,7 +127,7 @@ export const Route = createFileRoute("/explore/$slug")({
 });
 
 function ExplorePlacePage() {
-  const { place, article, rooms } = Route.useLoaderData();
+  const { place, article, rooms, landing } = Route.useLoaderData();
   const image = displayImageUrl(place.imageUrl);
   const heading = article?.h1 || place.name;
   return (
@@ -168,6 +178,13 @@ function ExplorePlacePage() {
           )
         )}
         <StayNearby rooms={rooms} />
+        {landing ? (
+          <p className="mt-6 break-words text-sm text-stone-700">
+            <Link to="/lp/$slug" params={{ slug: landing.slug }} className="font-semibold text-emerald-700 underline">
+              Penginapan untuk kunjungan ini: {landing.title}
+            </Link>
+          </p>
+        ) : null}
         <Link
           to="/explore"
           className="mt-8 inline-flex text-sm font-semibold text-emerald-700 hover:text-emerald-800"
