@@ -16,7 +16,9 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { createMultiRoomBooking, listRooms } from "@/admin/functions/bookings.functions";
+import { createMultiRoomBooking, listRooms, resendInvoice } from "@/admin/functions/bookings.functions";
+import { toastBookingInvoice } from "@/admin/lib/invoice-toast";
+import type { BookingInvoiceOutcome } from "@/services/invoice-dispatch";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
@@ -132,6 +134,7 @@ type Props = {
 
 export function NewBookingDialog({ open, onClose, onCreated }: Props) {
   const fnCreate = useServerFn(createMultiRoomBooking);
+  const resendFn = useServerFn(resendInvoice);
   const fnRooms = useServerFn(listRooms);
   const qc = useQueryClient();
 
@@ -344,15 +347,21 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
         },
       }),
     onSuccess: (res) => {
-      const ref = (res as { booking?: { reference_code?: string | null } })?.booking
-        ?.reference_code;
+      const created = res as {
+        booking?: { id?: string; reference_code?: string | null };
+        invoice?: BookingInvoiceOutcome;
+      };
+      const ref = created.booking?.reference_code;
       const count = effectiveRooms.length;
       toast.success(
         ref ? `Booking dibuat: ${ref} (${count} kamar)` : `Booking dibuat (${count} kamar)`,
       );
-      if (guest.phone.trim()) {
-        toast.info("Link invoice & konfirmasi sedang dikirim ke WhatsApp tamu…", { duration: 4000 });
-      }
+      const bookingId = created.booking?.id;
+      toastBookingInvoice(created.invoice, {
+        onResend: bookingId
+          ? async () => resendFn({ data: { bookingId } })
+          : undefined,
+      });
       qc.invalidateQueries({ queryKey: ["bookings"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["admin-calendar"] });

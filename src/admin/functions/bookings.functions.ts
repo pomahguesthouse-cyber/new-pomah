@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateAndSendInvoiceNotification } from "@/services/invoice-notification.service";
+import { awaitInvoiceNotification } from "@/services/invoice-dispatch";
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 import {
@@ -558,14 +559,14 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
     const { error: brErr } = await context.supabase.from("booking_rooms").insert(roomInserts);
     if (brErr) throw brErr;
 
-    // Kirim invoice + link konfirmasi ke tamu via WhatsApp secara otomatis
-    void generateAndSendInvoiceNotification({
+    // Tunggu kirim invoice di request ini. `void` terputus di Workers setelah
+    // response, sehingga baris invoices tidak pernah tertulis. Timeout ~9s;
+    // kegagalan invoice tidak membatalkan booking.
+    const invoice = await awaitInvoiceNotification({
       supabase: context.supabase,
       bookingId: booking.id,
       skipWhatsApp: false,
-    }).catch((err) =>
-      console.warn("[createMultiRoomBooking] Notifikasi invoice gagal (non-fatal):", err),
-    );
+    });
 
     // Alert ke manager (WhatsApp) — sama seperti booking via web/admin calendar
     const { runDeferred } = await import("@/lib/cf-context");
@@ -574,7 +575,7 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
       await notifyNewBooking(context.supabase, booking.id);
     });
 
-    return { guest_id: guestId, booking, nights, grand_total: grandTotal };
+    return { guest_id: guestId, booking, nights, grand_total: grandTotal, invoice };
   });
 
 const updateBookingFullSchema = z.object({

@@ -292,3 +292,50 @@ html.native-app [data-state="closed"].animate-out {
   animation-duration: 150ms;
   transition-duration: 150ms;
 }
+
+/*
+ * Cover screen Samsung Z Fold is about 320–344px wide. Sonner's default
+ * toast is 356px, anchored to the right, with the action beside the text,
+ * so "Kirim Invoice" overflows. On narrow screens the toaster fits the
+ * viewport and the action drops onto its own full-width row. Wide screens
+ * keep Sonner's default size and placement.
+ */
+@media (max-width: 420px) {
+  [data-sonner-toaster] {
+    --width: calc(100vw - 1rem);
+    --offset-right: 0.5rem;
+    --offset-left: 0.5rem;
+    left: 0.5rem !important;
+    right: auto !important;
+    width: calc(100vw - 1rem) !important;
+    max-width: calc(100vw - 1rem);
+    transform: none !important;
+  }
+  [data-sonner-toast][data-styled="true"] {
+    width: 100% !important;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  [data-sonner-toast][data-styled="true"] [data-content] {
+    flex: 1 1 calc(100% - 1.75rem);
+    min-width: 0;
+  }
+  [data-sonner-toast][data-styled="true"] [data-title],
+  [data-sonner-toast][data-styled="true"] [data-description] {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  [data-sonner-toast][data-styled="true"] [data-button] {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-top: 0.5rem;
+    flex: 1 1 100%;
+    flex-shrink: 1;
+    width: 100%;
+    height: auto;
+    min-height: 2.25rem;
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
+  }
+}
