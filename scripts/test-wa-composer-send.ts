@@ -194,6 +194,13 @@ assert.match(pageSrc, /claimSend/);
 assert.doesNotMatch(pageSrc, /sendMut/);
 
 const css = fs.readFileSync("src/styles.css", "utf8");
-assert.match(css, /html\[data-kb-open="true"\] \.wa-composer-tools/);
+assert.doesNotMatch(composerSrc, /wa-composer-tools|AI draft|Auto-tag|Templates/);
+assert.doesNotMatch(pageSrc, /onDraftAi|onClassify|draftAiReply|classifyIntent/);
+assert.doesNotMatch(css, /wa-composer-tools/);
+assert.match(fnSrc, /export const draftAiReply/);
+assert.match(fnSrc, /export const classifyIntent/);
+assert.match(css, /html\[data-wa-chat="true"\] \.admin-theme/);
+assert.match(css, /--wa-vh/);
+assert.match(css, /html\[data-kb-open="true"\] nav\[aria-label="Admin"\]/);
 
 console.log("test-wa-composer-send: OK");

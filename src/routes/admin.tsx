@@ -18,6 +18,7 @@ import {
 } from "@/lib/admin-session-trust";
 import { isCalendarFixtureRequest } from "@/admin/lib/calendar-fixture";
 import { isPbFixtureRequest } from "@/admin/modules/seo/builder-layout";
+import { isWaChatFixtureRequest } from "@/admin/modules/whatsapp/wa-chat-fixture";
 
 /**
  * beforeLoad runs on every /admin/* navigation. A full checkSession() calls the
@@ -57,7 +58,7 @@ export const Route = createFileRoute("/admin")({
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
     // Local layout preview only. import.meta.env.DEV is false in production builds.
-    if (isPbFixtureRequest() || isCalendarFixtureRequest()) return;
+    if (isPbFixtureRequest() || isCalendarFixtureRequest() || isWaChatFixtureRequest()) return;
     if (sessionValidatedWithin(SESSION_TRUST_MS)) {
       try {
         const { data } = await supabase.auth.getSession();
@@ -94,7 +95,7 @@ export const Route = createFileRoute("/admin")({
  */
 function AdminLayout() {
   useEffect(() => {
-    if (isPbFixtureRequest() || isCalendarFixtureRequest()) return;
+    if (isPbFixtureRequest() || isCalendarFixtureRequest() || isWaChatFixtureRequest()) return;
     let cancelled = false;
     let decided = false;
     let leaveTimer: number | null = null;
