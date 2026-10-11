@@ -5,6 +5,7 @@ import {
   threadQueryOptions,
   threadsQueryOptions,
 } from "@/admin/modules/whatsapp/wa-queries";
+import { isWaChatFixtureRequest } from "@/admin/modules/whatsapp/wa-chat-fixture";
 
 const THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/admin/whatsapp")({
   // cache/permintaan yang sama lewat useQuery. Daftar thread dan isi percakapan
   // yang dibuka dari notifikasi jadi berjalan paralel dengan unduhan chunk.
   loader: ({ context, deps }) => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || isWaChatFixtureRequest()) return;
     const desktop = window.matchMedia("(min-width: 1024px)").matches;
     void context.queryClient.prefetchQuery(threadsQueryOptions(defaultThreadsParams(desktop)));
     if (deps.thread) {

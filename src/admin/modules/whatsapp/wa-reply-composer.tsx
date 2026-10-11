@@ -1,56 +1,12 @@
-import {
-  forwardRef,
-  memo,
-  useImperativeHandle,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
-import { MessagesSquare, Paperclip, Send, Sparkles, Wand2, X, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { memo, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { FileText, Paperclip, Send, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { formatFileSize } from "@/services/wa-outbound-attachment";
 import {
   canSubmitReply,
   type ComposerSendPayload,
 } from "@/admin/modules/whatsapp/wa-composer-send";
-
-const TEMPLATES = [
-  {
-    label: "Welcome",
-    body: "Welcome to Pomah Guesthouse! Let us know if you need anything during your stay.",
-  },
-  {
-    label: "Late check-out",
-    body: "We can arrange a late check-out until 2 PM at no extra charge. Would that work?",
-  },
-  {
-    label: "Check availability",
-    body: "Let me check availability for those dates and get back to you within a few minutes.",
-  },
-  {
-    label: "Rate quote",
-    body: "Our nightly rate for that room category starts at IDR 750.000, breakfast included. Want me to hold a room?",
-  },
-  {
-    label: "Maintenance ack",
-    body: "Sorry about that — I'm sending someone up right away to take a look. Apologies for the inconvenience.",
-  },
-  {
-    label: "Thank you",
-    body: "Thank you so much for staying with us. We hope to welcome you back soon!",
-  },
-];
 
 type ComposerAttachment = {
   phase: "processing" | "uploading" | "ready";
@@ -62,10 +18,6 @@ type ComposerAttachment = {
   path: string | null;
 };
 
-export type ReplyComposerHandle = {
-  setDraft: (value: string) => void;
-};
-
 type ReplyComposerProps = {
   compact: boolean;
   metaWindowClosed: boolean;
@@ -75,10 +27,6 @@ type ReplyComposerProps = {
   onSend: (payload: ComposerSendPayload) => boolean;
   onPickFile: (list: FileList | null) => void;
   onClearAttachment: () => void;
-  onDraftAi: () => void;
-  draftAiPending: boolean;
-  onClassify: () => void;
-  classifyPending: boolean;
   fileAccept: string;
 };
 
@@ -87,25 +35,17 @@ type ReplyComposerProps = {
  * Tap Kirim memakai pointerdown + preventDefault supaya keyboard Android tidak
  * menutup (dan menelan tap) saat textarea kehilangan fokus.
  */
-export const ReplyComposer = memo(
-  forwardRef<ReplyComposerHandle, ReplyComposerProps>(function ReplyComposer(
-    {
-      compact,
-      metaWindowClosed,
-      metaWindowMessage,
-      attachment,
-      attachmentBusy,
-      onSend,
-      onPickFile,
-      onClearAttachment,
-      onDraftAi,
-      draftAiPending,
-      onClassify,
-      classifyPending,
-      fileAccept,
-    },
-    ref,
-  ) {
+export const ReplyComposer = memo(function ReplyComposer({
+  compact,
+  metaWindowClosed,
+  metaWindowMessage,
+  attachment,
+  attachmentBusy,
+  onSend,
+  onPickFile,
+  onClearAttachment,
+  fileAccept,
+}: ReplyComposerProps) {
     const [draft, setDraft] = useState("");
     const draftRef = useRef("");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -120,13 +60,6 @@ export const ReplyComposer = memo(
     closedRef.current = metaWindowClosed;
     onSendRef.current = onSend;
     if (!attachment?.path) consumedPath.current = null;
-
-    useImperativeHandle(ref, () => ({
-      setDraft: (value: string) => {
-        draftRef.current = value;
-        setDraft(value);
-      },
-    }));
 
     useLayoutEffect(() => {
       const el = textareaRef.current;
@@ -221,60 +154,6 @@ export const ReplyComposer = memo(
             {metaWindowMessage}
           </p>
         )}
-        <div className="wa-composer-tools flex max-w-full flex-wrap items-center gap-1 pb-1.5 min-[700px]:gap-1.5 min-[700px]:pb-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-11 px-2 text-xs lg:h-9"
-                aria-label="Templates"
-              >
-                <MessagesSquare className="mr-1.5 h-3.5 w-3.5" /> Templates
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[min(18rem,calc(100vw-1.5rem))]">
-              <DropdownMenuLabel className="text-[10px] uppercase tracking-wider">
-                Quick reply templates
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {TEMPLATES.map((t) => (
-                <DropdownMenuItem
-                  key={t.label}
-                  onClick={() => {
-                    draftRef.current = t.body;
-                    setDraft(t.body);
-                  }}
-                >
-                  <div>
-                    <p className="text-xs font-medium">{t.label}</p>
-                    <p className="line-clamp-1 text-[10px] text-muted-foreground">{t.body}</p>
-                  </div>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-11 px-2 text-xs lg:h-9"
-            disabled={draftAiPending}
-            onClick={onDraftAi}
-          >
-            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-            {draftAiPending ? "Drafting…" : "AI draft"}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-11 px-2 text-xs lg:h-9"
-            disabled={classifyPending}
-            onClick={onClassify}
-          >
-            <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-            {classifyPending ? "Menganalisis…" : "Auto-tag"}
-          </Button>
-        </div>
         {visibleAttachment && (
           <div className="mb-2 flex max-w-full items-center gap-2 rounded-md border border-border bg-muted/50 px-2 py-1.5">
             {visibleAttachment.previewUrl ? (
@@ -399,8 +278,7 @@ export const ReplyComposer = memo(
         )}
       </footer>
     );
-  }),
-);
+});
 
 function AttachButton({
   disabled,

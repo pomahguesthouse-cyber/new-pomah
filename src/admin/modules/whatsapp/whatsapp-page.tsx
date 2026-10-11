@@ -48,12 +48,10 @@ import {
 } from "lucide-react";
 import {
   sendMessage,
-  draftAiReply,
   markRead,
   togglePinned,
   setAiMode,
   simulateInbound,
-  classifyIntent,
   deleteThread,
   setTrainingExample,
   updateChatSummary,
@@ -100,7 +98,12 @@ import {
   metaCustomerWindowClosed,
   validateClientPick,
 } from "@/services/wa-outbound-attachment";
-import { ReplyComposer, type ReplyComposerHandle } from "@/admin/modules/whatsapp/wa-reply-composer";
+import { ReplyComposer } from "@/admin/modules/whatsapp/wa-reply-composer";
+import {
+  isWaChatFixtureRequest,
+  waChatFixtureThread,
+  waChatFixtureThreads,
+} from "@/admin/modules/whatsapp/wa-chat-fixture";
 import {
   canRetryMessage,
   claimSend,
@@ -360,13 +363,11 @@ const ThreadRow = memo(function ThreadRow({
 
 export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: string | null }) {
   const sendFn = useServerFn(sendMessage);
-  const draftFn = useServerFn(draftAiReply);
   const markReadFn = useServerFn(markRead);
   const pinFn = useServerFn(togglePinned);
 
   const aiModeFn = useServerFn(setAiMode);
   const simulateFn = useServerFn(simulateInbound);
-  const classifyFn = useServerFn(classifyIntent);
   const deleteFn = useServerFn(deleteThread);
   const trainingFn = useServerFn(setTrainingExample);
   const updateSummaryFn = useServerFn(updateChatSummary);
@@ -400,11 +401,23 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     };
   }, [isDesktop, threadLimit, debouncedSearch, filter]);
 
-  const { data: threadsData, isPending: threadsPending } = useQuery(threadsQueryOptions(threadsParams));
+  const waFixture = isWaChatFixtureRequest();
+  const threadsOptions = threadsQueryOptions(threadsParams);
+  const { data: threadsData, isPending: threadsPending } = useQuery(
+    waFixture
+      ? ({
+          ...threadsOptions,
+          queryFn: async () => waChatFixtureThreads(),
+          initialData: waChatFixtureThreads(),
+          staleTime: Infinity,
+        } as unknown as typeof threadsOptions)
+      : threadsOptions,
+  );
   const { data: aiLabConfig } = useQuery({
     queryKey: ["ai-lab-config"],
     queryFn: () => getAiLabConfig(),
     staleTime: 5 * 60_000,
+    enabled: !waFixture,
   });
   // Alert monitor hanya perlu untuk badge/tab Monitor: tunda sampai daftar thread
   // dan percakapan aktif selesai dimuat supaya tidak berebut jaringan di HP.
@@ -416,7 +429,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   const { data: alertsData } = useQuery({
     queryKey: ["conv-alerts"],
     queryFn: () => alertsFn(),
-    enabled: alertsReady,
+    enabled: alertsReady && !waFixture,
   });
 
   const threads = threadsData?.threads ?? [];
@@ -426,6 +439,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   // Realtime: satu channel, invalidasi dipersempit & di-debounce. Pesan baru hanya
   // me-refetch percakapan terkait (bukan semua thread di cache) + daftar thread.
   useEffect(() => {
+    if (isWaChatFixtureRequest()) return;
     const pendingIds = new Set<string>();
     let listDirty = false;
     let timer: number | null = null;
@@ -492,7 +506,6 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   };
   const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const inflightSends = useRef(new Set<string>());
-  const composerHandle = useRef<ReplyComposerHandle>(null);
   const [attachment, setAttachment] = useState<ComposerAttachment | null>(null);
   const attachmentRef = useRef<ComposerAttachment | null>(null);
   const uploadAbortRef = useRef<(() => void) | null>(null);
@@ -555,9 +568,17 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   // yang tampil daftar.
   const current = activeId ?? (isDesktop ? (filteredThreads[0]?.id ?? null) : null);
 
+  const threadOptions = threadQueryOptions(current ?? "", isDesktop);
   const { data: thread, isPending: threadPending, dataUpdatedAt: threadUpdatedAt } = useQuery({
-    ...threadQueryOptions(current ?? "", isDesktop),
+    ...threadOptions,
     enabled: !!current,
+    ...(waFixture
+      ? ({
+          queryFn: async () => waChatFixtureThread(),
+          initialData: waChatFixtureThread(),
+          staleTime: Infinity,
+        } as unknown as Partial<typeof threadOptions>)
+      : {}),
   });
 
   // Pesan lama yang dimuat lewat "Muat pesan lebih lama" (di-reset saat ganti thread).
@@ -603,7 +624,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   const currentUnread =
     thread?.thread?.unread_count ?? threads.find((x) => x.id === current)?.unread_count ?? 0;
   useEffect(() => {
-    if (!current || (currentUnread ?? 0) <= 0 || markingRef.current === current) return;
+    if (waFixture || !current || (currentUnread ?? 0) <= 0 || markingRef.current === current) return;
     markingRef.current = current;
     markReadFn({ data: { threadId: current } })
       .then(() => {
@@ -613,7 +634,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
       .finally(() => {
         if (markingRef.current === current) markingRef.current = null;
       });
-  }, [current, currentUnread, threadUpdatedAt, markReadFn, qc]);
+  }, [waFixture, current, currentUnread, threadUpdatedAt, markReadFn, qc]);
 
   // ── Posisi scroll percakapan ───────────────────────────────────────────────
   // Buka thread -> langsung di pesan terbaru (tanpa animasi). Pesan baru ->
@@ -943,22 +964,6 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
       toast.error((error as Error).message);
     }
   };
-
-  const draftMut = useMutation({
-    mutationFn: () => draftFn({ data: { threadId: current! } }),
-    onSuccess: (res) => composerHandle.current?.setDraft(res.draft),
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  const classifyMut = useMutation({
-    mutationFn: () => classifyFn({ data: { threadId: current! } }),
-    onSuccess: (res) => {
-      toast.success(`Dianalisis: ${INTENT_STYLES[res.intent]?.label ?? res.intent}`);
-      qc.invalidateQueries({ queryKey: ["wa-threads"] });
-      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
 
   const trainingMut = useMutation({
     mutationFn: (value: boolean) =>
@@ -1399,7 +1404,6 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
 
             <ReplyComposer
               key={current}
-              ref={composerHandle}
               compact={!isDesktop}
               metaWindowClosed={metaWindowClosed}
               metaWindowMessage={META_WINDOW_CLOSED_MESSAGE}
@@ -1408,10 +1412,6 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
               onSend={submitReply}
               onPickFile={(list) => void onPickFile(list)}
               onClearAttachment={clearAttachment}
-              onDraftAi={() => draftMut.mutate()}
-              draftAiPending={draftMut.isPending}
-              onClassify={() => classifyMut.mutate()}
-              classifyPending={classifyMut.isPending}
               fileAccept={WA_FILE_INPUT_ACCEPT}
             />
           </>
