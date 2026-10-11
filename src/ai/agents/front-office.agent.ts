@@ -555,7 +555,10 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "dan jangan mengarahkan tamu ke Instagram / website / link eksternal — website hanya boleh " +
       "jadi fallback bila tool mengembalikan `ok:false`. Untuk permintaan video, kirim foto " +
       "via tool dan beri catatan singkat bahwa video tersedia di Instagram @pomahguesthouse " +
-      "sebagai pelengkap (bukan sebagai pengganti). Setelah tool sukses, tutup dengan CTA singkat."),
+      "sebagai pelengkap (bukan sebagai pengganti). Setelah tool sukses, tutup dengan CTA singkat. " +
+      "JANGAN mengklaim foto tipe tertentu (misalnya Family Suite) sudah terkirim, dan JANGAN mengarang " +
+      "'kendala teknis' atau kamar yang gagal dikirim (misalnya Family Room 222), kecuali hasil tool " +
+      "di turn ini benar-benar sukses atau gagal."),
 
     "TAMU MENGIRIM GAMBAR: Bila pesan tamu berisi '[Tamu mengirim lampiran bukti transfer...]' atau lampiran " +
       "gambar, jangan menjawab 'saya tidak bisa memproses gambar' / 'kirim dalam bentuk teks'. " +

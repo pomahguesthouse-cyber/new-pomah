@@ -156,8 +156,9 @@ async function main() {
   assert.ok(svc.includes("sendGuestWhatsApp(phone || target, BROCHURE_CAPTION"));
   assert.ok(svc.includes("brochureLinkFallbackReply(outcome.file.url)"));
   assert.ok(svc.includes("MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY"));
-  assert.equal(BROCHURE_DEDUP_WINDOW_MS, 2 * 60 * 60_000, "jeda kirim ulang brosur 2 jam");
-  assert.ok(svc.includes("loadRecentOutboundCaptions(phone, BROCHURE_DEDUP_WINDOW_MS)"));
+  assert.equal(BROCHURE_DEDUP_WINDOW_MS, 2 * 60 * 60_000, "konstanta jendela caption lama tetap 2 jam");
+  assert.ok(svc.includes("loadThreadBrochureSendTimes"), "klaim sudah dikirim memakai jejak thread");
+  assert.ok(svc.includes("decideBrochureRepeat"), "kirim ulang memakai aturan 30 menit / plafon");
   const dedupSource = fs.readFileSync("src/services/wa-media-dedup.ts", "utf8");
   assert.ok(
     dedupSource.includes("Date.now() - windowMs"),

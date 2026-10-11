@@ -108,6 +108,7 @@ function messageText(m: MetaMessage): string {
     isPaymentProofCandidate({
       mediaType: m.type,
       mimeType: m.image?.mime_type ?? m.document?.mime_type ?? null,
+      fileName: m.document?.filename ?? null,
     })
   ) {
     return PAYMENT_PROOF_PLACEHOLDER;
@@ -199,6 +200,7 @@ async function persistInboundMetadata(
         mediaType: m.type,
         mimeType,
         body,
+        fileName: media?.fileName ?? null,
       }),
       ...(markPending ? { media_download_status: "pending" } : {}),
       ...(skipReason

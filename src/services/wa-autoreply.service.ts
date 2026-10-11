@@ -24,6 +24,8 @@ import {
   normalizeBrochureReply,
   cleanReplyBody,
   deniesMediaCapability,
+  emptyMediaDelivery,
+  guardUnverifiedMediaClaims,
 } from "@/services/reply-postprocess";
 import { checkConversation } from "@/services/conversation-monitor.service";
 import {
@@ -56,14 +58,19 @@ import {
   MEDIA_FAST_PATH_ALREADY_SENT_REPLY,
   MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY,
   adaptMediaSlotQuestion,
+  decideBrochureRepeat,
+  inboundBurstText,
   planMediaFastPath,
+  planRoomPhotos,
   roomsForPhotoPlan,
+  type BrochureRepeatAction,
+  type RoomPhotosPlan,
 } from "@/services/wa-autoreply/media-fast-path";
 import {
   BROCHURE_CAPTION,
-  BROCHURE_DEDUP_WINDOW_MS,
-  loadRecentOutboundCaptions,
+  loadThreadBrochureSendTimes,
 } from "@/services/wa-media-dedup";
+import { isGeneralFacilityQuestion } from "@/lib/guest-media-request";
 import {
   BROCHURE_BUCKET,
   BROCHURE_FILENAME,
@@ -85,6 +92,7 @@ import {
 } from "@/services/wa-autoreply/session-summary-policy";
 import {
   burstWantsMedia,
+  shouldAnswerMediaWithAi,
   hasRecentPriceContext,
   isAvailabilityNeedDatesQuestion,
   isAvailabilitySourceContext,
@@ -608,6 +616,31 @@ async function loadPublicBrochure(): Promise<BrochureFile | null> {
   return pickBrochure({ supabaseUrl, docs: docs ?? [], storageObjects: storageList?.data ?? [] });
 }
 
+/** Daftar file brosur untuk `pickAttachment`, termasuk bila retrieval SOP dilewati. */
+async function loadBrosurAttachmentFiles(): Promise<{ name: string; url: string }[]> {
+  const supabaseUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
+  const { data: brosurDocs } = await (supabaseAdmin as any)
+    .from("sop_documents")
+    .select("name, file_path, doc_category, storage_bucket")
+    .order("created_at", { ascending: true })
+    .limit(40);
+  let files = ((brosurDocs ?? []) as any[])
+    .filter(isBrosurDoc)
+    .filter((d) => d.file_path)
+    .map((d) => {
+      const bucket = (d.storage_bucket as string | undefined)?.trim() || "sop-documents";
+      const url = `${supabaseUrl}/storage/v1/object/public/${bucket}/${d.file_path}`;
+      return { name: isPdfUrl(url) ? BROCHURE_FILENAME : d.name, url };
+    });
+  if (!files.some((f) => isPdfUrl(f.url))) {
+    const fallbackBrochure = await loadPublicBrochure().catch(() => null);
+    if (fallbackBrochure) {
+      files = [{ name: fallbackBrochure.name, url: fallbackBrochure.url }, ...files];
+    }
+  }
+  return files;
+}
+
 type BrochureSendOutcome =
   | { status: "sent"; file: BrochureFile }
   | { status: "already_sent"; file: BrochureFile }
@@ -615,10 +648,9 @@ type BrochureSendOutcome =
   | { status: "unavailable" };
 
 /**
- * Kirim brosur PDF sebagai dokumen WhatsApp lewat Meta Cloud API. Dalam
- * `BROCHURE_DEDUP_WINDOW_MS` (2 jam) caption yang sama di
- * `whatsapp_meta_outbound` membalas "sudah dikirim"; setelah jendela itu
- * brosur dikirim ulang. Pencarian caption memakai konstanta yang sama.
+ * Kirim brosur PDF sebagai dokumen WhatsApp. Keputusan "sudah dikirim" /
+ * kirim ulang ada di `decideBrochureRepeat` (jejak thread, 30 menit, plafon
+ * 3/24 jam) — fungsi ini tidak menahan kiriman berdasarkan caption nomor.
  */
 async function sendBrochureFastPath(
   token: string,
@@ -631,8 +663,6 @@ async function sendBrochureFastPath(
     console.warn("[Autoreply] brosur PDF tidak ditemukan (env/sop_documents/bucket brosur)");
     return { status: "unavailable" };
   }
-  const recent = await loadRecentOutboundCaptions(phone, BROCHURE_DEDUP_WINDOW_MS);
-  if (recent.has(BROCHURE_CAPTION)) return { status: "already_sent", file };
   const { sendGuestWhatsApp } = await import("@/services/guest-whatsapp.service");
   const result = await sendGuestWhatsApp(phone || target, BROCHURE_CAPTION, {
     fileUrl: file.url,
@@ -1199,6 +1229,7 @@ export async function executeAutoreplyForPhone(
   if (!reply && !isManager && lastMessage) {
     let mediaType: string | null = null;
     let mimeType: string | null = null;
+    let fileName: string | null = null;
     let paymentProofCandidate = false;
     if (c.thread_id) {
       try {
@@ -1213,6 +1244,7 @@ export async function executeAutoreplyForPhone(
         const md = (lastIn?.metadata ?? {}) as Record<string, unknown>;
         mediaType = typeof md.media_type === "string" ? md.media_type : null;
         mimeType = typeof md.mime_type === "string" ? md.mime_type : null;
+        fileName = typeof md.file_name === "string" ? md.file_name : null;
         paymentProofCandidate = md.payment_proof_candidate === true;
       } catch (e) {
         console.warn("[Autoreply] payment-proof media hint failed (non-fatal):", e);
@@ -1222,6 +1254,7 @@ export async function executeAutoreplyForPhone(
       body: lastMessage,
       mediaType,
       mimeType,
+      fileName,
       paymentProofCandidate,
       staffSilenceActive: false,
     });
@@ -1256,15 +1289,33 @@ export async function executeAutoreplyForPhone(
   // pesan terakhir (insiden 9 Agu 2026 — "apakah ada gambarnya kak?" disusul
   // "harganya berapa ya ka" membuat permintaan foto tak terlihat).
   const wantsMedia = burstWantsMedia(rollingMessages);
-  // Permintaan foto/brosur murni dikirim dari galeri yang sudah diketahui,
-  // tanpa giliran LLM. Campuran dengan harga/ketersediaan tetap `wantsMedia`
-  // supaya fast-path availability tidak menelan permintaan fotonya.
-  if (!reply && !isManager && lastMessage) {
+  const mediaBurstText = inboundBurstText(rollingMessages);
+  const facilityAsk = isGeneralFacilityQuestion(mediaBurstText);
+  const deferMediaToAi = shouldAnswerMediaWithAi(mediaBurstText);
+  let brochureDelivered = false;
+  let brochureFailureUrl: string | null = null;
+  const turnDelivery = emptyMediaDelivery();
+  let brochureRepeat: BrochureRepeatAction = { action: "send" };
+  // Permintaan foto/brosur murni dikirim tanpa giliran LLM. Campuran (harga,
+  // kamar mandi, pesan panjang) tetap `wantsMedia` supaya availability/FAQ
+  // tidak menelan fotonya: brosur dikirim dulu, sisanya dijawab AI.
+  if (!reply && !isManager && lastMessage && (wantsMedia || facilityAsk)) {
     try {
       const contextRoom = roomTypeFromConversation(bookingState);
-      const mediaPlan = planMediaFastPath(rollingMessages, (rooms ?? []) as any[], {
-        roomType: contextRoom,
+      const gallery = (rooms ?? []) as any[];
+      const cannedPlan =
+        !facilityAsk && !deferMediaToAi
+          ? planMediaFastPath(rollingMessages, gallery, { roomType: contextRoom })
+          : null;
+      const threadSends = await loadThreadBrochureSendTimes(c.thread_id);
+      brochureRepeat = decideBrochureRepeat({
+        text: mediaBurstText,
+        rooms: gallery,
+        now: Date.now(),
+        threadSendAts: threadSends,
+        draftRoomType: contextRoom,
       });
+      const adoptCanned = cannedPlan != null;
       const mediaOrchResult = (toolsUsed: string[]) => ({
         agentKey: "front-office",
         intent: "media_request",
@@ -1273,11 +1324,8 @@ export async function executeAutoreplyForPhone(
         toolsUsed,
         fastPath: true,
       });
-      /** Foto per kamar (cadangan bila brosur tidak ada). `true` bila balasan diambil. */
-      const runRoomPhotoPlan = async (
-        photoPlan: Extract<NonNullable<typeof mediaPlan>, { kind: "room_photos" }>,
-      ): Promise<boolean> => {
-        const selected = roomsForPhotoPlan((rooms ?? []) as any[], photoPlan);
+      const runRoomPhotoPlan = async (photoPlan: RoomPhotosPlan, adopt: boolean): Promise<boolean> => {
+        const selected = roomsForPhotoPlan(gallery, photoPlan);
         await quickAck.beforeReplySend();
         const raw = await sendRoomPhotos(
           { room_type: photoPlan.roomType ?? "", max_photos: photoPlan.maxPhotos },
@@ -1294,63 +1342,104 @@ export async function executeAutoreplyForPhone(
         const parsed = JSON.parse(raw) as {
           ok?: boolean;
           total_sent?: number;
-          results?: Array<{ skipped?: boolean }>;
+          results?: Array<{ room?: string; skipped?: boolean; sent?: number; failed?: number }>;
         };
         const sent = (parsed.total_sent ?? 0) > 0;
         const skipped = (parsed.results ?? []).some((r) => r.skipped);
-        if (!(parsed.ok && (sent || skipped))) return false;
-        adoptReply(sent ? photoPlan.reply : MEDIA_FAST_PATH_ALREADY_SENT_REPLY);
-        orchResult = mediaOrchResult(["Room - Kirim Foto ke WA Tamu"]);
+        if (!(parsed.ok && (sent || skipped))) {
+          if ((parsed.results ?? []).some((r) => (r.failed ?? 0) > 0)) turnDelivery.anyMediaFailed = true;
+          return false;
+        }
+        for (const row of parsed.results ?? []) {
+          if (!row.room) continue;
+          if ((row.sent ?? 0) > 0 || row.skipped) turnDelivery.photoRoomsSent.push(row.room);
+          if ((row.failed ?? 0) > 0) {
+            turnDelivery.photoRoomsFailed.push(row.room);
+            turnDelivery.anyMediaFailed = true;
+          }
+        }
+        if (sent) turnDelivery.genericPhotoSent = true;
+        if (adopt) {
+          adoptReply(sent ? photoPlan.reply : MEDIA_FAST_PATH_ALREADY_SENT_REPLY);
+          orchResult = mediaOrchResult(["Room - Kirim Foto ke WA Tamu"]);
+        }
         console.info(
-          `[Autoreply] Media fast-path photos for ${phone.slice(-6)} sent=${parsed.total_sent ?? 0}`,
+          `[Autoreply] Media fast-path photos for ${phone.slice(-6)} sent=${parsed.total_sent ?? 0} adopt=${adopt}`,
         );
         return true;
       };
 
-      if (mediaPlan?.kind === "room_photos") {
-        await runRoomPhotoPlan(mediaPlan);
-      } else if (mediaPlan?.kind === "brochure") {
-        // Brosur PDF dikirim sebagai dokumen; teks singkat menyusul lewat jalur
-        // kirim normal (satu dokumen + satu teks, tanpa balasan ganda).
+      const deliverBrochure = async (): Promise<void> => {
         await quickAck.beforeReplySend();
         const outcome = await sendBrochureFastPath(c.wpp_token, sendTarget, phone, c.thread_id);
         if (outcome.status === "sent") {
-          adoptReply(mediaPlan.reply);
-          orchResult = mediaOrchResult(["brochure-fast-path"]);
-          console.info(`[Autoreply] Media fast-path brochure PDF for ${phone.slice(-6)}`);
-        } else if (outcome.status === "already_sent") {
-          const roomPlan = contextRoom
-            ? planMediaFastPath(rollingMessages, (rooms ?? []) as any[], {
-                roomType: contextRoom,
-                brochureAlreadySent: true,
-              })
-            : null;
-          if (roomPlan?.kind === "room_photos" && (await runRoomPhotoPlan(roomPlan))) {
-            // Foto tipe yang sedang dibahas, bukan ulang "brosur sudah dikirim".
-          } else {
-            adoptReply(MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY);
+          brochureDelivered = true;
+          turnDelivery.brochureSent = true;
+          if (adoptCanned && cannedPlan?.kind === "brochure") {
+            adoptReply(cannedPlan.reply);
             orchResult = mediaOrchResult(["brochure-fast-path"]);
           }
+          console.info(`[Autoreply] Media fast-path brochure PDF for ${phone.slice(-6)}`);
         } else if (outcome.status === "failed") {
-          // Dokumen ditolak (mis. Meta 131053 / URL tak terjangkau): kirim teks
-          // dengan tautan brosur supaya tamu tetap bisa membukanya.
-          adoptReply(brochureLinkFallbackReply(outcome.file.url));
-          orchResult = mediaOrchResult(["brochure-fast-path", "brochure-link-fallback"]);
+          turnDelivery.anyMediaFailed = true;
+          if (adoptCanned) {
+            adoptReply(brochureLinkFallbackReply(outcome.file.url));
+            orchResult = mediaOrchResult(["brochure-fast-path", "brochure-link-fallback"]);
+          } else {
+            brochureFailureUrl = outcome.file.url;
+          }
           console.warn(`[Autoreply] brochure document failed, sent link for ${phone.slice(-6)}`);
-        } else if (mediaPlan.photoFallback) {
-          await runRoomPhotoPlan(mediaPlan.photoFallback);
+        } else if (adoptCanned && cannedPlan?.kind === "brochure" && cannedPlan.photoFallback) {
+          await runRoomPhotoPlan(cannedPlan.photoFallback, true);
         }
+      };
+
+      if (cannedPlan?.kind === "room_photos") {
+        await runRoomPhotoPlan(cannedPlan, true);
+      } else if (brochureRepeat.action === "room_photos") {
+        const photoPlan = planRoomPhotos(brochureRepeat.roomType, gallery);
+        const sentPhotos = photoPlan ? await runRoomPhotoPlan(photoPlan, adoptCanned) : false;
+        if (!sentPhotos && adoptCanned && threadSends.length > 0) {
+          adoptReply(MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY);
+          orchResult = mediaOrchResult(["brochure-fast-path"]);
+        } else if (!sentPhotos && brochureRepeat.action === "room_photos" && threadSends.length < 3) {
+          await deliverBrochure();
+        }
+      } else if (brochureRepeat.action === "already_sent") {
+        if (adoptCanned && threadSends.length > 0) {
+          adoptReply(MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY);
+          orchResult = mediaOrchResult(["brochure-fast-path"]);
+        }
+      } else if (cannedPlan?.kind === "brochure" || wantsMedia || facilityAsk) {
+        await deliverBrochure();
       }
     } catch (e) {
       console.warn("[Autoreply] media fast-path failed (falling back to AI):", e);
     }
   }
+
+  const ensureFacilityBrochure = async () => {
+    if (brochureDelivered || brochureRepeat.action !== "send") return;
+    try {
+      await quickAck.beforeReplySend();
+      const outcome = await sendBrochureFastPath(c.wpp_token, sendTarget, phone, c.thread_id);
+      if (outcome.status === "sent") {
+        brochureDelivered = true;
+        turnDelivery.brochureSent = true;
+      } else if (outcome.status === "failed") {
+        brochureFailureUrl = outcome.file.url;
+        turnDelivery.anyMediaFailed = true;
+      }
+    } catch (e) {
+      console.warn("[Autoreply] facility brochure send failed (non-fatal):", e);
+    }
+  };
   // Opener "Halo Kak 👋" hanya untuk kontak pertama: skip bila bot sudah
   // membalas di sesi berjalan atau tamu membuka dengan salam.
   const faqGreetingUsed =
     messageOpensWithGreeting(lastMessage) ||
     currentSessionMessages.some((m: { direction: string }) => m.direction === "out");
-  if (!reply && FAST_FAQ_ENABLED && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && lastMessage) {
+  if (!reply && FAST_FAQ_ENABLED && !isManager && !bookingActive && !multiPendingInbound && !deferMediaToAi && (!wantsMedia || facilityAsk) && lastMessage) {
     const fastFaq = buildPropertyFaqReply({
       message: lastMessage,
       property: p as Record<string, unknown>,
@@ -1360,6 +1449,7 @@ export async function executeAutoreplyForPhone(
       mode: "early",
     });
     if (fastFaq) {
+      if (fastFaq.sendBrochure) await ensureFacilityBrochure();
       adoptReply(fastFaq.reply);
       orchResult = {
         agentKey: "front-office",
@@ -1575,7 +1665,7 @@ export async function executeAutoreplyForPhone(
   // Fast-path deterministik untuk FAQ properti ringan (greeting, thanks,
   // alamat, kontak, jam check-in/out). Dijalankan setelah booking-inquiry
   // fast-path supaya "halo, ada kamar ga?" tetap masuk ke availability.
-  if (!reply && !isManager && !bookingActive && !multiPendingInbound && lastMessage) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && !deferMediaToAi && lastMessage) {
     try {
       const propertyFaq = buildPropertyFaqReply({
         message: lastMessage,
@@ -1586,6 +1676,7 @@ export async function executeAutoreplyForPhone(
         mode: "late",
       });
       if (propertyFaq) {
+        if (propertyFaq.sendBrochure) await ensureFacilityBrochure();
         adoptReply(propertyFaq.reply);
         orchResult = {
           agentKey: "front-office",
@@ -1697,6 +1788,16 @@ export async function executeAutoreplyForPhone(
       }
     } catch (e) {
       console.warn("[Autoreply] relevant SOP retrieval failed (continuing without SOP):", e);
+    }
+  }
+
+  // Permintaan foto/fasilitas harus selalu punya daftar brosur, termasuk bila
+  // gerbang SOP/embedding dilewati — kalau tidak, jalur AI tidak bisa melampirkan file.
+  if (!reply && brosurFiles.length === 0 && (wantsMedia || facilityAsk || deferMediaToAi)) {
+    try {
+      brosurFiles = await loadBrosurAttachmentFiles();
+    } catch (e) {
+      console.warn("[Autoreply] brochure file list failed (non-fatal):", e);
     }
   }
 
@@ -2080,7 +2181,7 @@ export async function executeAutoreplyForPhone(
   let attachUrl: string | undefined;
   let attachName: string | undefined;
 
-  if (!isFallback) {
+  if (!isFallback && !brochureDelivered) {
     const picked = pickAttachment(lastMessage, rawReply, brosurFiles);
     attachUrl = picked.url;
     attachName = picked.name;
@@ -2106,6 +2207,26 @@ export async function executeAutoreplyForPhone(
   const pdfToStrip = attachUrl && /\.pdf(\?|$)/i.test(attachUrl) ? attachUrl : undefined;
   const normalizedReply = normalizeBrochureReply(lastMessage, rawReply, attachName);
   let finalReply = cleanReplyBody(normalizedReply, pdfToStrip);
+  if (!orchResult?.fastPath) {
+    const delivery = {
+      ...(orchResult?.mediaDelivery ?? emptyMediaDelivery()),
+      brochureSent: brochureDelivered || !!orchResult?.mediaDelivery?.brochureSent,
+      photoRoomsSent: [
+        ...(orchResult?.mediaDelivery?.photoRoomsSent ?? []),
+        ...turnDelivery.photoRoomsSent,
+      ],
+      photoRoomsFailed: [
+        ...(orchResult?.mediaDelivery?.photoRoomsFailed ?? []),
+        ...turnDelivery.photoRoomsFailed,
+      ],
+      anyMediaFailed: !!(orchResult?.mediaDelivery?.anyMediaFailed || turnDelivery.anyMediaFailed),
+      genericPhotoSent: !!(orchResult?.mediaDelivery?.genericPhotoSent || turnDelivery.genericPhotoSent),
+    };
+    finalReply = guardUnverifiedMediaClaims(finalReply, delivery);
+  }
+  if (brochureFailureUrl && !finalReply.includes(brochureFailureUrl)) {
+    finalReply = `${finalReply}\n\n${brochureLinkFallbackReply(brochureFailureUrl)}`.trim();
+  }
 
   // Invarian #5: balasan media jangan menanyakan ulang slot yang sudah
   // disebut tamu di percakapan ini (insiden 28 Sep 2026).
