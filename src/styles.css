@@ -212,6 +212,156 @@
 }
 
 /*
+ * Safe areas (status bar, display cutout, gesture bar).
+ *
+ * --safe-* is the larger of the browser env() inset and the value Capacitor
+ * SystemBars writes as --safe-area-inset-* (WindowInsetsCompat system bars +
+ * display cutout). On a desktop browser both are 0, so these rules add nothing.
+ * On Android WebView < 140, SystemBars pads the WebView itself and injects 0,
+ * so this CSS does not pad a second time.
+ *
+ * The toolbar stays 3.5rem below the inset, so its centered icons keep about
+ * 12px of air under the status bar. When the inset is 0 the bar is exactly
+ * 3.5rem, the same as the previous h-14 header.
+ */
+:root {
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
+}
+
+.admin-topbar {
+  box-sizing: border-box;
+  height: auto;
+  min-height: calc(3.5rem + var(--safe-top));
+  padding-top: max(var(--safe-top), 0px);
+  padding-left: max(0.75rem, var(--safe-left));
+  padding-right: max(0.75rem, var(--safe-right));
+}
+@media (min-width: 768px) {
+  .admin-topbar {
+    padding-left: max(1rem, var(--safe-left));
+    padding-right: max(1rem, var(--safe-right));
+  }
+}
+
+.safe-page-header {
+  padding-top: max(0.5rem, var(--safe-top));
+}
+
+.admin-shell-main {
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+@media (max-width: 767px) {
+  .admin-shell-main {
+    padding-bottom: calc(4rem + var(--safe-bottom));
+  }
+}
+
+.admin-mobile-nav {
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+/* Public site: fixed/sticky headers and the mobile booking bar.
+   Insets are 0 on desktop, so the existing py/px inside these bars is unchanged. */
+.safe-area-top {
+  padding-top: var(--safe-top);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+@media (max-width: 767px) {
+  .safe-bottom-bar {
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+  }
+  .safe-bottom-bar > .safe-bottom-bar-card {
+    padding-bottom: max(0.5rem, var(--safe-bottom));
+  }
+}
+
+/* Full-height side sheets (mobile sidebar, AI Lab). p-0 sheets keep 0 padding
+   when insets are 0. Default p-6 sheets grow only when the inset exceeds 1.5rem. */
+[data-sheet-side="left"][class~="p-0"],
+[data-sheet-side="right"][class~="p-0"],
+[data-sheet-side="top"][class~="p-0"] {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+}
+[data-sheet-side="left"][class~="p-0"] {
+  padding-left: var(--safe-left);
+}
+[data-sheet-side="right"][class~="p-0"] {
+  padding-right: var(--safe-right);
+}
+[data-sheet-side="bottom"]:not([class~="p-0"]) {
+  padding-bottom: max(1.5rem, var(--safe-bottom));
+  padding-left: max(1.5rem, var(--safe-left));
+  padding-right: max(1.5rem, var(--safe-right));
+}
+[data-sheet-side="left"]:not([class~="p-0"]),
+[data-sheet-side="right"]:not([class~="p-0"]) {
+  padding-top: max(1.5rem, var(--safe-top));
+  padding-bottom: max(1.5rem, var(--safe-bottom));
+}
+[data-sheet-side="left"]:not([class~="p-0"]) {
+  padding-left: max(1.5rem, var(--safe-left));
+}
+[data-sheet-side="right"]:not([class~="p-0"]) {
+  padding-right: max(1.5rem, var(--safe-right));
+}
+[data-sheet-side="top"]:not([class~="p-0"]) {
+  padding-top: max(1.5rem, var(--safe-top));
+  padding-left: max(1.5rem, var(--safe-left));
+  padding-right: max(1.5rem, var(--safe-right));
+}
+
+/* Desktop sidebar is pinned to the screen edge (Fold inner cutout). */
+@media (min-width: 768px) {
+  [data-side="left"] [data-sidebar="sidebar"]:not([data-mobile="true"]) {
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+    padding-left: var(--safe-left);
+  }
+  [data-side="right"] [data-sidebar="sidebar"]:not([data-mobile="true"]) {
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+    padding-right: var(--safe-right);
+  }
+}
+
+@media (max-width: 639px) {
+  .safe-bottom-sheet {
+    left: var(--safe-left);
+    right: var(--safe-right);
+    width: auto;
+    max-width: none;
+  }
+}
+
+[data-sonner-toaster][data-y-position="top"] {
+  top: calc(var(--safe-top) + 16px) !important;
+}
+[data-sonner-toaster][data-y-position="bottom"] {
+  bottom: calc(var(--safe-bottom) + 16px) !important;
+}
+[data-sonner-toaster][data-x-position="right"] {
+  right: calc(var(--safe-right) + 16px) !important;
+}
+[data-sonner-toaster][data-x-position="left"] {
+  left: calc(var(--safe-left) + 16px) !important;
+}
+@media (max-width: 767px) {
+  body:has(.admin-mobile-nav) [data-sonner-toaster][data-y-position="bottom"] {
+    bottom: calc(4rem + var(--safe-bottom) + 12px) !important;
+  }
+}
+
+/*
  * AI Lab is a bare admin route with a large React Flow canvas. In local dev,
  * React Flow and dev wrappers can make the browser hide or trap page scrolling.
  * Keep the document scrollable whenever this route is mounted.
@@ -250,7 +400,7 @@ body:has(.ai-lab-react-flow) {
     display: none;
   }
   html[data-kb-open="true"] .admin-theme main main {
-    padding-bottom: env(safe-area-inset-bottom) !important;
+    padding-bottom: var(--safe-bottom) !important;
   }
 }
 
@@ -302,13 +452,13 @@ html.native-app [data-state="closed"].animate-out {
  */
 @media (max-width: 420px) {
   [data-sonner-toaster] {
-    --width: calc(100vw - 1rem);
-    --offset-right: 0.5rem;
-    --offset-left: 0.5rem;
-    left: 0.5rem !important;
+    --width: calc(100vw - 1rem - var(--safe-left) - var(--safe-right));
+    --offset-right: calc(0.5rem + var(--safe-right));
+    --offset-left: calc(0.5rem + var(--safe-left));
+    left: calc(0.5rem + var(--safe-left)) !important;
     right: auto !important;
-    width: calc(100vw - 1rem) !important;
-    max-width: calc(100vw - 1rem);
+    width: calc(100vw - 1rem - var(--safe-left) - var(--safe-right)) !important;
+    max-width: calc(100vw - 1rem - var(--safe-left) - var(--safe-right));
     transform: none !important;
   }
   [data-sonner-toast][data-styled="true"] {

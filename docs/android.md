@@ -187,6 +187,23 @@ python3 scripts/generate-android-icons.py
 
 Then copy the results into `android/app/src/main/res` (see the script’s outputs: `resources/icon.png`, `resources/splash.png`, `resources/notification-icon.png`). The committed mipmaps are already generated from those files.
 
+## Safe area (status bar, camera cutout, gesture bar)
+
+The admin loads with `viewport-fit=cover`. The shell pads from `--safe-top`, `--safe-right`, `--safe-bottom`, and `--safe-left` in `src/styles.css`. Each one is `max(env(safe-area-inset-*), var(--safe-area-inset-*))`. On a desktop browser both are 0, so the header stays 3.5rem and the public site keeps its current spacing.
+
+Android 15+ forces the WebView to draw edge-to-edge when `targetSdk` is 35 or higher (this app targets 36). WebView builds before Chromium 140 report `env(safe-area-inset-*)` as 0, which is why the header was sliding under the status icons and the Fold inner camera. Capacitor 7's `android.adjustMarginsForEdgeToEdge` is gone in Capacitor 8, and `StatusBar.setOverlaysWebView({ overlay: false })` is ignored on this target SDK (and would pad twice on older phones where it still works).
+
+This app uses the Capacitor 8 SystemBars plugin instead (`@capacitor/core` 8.5):
+
+- `plugins.SystemBars.insetsHandling` is `"css"`.
+- `initialViewportFitValueHint` is `"cover"`.
+- `MainActivity` calls `EdgeToEdge.enable(this)` before `super.onCreate`.
+- The theme allows drawing in the display cutout (`windowLayoutInDisplayCutoutMode=always`) so a camera on the long edge (Galaxy Z Fold inner screen, right/top) is an inset, not a surprise overlap.
+- SystemBars reads `WindowInsetsCompat` for system bars **and** `displayCutout`. On WebView 140+ with `viewport-fit=cover` it leaves the WebView full-bleed and sets both `env()` and `--safe-area-inset-*`. On older WebViews it pads the WebView and injects 0, so the CSS does not add a second gap.
+- The status bar and the window background are `#F7FBF8` with dark icons, the same light header surface. Dark mode switches the icons and the fallback color to the dark admin surface. The header itself paints the status-bar strip once the website CSS is deployed.
+
+A new APK is required for `MainActivity`, the theme, and the SystemBars config (`capacitor.config.ts` is copied in by `cap sync`). The CSS and the status-bar color call ship with the website deploy and already help mobile Chrome and Safari, which do report `env()`. Until the APK is reinstalled, the current shell can still draw under the status bar.
+
 ## Phone behavior
 
 - Bottom nav on small screens: Dashboard, Booking, Chat WA, More. More opens the existing sidebar. Desktop layout is unchanged.

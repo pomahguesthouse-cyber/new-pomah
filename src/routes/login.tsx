@@ -166,7 +166,7 @@ function LoginPage() {
   };
 
   return (
-    <div className="grid min-h-screen md:grid-cols-2">
+    <div className="grid min-h-dvh pt-[var(--safe-top)] pr-[var(--safe-right)] pb-[var(--safe-bottom)] pl-[var(--safe-left)] md:grid-cols-2">
       <div className="hidden border-r border-border bg-card p-12 md:flex md:flex-col md:justify-between">
         <Link to="/" className="font-mono text-sm font-semibold">
           POMAH<span className="text-accent">.</span>

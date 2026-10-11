@@ -33,6 +33,22 @@ const config: CapacitorConfig = {
     backgroundColor: "#1b3f3f",
   },
   plugins: {
+    // Capacitor 8 (this repo is @capacitor/core 8.5, targetSdk 36). Android 15+
+    // forces edge-to-edge, and WebView builds before 140 report
+    // env(safe-area-inset-*) as 0. `insetsHandling: "css"` is the robust path:
+    // SystemBars reads WindowInsetsCompat (system bars + display cutout) and,
+    // on WebView >= 140 with viewport-fit=cover, passes those insets through so
+    // env() is correct AND sets --safe-area-inset-*. On older WebViews it pads
+    // the WebView and injects 0 so CSS does not pad twice.
+    // Do not set StatusBar.setOverlaysWebView({ overlay: false }) or the removed
+    // Capacitor 7 `adjustMarginsForEdgeToEdge`. overlay:false is ignored on
+    // targetSdk 35+ and would double-pad on older Android where it still works.
+    SystemBars: {
+      insetsHandling: "css",
+      initialViewportFitValueHint: "cover",
+      // Dark icons on the light admin header (#F7FBF8).
+      style: "LIGHT",
+    },
     SplashScreen: {
       launchAutoHide: true,
       launchShowDuration: 1200,

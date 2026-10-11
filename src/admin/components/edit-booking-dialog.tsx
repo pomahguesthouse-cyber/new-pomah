@@ -506,7 +506,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[680px] p-0 gap-0 overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] flex flex-col">
+      <DialogContent className="flex w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 max-h-[calc(100dvh-1rem-var(--safe-top)-var(--safe-bottom))] sm:w-full sm:max-h-[90vh] sm:max-w-[680px]">
         <div className="relative shrink-0 border-b border-border bg-gradient-to-br from-primary/15 via-accent/5 to-transparent px-4 py-4 pr-12 sm:px-6 sm:py-5">
           <DialogHeader>
             <div className="flex items-center gap-3">

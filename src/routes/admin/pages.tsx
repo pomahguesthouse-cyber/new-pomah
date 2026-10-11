@@ -544,11 +544,11 @@ function HomepageBuilder() {
   return (
     <div
       className={cn(
-        "pb-tap flex h-full min-h-0 w-full max-w-full flex-col overflow-hidden bg-stone-100 pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]",
-        layout !== "overlay" && "pb-[env(safe-area-inset-bottom)]",
+        "pb-tap flex h-full min-h-0 w-full max-w-full flex-col overflow-hidden bg-stone-100 pl-[var(--safe-left)] pr-[var(--safe-right)]",
+        layout !== "overlay" && "pb-[var(--safe-bottom)]",
       )}
     >
-      <header className="flex max-w-full flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
+      <header className="safe-page-header flex max-w-full flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
         <Button asChild variant="outline" size="sm" className="h-10 shrink-0 gap-1.5 px-3">
           <Link to="/admin" aria-label="Keluar">
             <ArrowLeft className="h-4 w-4" />
@@ -708,7 +708,7 @@ function HomepageBuilder() {
 
       {overlay ? (
         <>
-          <nav className="grid shrink-0 grid-cols-2 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
+          <nav className="grid shrink-0 grid-cols-2 border-t border-border bg-card pb-[var(--safe-bottom)]">
             <button
               type="button"
               className={cn(
@@ -2298,7 +2298,7 @@ function RenamePageDialog({
             <p className="text-[10px] text-muted-foreground">/lp/{slug}</p>
           </div>
         </div>
-        <DialogFooter className="shrink-0 gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:space-x-0">
+        <DialogFooter className="shrink-0 gap-2 border-t px-4 py-3 pb-[max(0.75rem,var(--safe-bottom))] sm:space-x-0">
           <Button variant="outline" className="h-10" onClick={onClose} disabled={saving}>
             Batal
           </Button>
@@ -3105,7 +3105,7 @@ function PageSettingsPanel({
         )}
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-stone-200 bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="flex items-center justify-end gap-2 border-t border-stone-200 bg-card px-4 py-3 pb-[max(0.75rem,var(--safe-bottom))]">
         <Button size="sm" className="h-10 bg-teal-700 text-white hover:bg-teal-800" disabled={saving} onClick={handleSave}>
           {saving ? (
             <>
