@@ -48,6 +48,7 @@ import {
 import { normalizeAssistantName } from "./agents/persona";
 import { runDeferred } from "@/lib/cf-context";
 import { burstWantsMedia, isMediaRequest } from "@/services/wa-autoreply/message-parsers";
+import { emptyMediaDelivery, noteMediaToolResult, type MediaDelivery } from "@/services/reply-postprocess";
 import { shouldSkipOrchestratorTrainingRetrieval } from "./router/message-gates";
 import { reportAiGatewayFailureAsync } from "@/services/ai-credit-alert";
 
@@ -434,8 +435,10 @@ async function runAgent(
   error?: string;
   retries?: Array<{ attempt: number; reason: string; latency_ms: number }>;
   loopAlert?: { toolName: string; repeatCount: number; lastArgs?: string; sampleOutput?: string };
+  mediaDelivery: MediaDelivery;
 }> {
   const toolsUsed = new Set<string>();
+  const mediaDelivery = emptyMediaDelivery();
   const allRetries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
   let emptyCompletionRetried = false;
   let lastToolDraftReply: string | null = null;
@@ -630,6 +633,7 @@ async function runAgent(
       return {
         reply: null,
         toolsUsed: Array.from(toolsUsed),
+        mediaDelivery,
         error: "LLM gateway error",
         ...(allRetries.length ? { retries: allRetries } : {}),
       };
@@ -685,11 +689,12 @@ async function runAgent(
         return {
           reply: lastToolDraftReply,
           toolsUsed: Array.from(toolsUsed),
+          mediaDelivery,
           error: lastToolDraftReply ? `${detail}; returned tool draft` : detail,
           ...(allRetries.length ? { retries: allRetries } : {}),
         };
       }
-      return { reply, toolsUsed: Array.from(toolsUsed), ...(allRetries.length ? { retries: allRetries } : {}) };
+      return { reply, toolsUsed: Array.from(toolsUsed), mediaDelivery, ...(allRetries.length ? { retries: allRetries } : {}) };
     }
 
     // ── Tool calls ────────────────────────────────────────────────────────────
@@ -749,6 +754,7 @@ async function runAgent(
         const result = await executeTool(toolName, rawArgs, toolCtx);
         output = result.output;
         toolLabel = result.toolLabel;
+        noteMediaToolResult(mediaDelivery, toolName, output);
       }
 
       if (toolLabel) toolsUsed.add(toolLabel);
@@ -766,6 +772,7 @@ async function runAgent(
         return {
           reply: verbatimReply,
           toolsUsed: Array.from(toolsUsed),
+          mediaDelivery,
           ...(allRetries.length ? { retries: allRetries } : {}),
         };
       }
@@ -812,6 +819,7 @@ async function runAgent(
   return {
     reply: lastToolDraftReply ?? null,
     toolsUsed: Array.from(toolsUsed),
+    mediaDelivery,
     // If a tool produced a draft reply (e.g. formatted availability), treat as
     // success so the guest/admin gets useful data instead of a generic fallback.
     ...(lastToolDraftReply
@@ -1541,6 +1549,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
       status: foResult.reply ? "reply" : "error",
       reply: foResult.reply,
       toolsUsed: foResult.toolsUsed,
+      mediaDelivery: foResult.mediaDelivery,
       agentKey: "front-office",
       intent: classified.category,
       routingConfidence: routing.confidence,
@@ -1559,6 +1568,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
     status: agentResult.reply ? "reply" : "error",
     reply: agentResult.reply,
     toolsUsed: agentResult.toolsUsed,
+    mediaDelivery: agentResult.mediaDelivery,
     agentKey: routing.agentKey,
     intent: classified.category,
     routingConfidence: routing.confidence,

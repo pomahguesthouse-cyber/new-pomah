@@ -8,6 +8,7 @@
 import { saveMessageMetadata } from "@/repositories/message.repository";
 import type { PaymentProofResult } from "@/services/payment-proof.service";
 import { formatPaymentProofSummary } from "@/services/payment-proof-match";
+import { isOurBrochureFilename } from "@/services/wa-autoreply/brochure-source";
 
 export const WA_INBOUND_BUCKET = "wa-inbound";
 /** Selaras dengan file_size_limit di migrasi bucket. */
@@ -186,8 +187,11 @@ export function isPaymentProofCandidate(input: {
   mediaType?: string | null;
   mimeType?: string | null;
   body?: string | null;
+  fileName?: string | null;
   paymentProofCandidate?: boolean | null;
 }): boolean {
+  // Tamu meneruskan brosur kita — bukan bukti transfer.
+  if (isOurBrochureFilename(input.fileName)) return false;
   if (input.paymentProofCandidate === true) return true;
   const type = String(input.mediaType ?? "").toLowerCase();
   if (type === "sticker" || type === "audio" || type === "video") return false;
@@ -289,6 +293,7 @@ export function planPaymentProofGuestReply(input: {
   body?: string | null;
   mediaType?: string | null;
   mimeType?: string | null;
+  fileName?: string | null;
   paymentProofCandidate?: boolean | null;
   staffSilenceActive?: boolean;
   sentAt?: string | Date | null;
@@ -563,6 +568,7 @@ export async function processInboundMedia(
   const candidate = isPaymentProofCandidate({
     mediaType: input.media.mediaType,
     mimeType: input.media.mimeType,
+    fileName: input.media.fileName,
   });
   const empty = (patch: Partial<InboundMediaJobResult>): InboundMediaJobResult => ({
     storagePath: null,

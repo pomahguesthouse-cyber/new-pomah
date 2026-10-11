@@ -3,6 +3,8 @@ import {
   GUEST_BROCHURE_WORD_RE,
   GUEST_PHOTO_WORD_RE,
   isGuestMediaExcluded,
+  isRoomLookAsk,
+  normalizeGuestMediaText,
 } from "@/lib/guest-media-request";
 
 /**
@@ -86,9 +88,10 @@ function llmPromisedBrochure(reply: string): boolean {
 }
 
 export function isBrochureRequest(text: string): boolean {
-  if (isGuestMediaExcluded(text)) return false;
-  if (GUEST_PHOTO_WORD_RE.test(text) || GUEST_BROCHURE_WORD_RE.test(text)) return true;
-  return BROCHURE_REQUEST_PATTERNS.some((p) => p.test(text));
+  const n = normalizeGuestMediaText(text ?? "");
+  if (isGuestMediaExcluded(n)) return false;
+  if (GUEST_PHOTO_WORD_RE.test(n) || GUEST_BROCHURE_WORD_RE.test(n) || isRoomLookAsk(n)) return true;
+  return BROCHURE_REQUEST_PATTERNS.some((p) => p.test(n));
 }
 
 const BROCHURE_DENIAL_PATTERNS: RegExp[] = [
@@ -163,6 +166,142 @@ export function stripMediaCapabilityDenial(reply: string): { text: string; strip
     .trim();
 
   return { text, stripped };
+}
+
+export interface MediaDelivery {
+  brochureSent: boolean;
+  photoRoomsSent: string[];
+  photoRoomsFailed: string[];
+  anyMediaFailed: boolean;
+  genericPhotoSent: boolean;
+}
+
+export function emptyMediaDelivery(): MediaDelivery {
+  return {
+    brochureSent: false,
+    photoRoomsSent: [],
+    photoRoomsFailed: [],
+    anyMediaFailed: false,
+    genericPhotoSent: false,
+  };
+}
+
+/** Catat hasil tool foto/tur supaya klaim di balasan bisa dicek. */
+export function noteMediaToolResult(delivery: MediaDelivery, toolName: string, output: string): void {
+  if (toolName !== "send_room_photos" && toolName !== "send_room_tour") return;
+  let parsed: {
+    ok?: boolean;
+    results?: Array<{ room?: string; sent?: number; failed?: number; skipped?: boolean }>;
+  } | null = null;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    return;
+  }
+  if (!parsed) return;
+  if (parsed.ok === false) delivery.anyMediaFailed = true;
+  const results = Array.isArray(parsed.results) ? parsed.results : [];
+  for (const row of results) {
+    const room = typeof row?.room === "string" ? row.room.trim() : "";
+    const sent = Number(row?.sent ?? 0);
+    const failed = Number(row?.failed ?? 0);
+    if (room && (sent > 0 || row?.skipped)) delivery.photoRoomsSent.push(room);
+    if (failed > 0) {
+      delivery.anyMediaFailed = true;
+      if (room) delivery.photoRoomsFailed.push(room);
+    }
+  }
+  if (parsed.ok === true && (results.length === 0 || results.some((r) => Number(r?.sent ?? 0) > 0))) {
+    delivery.genericPhotoSent = true;
+  }
+}
+
+const ROOM_CLAIM_RE =
+  /\b(family\s+suite(?:\s+\d+)?|family\s+room\s+\d+|grand\s+deluxe|junior\s+suite|deluxe|single|superior|twin|standard|standar)\b/i;
+
+function claimedRoom(sentence: string): string | null {
+  const hit = sentence.match(ROOM_CLAIM_RE);
+  return hit?.[1] ?? null;
+}
+
+function roomListed(name: string, list: string[]): boolean {
+  const n = name.toLowerCase().replace(/\s+/g, " ").trim();
+  return list.some((room) => {
+    const r = room.toLowerCase().replace(/\s+/g, " ").trim();
+    return r === n || r.includes(n) || n.includes(r);
+  });
+}
+
+function claimsTechnicalFailure(sentence: string): boolean {
+  return (
+    /\bkendala\s+teknis\b/i.test(sentence) ||
+    /\b(foto|gambar|brosur)\w*\b[\s\S]{0,60}\b(gagal dikirim|tidak terkirim|belum bisa dikirim)\b/i.test(sentence)
+  );
+}
+
+function claimsMediaSent(sentence: string): boolean {
+  return (
+    /\b(foto|gambar|brosur|katalog)\w*\b[\s\S]{0,80}\b(sudah\s+(?:kami\s+)?(?:kirim|dikirim)|telah\s+(?:kami\s+)?dikirim|terkirim)\b/i.test(
+      sentence,
+    ) ||
+    /\b(sudah\s+(?:kami\s+)?kirim(?:kan)?|kami\s+kirimkan|kita kirimkan)\b[\s\S]{0,60}\b(foto|gambar|brosur|katalog)\w*/i.test(
+      sentence,
+    )
+  );
+}
+
+/**
+ * Buang klaim "foto sudah terkirim" / "kendala teknis" yang tidak didukung
+ * hasil kirim di turn ini. Contoh insiden: pesan panjang minta "foto kamar
+ * terbaru", model mengarang Family Suite terkirim dan Family Room 222 gagal.
+ */
+export function guardUnverifiedMediaClaims(reply: string, delivery: MediaDelivery): string {
+  const source = (reply ?? "").trim();
+  if (!source) return source;
+  const parts = source
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const kept: string[] = [];
+  let stripped = false;
+  for (const sentence of parts) {
+    if (claimsTechnicalFailure(sentence)) {
+      const room = claimedRoom(sentence);
+      const allowed = room
+        ? roomListed(room, delivery.photoRoomsFailed)
+        : delivery.anyMediaFailed;
+      if (!allowed) {
+        stripped = true;
+        continue;
+      }
+    }
+    if (claimsMediaSent(sentence)) {
+      const room = claimedRoom(sentence);
+      if (room) {
+        if (!roomListed(room, delivery.photoRoomsSent)) {
+          stripped = true;
+          continue;
+        }
+      } else if (/\b(?:brosur|katalog)\b/i.test(sentence)) {
+        if (!delivery.brochureSent) {
+          stripped = true;
+          continue;
+        }
+      } else if (!delivery.genericPhotoSent && delivery.photoRoomsSent.length === 0 && !delivery.brochureSent) {
+        stripped = true;
+        continue;
+      }
+    }
+    kept.push(sentence);
+  }
+  if (!stripped) return source;
+  if (kept.length === 0) {
+    if (delivery.brochureSent) {
+      return "Brosurnya sudah saya kirim ya Kak. Silakan dilihat, dan kalau ada pertanyaan lain saya bantu.";
+    }
+    return "Baik Kak, saya bantu lanjut ya. Kalau ada yang ingin ditanyakan lagi, silakan ditulis.";
+  }
+  return kept.join(" ").replace(/[ \t]{2,}/g, " ").trim();
 }
 
 export interface BrosurFile {

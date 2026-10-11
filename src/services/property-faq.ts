@@ -28,10 +28,13 @@ import {
   type FacilityRoom,
 } from "@/ai/state-machine/booking-inline-answers";
 import { mentionsExplicitDateSignal } from "@/lib/id-date";
+import { isGeneralFacilityQuestion } from "@/lib/guest-media-request";
 
 export interface PropertyFaqReply {
   reply: string;
   intent: string;
+  /** Pertanyaan fasilitas umum: kirim brosur bersama teks ini. */
+  sendBrochure?: boolean;
 }
 
 export interface PropertyFaqInput {
@@ -491,18 +494,22 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   }
 
   // — Fasilitas: per tipe kamar / perbandingan —
-  const facilityKeyword = /\b(fasilitas|amenities|ada apa saja)\b/i.test(raw);
+  // Pertanyaan umum ("fasilitasnya apa saja", "ada apa aja", "rincian fasilitas")
+  // mengirim brosur + teks ini. Ya/tidak satu item (parkir/dapur/kulkas/sarapan)
+  // tidak masuk sini.
+  const facilityKeyword = isGeneralFacilityQuestion(raw);
   const diffKeyword = /\b(perbedaan|bedanya|beda)\b/i.test(raw);
   const priceOnlyQuestion = /\b(harga|tarif|price|rate)\b/i.test(raw) && !facilityKeyword;
   if (facilityKeyword || (diffKeyword && !priceOnlyQuestion)) {
     const mentionedRooms = findMentionedRooms(raw, rooms);
     if (facilityKeyword || mentionedRooms.length >= 2) {
       const reply = buildFacilityReply(raw, rooms);
-      if (reply) return { reply, intent: "faq_facility" };
+      if (reply) return { reply, intent: "faq_facility", sendBrochure: facilityKeyword };
       if (facilityKeyword) {
         return {
           reply: "Fasilitas tergantung tipe kamar yang dipilih Kak. Sebutkan tipe kamarnya ya, nanti saya rincikan.",
           intent: "faq_facility",
+          sendBrochure: true,
         };
       }
     }

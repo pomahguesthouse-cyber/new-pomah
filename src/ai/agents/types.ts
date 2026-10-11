@@ -284,6 +284,14 @@ export interface MultiAgentResult {
   trainingExampleIds?:   string[];
   /** LLM retry events that occurred during this orchestration run */
   retries?: Array<{ attempt: number; reason: string; latency_ms: number }>;
+  /** Hasil kirim foto/brosur di turn ini. Klaim tamu harus cocok dengan ini. */
+  mediaDelivery?: {
+    brochureSent: boolean;
+    photoRoomsSent: string[];
+    photoRoomsFailed: string[];
+    anyMediaFailed: boolean;
+    genericPhotoSent: boolean;
+  };
   /** Tool yang stuck loop (mis. terus return need_dates). Sinyal untuk
    *  super admin alert — bukan untuk ditampilkan ke tamu. */
   loopAlert?: {

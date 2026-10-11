@@ -7,7 +7,13 @@ import {
   resolveMonthName,
   resolveRelativeDayRange,
 } from "@/lib/id-date";
-import { GUEST_MEDIA_WORD_RE, isGuestMediaExcluded } from "@/lib/guest-media-request";
+import {
+  GUEST_MEDIA_WORD_RE,
+  isGeneralFacilityQuestion,
+  isGuestMediaExcluded,
+  isRoomLookAsk,
+  normalizeGuestMediaText,
+} from "@/lib/guest-media-request";
 import { readGuestCount } from "@/lib/guest-party";
 
 export { mentionsExplicitDateSignal, resolveMonthName };
@@ -346,7 +352,7 @@ const VIEW_ROOM_TARGET_RE =
 const IN_PERSON_VISIT_RE = /\b(langsung|datang|survei|survey|ke lokasi|on ?site|in person)\b/i;
 
 export function isViewRoomRequest(message: string): boolean {
-  const text = message ?? "";
+  const text = normalizeGuestMediaText(message ?? "");
   if (IN_PERSON_VISIT_RE.test(text)) return false;
   if (/\bcontoh\s+kamar(?:nya)?\b/i.test(text)) return true;
   // Kata kerja "lihat" lalu kamar dalam ±25 karakter (bukan "kamar" lalu "lihat" saja).
@@ -357,9 +363,51 @@ export function isViewRoomRequest(message: string): boolean {
 }
 
 export function isMediaRequest(message: string): boolean {
-  const text = message ?? "";
+  const text = normalizeGuestMediaText(message ?? "");
   if (isGuestMediaExcluded(text)) return false;
-  return GUEST_MEDIA_WORD_RE.test(text) || isViewRoomRequest(text);
+  return GUEST_MEDIA_WORD_RE.test(text) || isViewRoomRequest(text) || isRoomLookAsk(text);
+}
+
+/**
+ * Pertanyaan lain di pesan yang sama (kamar mandi, harga, wifi/ac yang
+ * ditanyakan, atau pesan panjang multi-pertanyaan). Fast-path kaleng tidak
+ * boleh menelan sisanya — brosur dikirim dulu, jawabannya diserahkan ke AI.
+ */
+/** Pertanyaan lain yang bukan sopan-santun di sekitar minta foto/lihat kamar. */
+const SUBSTANTIVE_COMPANION_RE =
+  /\b(?:berapa|kenapa|mengapa|kapan|kamar\s*mandi|toilet|\bwc\b|dalam\s+atau|di\s*luar|diluar|harga|tarif|kosong|tersedia|bayar|transfer|lokasi|alamat|check-?in|check-?out)\b/i;
+/** "apakah saya boleh melihat…" dan "kayak gimana" adalah permintaan media, bukan pertanyaan kedua. */
+const POLITE_MEDIA_RE = /\b(?:apakah|gimana|bagaimana)\b/i;
+
+function hasCompanionQuestion(text: string): boolean {
+  const n = normalizeGuestMediaText(text);
+  if (/[?]/.test(n) && /\b(?:wifi|wi-fi|\bac\b)\b/i.test(n)) return true;
+  const parts = n
+    .split(/[?\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const clauses = parts.length > 0 ? parts : [n];
+  return clauses.some((clause) => {
+    if (SUBSTANTIVE_COMPANION_RE.test(clause)) {
+      if (
+        isGeneralFacilityQuestion(clause) &&
+        !/\b(?:kamar\s*mandi|toilet|harga|tarif|berapa|kosong|tersedia|bayar)\b/i.test(clause)
+      ) {
+        return false;
+      }
+      return true;
+    }
+    if (!POLITE_MEDIA_RE.test(clause)) return false;
+    return !(isMediaRequest(clause) || isViewRoomRequest(clause) || isRoomLookAsk(clause));
+  });
+}
+
+export function shouldAnswerMediaWithAi(text: string): boolean {
+  const n = normalizeGuestMediaText(text ?? "");
+  if (!n.trim() || !isMediaRequest(n)) return false;
+  if (n.length > 280) return true;
+  if (isGeneralFacilityQuestion(n) && !hasCompanionQuestion(n)) return false;
+  return hasCompanionQuestion(n);
 }
 
 /**

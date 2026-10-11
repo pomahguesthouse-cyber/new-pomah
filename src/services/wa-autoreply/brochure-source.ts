@@ -19,6 +19,25 @@ export const BROCHURE_BUCKET = "brosur";
 /** Nama file yang dilihat tamu di WhatsApp (dokumen Meta wajib punya ekstensi). */
 export const BROCHURE_FILENAME = "Brosur Pomah Guesthouse.pdf";
 
+/**
+ * Dokumen masuk yang namanya sama dengan brosur kita (tamu meneruskan PDF
+ * brosur). Bukan bukti transfer.
+ */
+export function isOurBrochureFilename(fileName: string | null | undefined): boolean {
+  const raw = (fileName ?? "").trim();
+  if (!raw) return false;
+  const base = raw.split(/[/\\]/).pop() ?? raw;
+  const fold = base
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const official = BROCHURE_FILENAME.toLowerCase();
+  if (fold === official) return true;
+  if (fold.replace(/\.pdf$/, "") === official.replace(/\.pdf$/, "")) return true;
+  return /\bbrosur\b/.test(fold) && /\bpomah\b/.test(fold) && /\.pdf$/.test(fold);
+}
+
 export interface BrochureFile {
   url: string;
   name: string;

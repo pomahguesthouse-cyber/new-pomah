@@ -24,7 +24,12 @@ import {
   isTrivialSocialMessage,
   isVeryShortMessage,
 } from "./message-gates";
-import { GUEST_PHOTO_WORD_RE, isGuestMediaExcluded } from "@/lib/guest-media-request";
+import {
+  GUEST_PHOTO_WORD_RE,
+  isGuestMediaExcluded,
+  isRoomLookAsk,
+  normalizeGuestMediaText,
+} from "@/lib/guest-media-request";
 
 // ─── Rule definitions ─────────────────────────────────────────────────────────
 
@@ -147,7 +152,7 @@ export const RULES: IntentRule[] = [
       /\b(brosur|brochure|katalog|catalog|pricelist|price list|daftar harga bergambar)\b/i,
       /\b(video|videonya|reels?|penampakan|nampakan|visual)\b/i,
       /\b(virtual tour|tour 360|tur 360|360|walkthrough|walk through|lihat kamar(?:nya)? langsung)\b/i,
-      /\b(liat|lihat|minta|ada|punya|boleh)\b.{0,20}\b(foto|gambar|video|brosur|katalog)\b/i,
+      /\b(liat|lihat|minta|ada|punya|boleh)\b.{0,20}\b(foto|gambar|video|brosur|katalog|pict|pic)\b/i,
       /\b(?:me)?(?:lihat|liat)(?:in|kan)?\b.{0,25}\bkamar(?:nya)?\b(?!.{0,20}\b(?:langsung|datang|survei|survey|ke lokasi)\b)/i,
     ],
   },
@@ -587,9 +592,11 @@ export async function classifyIntent(
   const scores = new Map<IntentCategory, number>();
   const matched = new Map<IntentCategory, string[]>();
 
+  const mediaHaystack = normalizeGuestMediaText(text);
   for (const rule of activeRules) {
+    const haystack = rule.category === "media_request" ? mediaHaystack : text;
     for (const pattern of rule.patterns) {
-      const hit = text.match(pattern);
+      const hit = haystack.match(pattern);
       if (hit) {
         scores.set(rule.category, (scores.get(rule.category) ?? 0) + rule.weight);
         const terms = matched.get(rule.category) ?? [];
@@ -597,6 +604,14 @@ export async function classifyIntent(
         matched.set(rule.category, terms);
       }
     }
+  }
+
+  // "yg 175k itu kaya apa" = minta lihat kamar, bukan pertanyaan harga biasa.
+  if (isRoomLookAsk(text) && !isGuestMediaExcluded(mediaHaystack)) {
+    scores.set("media_request", (scores.get("media_request") ?? 0) + 8);
+    const terms = matched.get("media_request") ?? [];
+    terms.push("room-look");
+    matched.set("media_request", terms);
   }
 
   // Pertanyaan isi brosur / izin memotret sendiri bukan permintaan kirim media.

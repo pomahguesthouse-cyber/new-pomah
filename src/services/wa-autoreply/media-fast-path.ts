@@ -10,8 +10,17 @@
  * jawaban harga tidak tertelan — insiden 9 Agu 2026.
  */
 
-import { isGuestMediaExcluded, mentionsGuestPhotoWord } from "@/lib/guest-media-request";
-import { isMediaRequest, isViewRoomRequest } from "@/services/wa-autoreply/message-parsers";
+import {
+  isGeneralFacilityQuestion,
+  isGuestMediaExcluded,
+  mentionsGuestPhotoWord,
+  normalizeGuestMediaText,
+} from "@/lib/guest-media-request";
+import {
+  isMediaRequest,
+  isViewRoomRequest,
+  shouldAnswerMediaWithAi,
+} from "@/services/wa-autoreply/message-parsers";
 
 export interface GalleryRoom {
   name: string;
@@ -77,7 +86,15 @@ const GENERIC_ROOM_WORDS = new Set([
 const ROOM_HINT_RE =
   /\b(deluxe|family|suite|single|twin|superior|standard|standar|grand|vip|executive)\b/i;
 const COMPLAINT_RE =
-  /\b(rusak|mati|bocor|kotor|komplain|kecewa|wifi|ac|air mati|tidak bisa|ga bisa|gak bisa)\b/i;
+  /\b(rusak|mati|bocor|kotor|komplain|kecewa|air mati|tidak bisa|ga bisa|gak bisa)\b/i;
+
+/** Tamu minta brosur dikirim ulang karena file sebelumnya tidak terbuka. */
+export const BROCHURE_RESEND_RE =
+  /\b(?:lagi|ulang|belum masuk|(?:tidak|gak|ga|nggak|ngga)\s+(?:bisa\s+)?(?:di)?buka|(?:gak|ga|nggak|ngga|tidak)\s+kebuka)\b/i;
+
+export function isBrochureResendRequest(text: string): boolean {
+  return BROCHURE_RESEND_RE.test(normalizeGuestMediaText(text ?? ""));
+}
 
 function normalizeName(value: string): string {
   return value
@@ -137,11 +154,71 @@ function pendingInbound(messages: Array<{ direction: string; body?: string }>): 
   return bodies.reverse();
 }
 
+export function inboundBurstText(messages: Array<{ direction: string; body?: string }>): string {
+  return pendingInbound(messages).join("\n").trim();
+}
+
 export interface MediaFastPathContext {
   /** Tipe kamar dari last_entity / slots percakapan. */
   roomType?: string | null;
   /** Brosur PDF sudah terkirim dalam jendela dedup. */
   brochureAlreadySent?: boolean;
+}
+
+/** Setelah kiriman terakhir, brosur boleh dikirim lagi. */
+export const BROCHURE_RESEND_AFTER_MS = 30 * 60_000;
+/** Plafon kiriman brosur per tamu. */
+export const BROCHURE_DAILY_CAP = 3;
+export const BROCHURE_DAILY_WINDOW_MS = 24 * 60 * 60_000;
+
+export type BrochureRepeatAction =
+  | { action: "send" }
+  | { action: "room_photos"; roomType: string }
+  | { action: "already_sent" };
+
+/**
+ * Aturan ulang brosur. `already_sent` hanya bila ada jejak kiriman di thread
+ * yang sama. Tipe kamar yang disebut di pesan menang atas draf booking.
+ */
+export function decideBrochureRepeat(input: {
+  text: string;
+  rooms: Array<{ name: string }>;
+  now: number;
+  /** Waktu kirim brosur yang tercatat di thread ini (epoch ms). */
+  threadSendAts: number[];
+  draftRoomType?: string | null;
+}): BrochureRepeatAction {
+  const text = normalizeGuestMediaText(input.text ?? "");
+  const sends = [...(input.threadSendAts ?? [])]
+    .filter((n) => Number.isFinite(n))
+    .sort((a, b) => a - b);
+  const logged = sends.length > 0;
+  if (!logged) return { action: "send" };
+
+  const last = sends[sends.length - 1]!;
+  const since24 = input.now - BROCHURE_DAILY_WINDOW_MS;
+  const count24 = sends.filter((t) => t >= since24).length;
+  const age = input.now - last;
+  const resendPhrase = isBrochureResendRequest(text);
+  const named = matchGalleryRoom(text, input.rooms);
+
+  if (resendPhrase) {
+    if (count24 >= BROCHURE_DAILY_CAP) return { action: "already_sent" };
+    return { action: "send" };
+  }
+  if (named) return { action: "room_photos", roomType: named.name };
+  if (age > BROCHURE_RESEND_AFTER_MS) {
+    if (count24 >= BROCHURE_DAILY_CAP) return { action: "already_sent" };
+    return { action: "send" };
+  }
+  // Draf booking hanya cadangan bila pesan minta foto tanpa menyebut tipe.
+  const draft = (input.draftRoomType ?? "").trim();
+  const photoAsk = mentionsGuestPhotoWord(text) || isViewRoomRequest(text);
+  if (draft && photoAsk && !isGeneralFacilityQuestion(text)) {
+    const draftRoom = matchGalleryRoom(draft, input.rooms);
+    if (draftRoom) return { action: "room_photos", roomType: draftRoom.name };
+  }
+  return { action: "already_sent" };
 }
 
 /**
@@ -155,8 +232,9 @@ export function planMediaFastPath(
 ): MediaFastPathPlan | null {
   const burst = pendingInbound(messages);
   if (burst.length === 0) return null;
-  const text = burst.join("\n").trim();
-  if (!text || text.length > 280) return null;
+  const raw = burst.join("\n").trim();
+  const text = normalizeGuestMediaText(raw);
+  if (!text || raw.length > 280) return null;
   if (isGuestMediaExcluded(text)) return null;
 
   const wantsPhoto = PHOTO_RE(text);
@@ -174,22 +252,25 @@ export function planMediaFastPath(
     return true;
   });
   if (mixedBurst) return null;
-  if (COMPLAINT_RE.test(text)) return null;
+  // "wifi"/"ac" bukan keluhan. Frasa "tidak bisa dibuka" adalah minta kirim ulang.
+  if (COMPLAINT_RE.test(text) && !isBrochureResendRequest(text)) return null;
   if (TOUR_OR_VIDEO_RE.test(text)) return null;
   if (MIXED_LLM_RE.test(text)) return null;
+  // Daftar fasilitas dijawab teks FAQ + brosur, bukan balasan kaleng saja.
+  if (isGeneralFacilityQuestion(text)) return null;
+  // Foto + pertanyaan lain, atau pesan panjang: brosur dulu, sisanya ke AI.
+  if (shouldAnswerMediaWithAi(text)) return null;
 
   if (!wantsPhoto && !wantsBrochure && !wantsView) return null;
 
-  // Brosur sudah pernah dikirim dan percakapan sudah menyebut tipe kamar:
-  // kirim foto tipe itu, jangan mengulang "brosur sudah dikirim".
-  if (
-    context?.brochureAlreadySent &&
-    context.roomType &&
-    (wantsPhoto || wantsView) &&
-    !wantsBrochure
-  ) {
-    const photos = planRoomPhotos(context.roomType, rooms);
-    if (photos) return photos;
+  // Brosur sudah pernah dikirim: foto tipe yang disebut di pesan, baru draf booking.
+  if (context?.brochureAlreadySent && (wantsPhoto || wantsView) && !wantsBrochure) {
+    const named = matchGalleryRoom(text, rooms);
+    const roomSource = named?.name ?? context.roomType;
+    if (roomSource) {
+      const photos = planRoomPhotos(roomSource, rooms);
+      if (photos) return photos;
+    }
   }
 
   if (wantsBrochure && !wantsPhoto) {
