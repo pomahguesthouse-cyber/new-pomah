@@ -639,7 +639,7 @@ function LandingPage() {
       {/* WhatsApp float */}
       <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer"
         aria-label="Hubungi via WhatsApp"
-        className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600">
+        className="fixed bottom-[max(1.25rem,var(--safe-bottom))] right-[max(1.25rem,var(--safe-right))] z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600">
         <MessageCircle className="h-7 w-7" />
       </a>
     </div>
@@ -738,7 +738,7 @@ function HeaderSection({ s }: { s: LPHeaderSection }) {
   const [open, setOpen] = useState(false);
   const links = s.links ?? [];
   return (
-    <nav className={`${s.sticky ?? true ? "sticky top-0" : ""} z-40 border-b border-stone-200 bg-white/95 backdrop-blur-sm shadow-sm`}>
+    <nav className={`safe-area-top ${s.sticky ?? true ? "sticky top-0" : ""} z-40 border-b border-stone-200 bg-white/95 backdrop-blur-sm shadow-sm`}>
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <a href="/" className="flex items-center gap-2">
           {s.logo_url ? (
@@ -1453,8 +1453,8 @@ function LPNav({
     <nav
       className={
         overlay
-          ? "absolute inset-x-0 top-0 z-50"
-          : "sticky top-0 z-40 border-b border-stone-200 bg-white/95 shadow-sm backdrop-blur-sm"
+          ? "safe-area-top absolute inset-x-0 top-0 z-50"
+          : "safe-area-top sticky top-0 z-40 border-b border-stone-200 bg-white/95 shadow-sm backdrop-blur-sm"
       }
       style={
         overlay

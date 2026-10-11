@@ -122,7 +122,7 @@ export function BlockRoomDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl">
+      <DialogContent className="safe-bottom-sheet flex max-h-[90dvh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl">
         <DialogHeader className="shrink-0 space-y-1 px-4 pb-2 pr-10 pt-4">
           <DialogTitle>Blokir kamar</DialogTitle>
           <DialogDescription>
@@ -198,7 +198,7 @@ export function BlockRoomDialog({
           </div>
         </div>
 
-        <DialogFooter className="sticky bottom-0 z-10 shrink-0 gap-2 border-t border-border bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <DialogFooter className="sticky bottom-0 z-10 shrink-0 gap-2 border-t border-border bg-background px-4 py-3 pb-[max(0.75rem,var(--safe-bottom))]">
           <Button variant="outline" className="h-10" onClick={onClose} disabled={mutation.isPending}>
             Batal
           </Button>

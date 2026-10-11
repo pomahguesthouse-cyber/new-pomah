@@ -31,7 +31,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <AdminTopbar fullName="Admin" email={null} />
         <main
           className={cn(
-            "flex min-h-0 min-w-0 flex-1 flex-col max-md:pb-[calc(4rem+env(safe-area-inset-bottom))]",
+            "admin-shell-main flex min-h-0 min-w-0 flex-1 flex-col",
             chat || calendar ? "overflow-hidden" : "overflow-auto",
           )}
         >

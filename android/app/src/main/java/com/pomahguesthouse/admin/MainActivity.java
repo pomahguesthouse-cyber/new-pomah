@@ -3,6 +3,7 @@ package com.pomahguesthouse.admin;
 import android.os.Bundle;
 import android.util.Log;
 import android.webkit.WebView;
+import androidx.activity.EdgeToEdge;
 import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
@@ -17,6 +18,11 @@ public class MainActivity extends BridgeActivity {
         // Theme.SplashScreen is not an AppCompat theme until this runs. Without it,
         // BridgeActivity crashes on launch on some Android 12+ / One UI devices.
         SplashScreen.installSplashScreen(this);
+        // Android 15+ (targetSdk 36) draws edge-to-edge. EdgeToEdge makes older
+        // releases do the same so SystemBars can read the status bar, gesture
+        // bar, and display cutout (Fold cover punch-hole, Fold inner camera).
+        // The website then pads with env() / --safe-area-inset-*. See docs/android.md.
+        EdgeToEdge.enable(this);
         registerPlugin(PomahFirebasePlugin.class);
         super.onCreate(savedInstanceState);
         keepWebViewAlive();

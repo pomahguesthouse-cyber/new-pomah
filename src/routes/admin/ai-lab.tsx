@@ -283,6 +283,12 @@ const stepLabel = (ids: string[]) => ids.map((id) => FLOW_NODES.find((n) => n.id
 
 function AiLab() {
   const qc = useQueryClient();
+  // Dark full-screen chrome. The native shell watches this class and switches
+  // the status-bar icons to light so they stay visible on #090f1c.
+  useEffect(() => {
+    document.documentElement.classList.add("status-bar-light");
+    return () => document.documentElement.classList.remove("status-bar-light");
+  }, []);
   const [drawer, setDrawer] = useState<DrawerKey>(null);
   const [selectedNode, setSelectedNode] = useState<FlowNodeMeta | null>(null);
 
@@ -336,8 +342,8 @@ function AiLab() {
   }
 
   return (
-    <div className="bg-slate-950 text-slate-100" style={{ height: "100dvh", overflowY: "auto", overscrollBehaviorY: "contain" }}>
-      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-[#090f1c]/95 backdrop-blur">
+    <div className="bg-slate-950 pb-[var(--safe-bottom)] pl-[var(--safe-left)] pr-[var(--safe-right)] text-slate-100" style={{ height: "100dvh", overflowY: "auto", overscrollBehaviorY: "contain" }}>
+      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-[#090f1c]/95 pt-[var(--safe-top)] backdrop-blur">
         <div className="flex min-h-[72px] flex-wrap items-center gap-3 px-4 py-3 md:px-6">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30">
             <MessageCircle className="h-5 w-5" />

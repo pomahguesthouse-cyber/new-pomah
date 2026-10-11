@@ -1,3 +1,4 @@
+import type { StatusBarPlugin, Style } from "@capacitor/status-bar";
 import { supabase } from "@/integrations/supabase/client";
 import { canRegisterStaffPush } from "@/lib/native-push";
 import { loginDestination } from "@/lib/auth-return";
@@ -238,15 +239,11 @@ export async function startNativeAdmin(
   void SplashScreen.hide().catch(() => {
     // Splash may already be hidden.
   });
-  // Status bar styling is cosmetic; do not wait for it.
-  void (async () => {
-    try {
-      await StatusBar.setStyle({ style: Style.Light });
-      await StatusBar.setBackgroundColor({ color: "#fafaf9" });
-    } catch {
-      // Status bar styling is optional.
-    }
-  })();
+  // Match the admin header. Edge-to-edge (Android 15+, targetSdk 36) draws the
+  // WebView under a transparent status bar; the header background shows through
+  // once CSS padding is applied. These colors cover the gap on older WebViews,
+  // where SystemBars pads the WebView and the window background is visible.
+  const stopTheme = watchStatusBarTheme(StatusBar, Style);
 
   const handles: Array<{ remove: () => Promise<void> }> = [];
 
@@ -272,11 +269,48 @@ export async function startNativeAdmin(
 
   return {
     stop: () => {
+      stopTheme();
       stopPull();
       stopPush();
       for (const handle of handles) void handle.remove();
     },
   };
+}
+
+/** Light header #F7FBF8 (admin --background). Dark header is the .dark admin surface. */
+const HEADER_LIGHT = "#F7FBF8";
+const HEADER_DARK = "#1A2823";
+
+function watchStatusBarTheme(
+  StatusBar: StatusBarPlugin,
+  Style: { readonly Light: Style; readonly Dark: Style },
+): Stop {
+  let generation = 0;
+  const apply = () => {
+    const id = ++generation;
+    const root = document.documentElement;
+    const aiLab = root.classList.contains("status-bar-light");
+    const drawer = root.classList.contains("status-bar-on-dark");
+    const lightIcons = aiLab || drawer || root.classList.contains("dark");
+    const color = aiLab ? "#090F1C" : drawer ? "#243830" : lightIcons ? HEADER_DARK : HEADER_LIGHT;
+    void (async () => {
+      try {
+        await StatusBar.setStyle({ style: lightIcons ? Style.Dark : Style.Light });
+        await StatusBar.setBackgroundColor({ color });
+        const { SystemBars, SystemBarsStyle } = await import("@capacitor/core");
+        if (id !== generation) return;
+        await SystemBars.setStyle({
+          style: lightIcons ? SystemBarsStyle.Dark : SystemBarsStyle.Light,
+        });
+      } catch {
+        // Status bar styling is optional. SystemBars ships with Capacitor 8.
+      }
+    })();
+  };
+  apply();
+  const observer = new MutationObserver(apply);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  return () => observer.disconnect();
 }
 
 async function isFirebasePushConfigured(): Promise<boolean> {

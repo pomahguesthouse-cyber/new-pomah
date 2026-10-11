@@ -74,7 +74,7 @@ export function PublicNav({
   const firstWord = parts[0];
   const restWords = parts.slice(1).join(" ");
   return (
-    <nav className={`z-50 transition-all duration-300 ${
+    <nav className={`safe-area-top z-50 transition-all duration-300 ${
       transparent 
         ? "absolute top-0 left-0 right-0 border-b border-white/10 bg-transparent" 
         : "sticky top-0 border-b border-stone-200 bg-white/95 backdrop-blur-sm shadow-sm"
@@ -573,7 +573,7 @@ export function PomahNav({
               }
             : undefined
         }
-        className={`z-50 transition-all duration-300 ${positionClass} ${
+        className={`safe-area-top z-50 transition-all duration-300 ${positionClass} ${
           style === "minimal" ? "border-b border-stone-200 bg-white" : ""
         } ${header.dropShadow && (style === "solid" || style === "minimal") ? "shadow-md" : ""} ${
           selected ? "outline outline-2 -outline-offset-2 outline-orange-500" : ""
@@ -606,7 +606,9 @@ export function PomahNav({
         </div>
         <span className="sr-only">{name}</span>
       </nav>
-      {needsSpacer && <div style={{ height: headerHeight }} aria-hidden />}
+      {needsSpacer && (
+        <div style={{ height: `calc(${headerHeight}px + var(--safe-top))` }} aria-hidden />
+      )}
     </>
   );
 }

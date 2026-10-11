@@ -13,6 +13,18 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Matches the light admin header. Shown behind the transparent status
+             bar before the WebView paints, and in the gap when an older WebView
+             is padded by SystemBars instead of drawing edge-to-edge. -->
+        <item name="android:windowBackground">#F7FBF8</item>
+        <item name="android:statusBarColor">#F7FBF8</item>
+        <item name="android:navigationBarColor">#F7FBF8</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <!-- Report side cutouts (Fold inner camera on the right) as insets. -->
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
     </style>
 
 

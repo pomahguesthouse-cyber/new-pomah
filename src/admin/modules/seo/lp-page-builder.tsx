@@ -416,7 +416,7 @@ export function LpPageBuilder({
             <SheetTitle>Properti section</SheetTitle>
             <SheetDescription>Ubah konten atau style blok yang dipilih.</SheetDescription>
           </SheetHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,var(--safe-bottom))]">
             {editorBody}
           </div>
         </SheetContent>
@@ -432,7 +432,7 @@ export function LpPageBuilder({
               <SheetTitle>Pilih Tipe Section</SheetTitle>
               <SheetDescription>Pilih jenis section yang ingin ditambahkan ke halaman.</SheetDescription>
             </SheetHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,var(--safe-bottom))]">
               {palette}
             </div>
           </SheetContent>
@@ -444,7 +444,7 @@ export function LpPageBuilder({
               <DialogTitle>Pilih Tipe Section</DialogTitle>
               <DialogDescription>Pilih jenis section yang ingin ditambahkan ke halaman.</DialogDescription>
             </DialogHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,var(--safe-bottom))]">
               {palette}
             </div>
           </DialogContent>

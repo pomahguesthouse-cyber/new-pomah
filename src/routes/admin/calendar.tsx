@@ -77,10 +77,10 @@ import { cn } from "@/lib/utils";
 
 /** Sheet/dialog shell: 90dvh, internal scroll, safe-area. The width class is kept for the invoice dispatch check. */
 const calendarSheetClass =
-  "flex max-h-[90dvh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[440px] max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl";
+  "safe-bottom-sheet flex max-h-[90dvh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[440px] max-sm:bottom-0 max-sm:left-0 max-sm:right-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-2xl";
 
 const calendarSheetFooterClass =
-  "sticky bottom-0 z-10 shrink-0 gap-2 border-t border-border bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]";
+  "sticky bottom-0 z-10 shrink-0 gap-2 border-t border-border bg-background px-4 py-3 pb-[max(0.75rem,var(--safe-bottom))]";
 
 export const Route = createFileRoute("/admin/calendar")({
   component: CalendarPage,
@@ -296,7 +296,7 @@ function CalendarPage() {
     <div className="admin-calendar-page flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-background">
       <header
         data-calendar-toolbar
-        className="relative z-40 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border bg-card px-[max(0.5rem,env(safe-area-inset-left))] py-1.5 pr-[max(0.5rem,env(safe-area-inset-right))] shadow-sm"
+        className="relative z-40 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border bg-card px-2 py-1.5 shadow-sm"
       >
         <h1 className="sr-only">Kalender booking</h1>
         <Button

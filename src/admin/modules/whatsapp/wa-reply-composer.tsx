@@ -210,7 +210,7 @@ export const ReplyComposer = memo(
         className={cn(
           "wa-reply-footer relative z-20 min-w-0 max-w-full shrink-0 border-t border-border bg-card",
           "px-2 pt-2 min-[700px]:px-3 min-[700px]:pt-3 lg:p-3",
-          "pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-3",
+          "pb-2 lg:pb-3",
         )}
       >
         {metaWindowClosed && (

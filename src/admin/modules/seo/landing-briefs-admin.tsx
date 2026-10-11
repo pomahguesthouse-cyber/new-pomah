@@ -304,7 +304,7 @@ function BriefTab({ onGenerated }: { onGenerated?: () => void }) {
         <p className="text-[11px] text-stone-500">Status: {draft.status}. Generate hanya jalan setelah brief disetujui.</p>
       </div>
     </div>
-        <div className="flex shrink-0 flex-wrap gap-2 border-t border-stone-200 bg-white py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="flex shrink-0 flex-wrap gap-2 border-t border-stone-200 bg-white py-3 pb-[max(0.75rem,var(--safe-bottom))]">
           <Button type="button" size="sm" variant="outline" className="h-10" disabled={busy} onClick={() => save("draft")}>
             Simpan draf
           </Button>
@@ -463,7 +463,7 @@ function LandmarkTab() {
         ))}
       </ul>
     </div>
-      <div className="flex shrink-0 border-t border-stone-200 bg-white py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="flex shrink-0 border-t border-stone-200 bg-white py-3 pb-[max(0.75rem,var(--safe-bottom))]">
         <Button type="button" size="sm" className="h-10" disabled={busy} onClick={save}>
           Simpan landmark
         </Button>

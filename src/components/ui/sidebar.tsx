@@ -174,6 +174,12 @@ const Sidebar = React.forwardRef<
   ) => {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
 
+    React.useEffect(() => {
+      if (!isMobile || !openMobile) return;
+      document.documentElement.classList.add("status-bar-on-dark");
+      return () => document.documentElement.classList.remove("status-bar-on-dark");
+    }, [isMobile, openMobile]);
+
     if (collapsible === "none") {
       return (
         <div
