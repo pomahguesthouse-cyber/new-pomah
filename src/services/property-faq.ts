@@ -1,7 +1,7 @@
 /**
  * Property FAQ builder — SATU-SATUNYA sumber jawaban FAQ deterministik
  * (greeting, thanks, alamat, kontak, jam check-in/out, wifi, parkir,
- * fasilitas).
+ * fasilitas, aturan tamu satu kamar).
  *
  * Konsolidasi 3 Jul 2026 (O3): sebelumnya logika ini terpecah di DUA builder
  * dalam wa-autoreply.service.ts (`buildFastFaqReply` dijalankan sebelum jalur
@@ -29,6 +29,7 @@ import {
 } from "@/ai/state-machine/booking-inline-answers";
 import { mentionsExplicitDateSignal } from "@/lib/id-date";
 import { isGeneralFacilityQuestion } from "@/lib/guest-media-request";
+import { buildRoomSharingReply } from "@/services/room-sharing-policy";
 
 export interface PropertyFaqReply {
   reply: string;
@@ -203,7 +204,16 @@ export function parseRequestedHour(text: string, direction: "in" | "out"): numbe
 
 export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply | null {
   const raw = input.message.toLowerCase().replace(/\s+/g, " ").trim();
-  if (!raw || raw.length > 260) return null;
+  if (!raw) return null;
+
+  // Aturan satu kamar (suami-istri / keluarga / teman sesama jenis) dijawab
+  // sebelum FAQ_BLOCK dan sebelum batas 260 karakter. Pesan seperti
+  // "satu kamar sama pacar" memuat kata "kamar", dan "teman cewek semua 3 orang"
+  // memuat "orang" — keduanya ada di blocklist mode early.
+  const sharing = buildRoomSharingReply(input.message);
+  if (sharing) return sharing;
+
+  if (raw.length > 260) return null;
 
   // Pertanyaan DP / bayar di tempat harus dijawab sebelum sinyal komplain
   // ("tidak bisa") dan sebelum FAQ_BLOCK yang memuat kata dp/bayar/malam.

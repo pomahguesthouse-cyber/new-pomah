@@ -1,3 +1,4 @@
+import { enforceRoomSharingPolicyReply } from "@/services/room-sharing-policy";
 import { sanitizeGuestFacingRoleDisclosure } from "@/services/wa-autoreply/guest-role-disclosure";
 import {
   GUEST_BROCHURE_WORD_RE,
@@ -439,12 +440,17 @@ export function sanitizeForbiddenPhrases(reply: string): string {
  *   - Strip internal agent role disclosures from guest-facing replies.
  *   - Collapse trailing-whitespace lines and triple+ newlines.
  */
-export function cleanReplyBody(reply: string, attachedPdfUrl?: string): string {
+export function cleanReplyBody(
+  reply: string,
+  attachedPdfUrl?: string,
+  guestMessage?: string,
+): string {
   let out = reply;
   if (attachedPdfUrl) out = out.replace(attachedPdfUrl, "");
   out = stripMediaCapabilityDenial(out).text;
   out = sanitizeForbiddenPhrases(out);
   out = sanitizeGuestFacingRoleDisclosure(out);
+  out = enforceRoomSharingPolicyReply(out, guestMessage);
   return out
     .replace(/https?:\/\/\S+\.(?:jpe?g|png|webp|gif)(?:\?\S*)?/gi, "")
     .replace(/[ \t]+\n/g, "\n")

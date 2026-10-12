@@ -43,6 +43,7 @@ import { getBookingState } from "@/ai/state-machine/booking-machine";
 import { STAFF_REPLY_SILENCE_MS, staffSilenceUntil } from "@/services/wa-autoreply/staff-silence";
 import { planPaymentProofGuestReply } from "@/services/wa-inbound-media";
 import { buildPropertyFaqReply } from "@/services/property-faq";
+import { buildRoomSharingReply } from "@/services/room-sharing-policy";
 import {
   AI_TIMEOUT_MS,
   FALLBACK_MESSAGE,
@@ -1439,6 +1440,24 @@ export async function executeAutoreplyForPhone(
   const faqGreetingUsed =
     messageOpensWithGreeting(lastMessage) ||
     currentSessionMessages.some((m: { direction: string }) => m.direction === "out");
+  // Aturan satu kamar berlaku juga di tengah booking. Jangan menunggu FAQ umum
+  // (yang dilewati saat booking aktif) dan jangan menunda ke tim.
+  if (!reply && !isManager && !multiPendingInbound && !deferMediaToAi && lastMessage) {
+    const sharing = buildRoomSharingReply(lastMessage);
+    if (sharing) {
+      adoptReply(sharing.reply);
+      orchResult = {
+        agentKey: "front-office",
+        intent: sharing.intent,
+        routingConfidence: 1,
+        escalated: false,
+        toolsUsed: ["room-sharing-policy"],
+        fastPath: true,
+      };
+      console.info(`[Autoreply] Room-sharing policy (${sharing.intent}) for ${phone.slice(-6)}`);
+    }
+  }
+
   if (!reply && FAST_FAQ_ENABLED && !isManager && !bookingActive && !multiPendingInbound && !deferMediaToAi && (!wantsMedia || facilityAsk) && lastMessage) {
     const fastFaq = buildPropertyFaqReply({
       message: lastMessage,
@@ -2206,7 +2225,7 @@ export async function executeAutoreplyForPhone(
   // Strip any inline PDF URL that became the attachment + bare image URLs.
   const pdfToStrip = attachUrl && /\.pdf(\?|$)/i.test(attachUrl) ? attachUrl : undefined;
   const normalizedReply = normalizeBrochureReply(lastMessage, rawReply, attachName);
-  let finalReply = cleanReplyBody(normalizedReply, pdfToStrip);
+  let finalReply = cleanReplyBody(normalizedReply, pdfToStrip, lastMessage);
   if (!orchResult?.fastPath) {
     const delivery = {
       ...(orchResult?.mediaDelivery ?? emptyMediaDelivery()),

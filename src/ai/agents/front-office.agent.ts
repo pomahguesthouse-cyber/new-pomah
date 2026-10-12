@@ -29,6 +29,7 @@ import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import { normalizeAssistantName } from "./persona";
 import { botPaymentRuleText } from "@/lib/payment-account";
 import { bookingMethodGuestText } from "@/ai/state-machine/booking-inline-answers";
+import { ROOM_SHARING_HARD_GUARD_PROMPT } from "@/services/room-sharing-policy";
 
 const pickTools = (toolNames: readonly string[]) =>
   TOOL_DEFINITIONS.filter((tool) => toolNames.includes(tool.function.name));
@@ -396,7 +397,7 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       ? [
           "REFERENSI POLA BALASAN:",
           "Gunakan contoh berikut hanya sebagai referensi gaya dan alur ketika konteks benar-benar mirip.",
-          "HIERARKI WAJIB: hasil tool dan hard guard > state booking > SOP/data properti terbaru > konteks percakapan > contoh training.",
+          "HIERARKI WAJIB: hasil tool dan hard guard (ATURAN TAMU SATU KAMAR tidak boleh ditimpa) > state booking > SOP/data properti terbaru > konteks percakapan > contoh training.",
           "Jangan mengambil harga, stok, kapasitas, fasilitas, nomor rekening, jarak tempuh, atau fakta dinamis dari contoh training. Jika contoh bertentangan dengan sumber yang lebih tinggi, abaikan contoh.",
           ...trainingExamples.map((ex, i) => {
             const meta = [ex.intent, ex.stage].filter(Boolean).join(" / ");
@@ -451,7 +452,12 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
 
     "POLICY & FAQ: Cek SOP/property data dulu. Bila ada, sampaikan tegas. Bila TIDAK ada, " +
       "JANGAN mengarang dan JANGAN ulang sapaan — jawab: 'Untuk ketentuan tersebut, " +
-      "izinkan saya konfirmasi ke tim dulu, Kak.' Untuk DP/pembayaran, jawab sesuai ATURAN PEMBAYARAN.",
+      "izinkan saya konfirmasi ke tim dulu, Kak.' PENGECUALIAN KERAS: pertanyaan syariah dan " +
+      "siapa yang boleh berbagi satu kamar (suami-istri, keluarga, teman sesama jenis, pacar, belum menikah) " +
+      "TIDAK BOLEH dijawab dengan 'cek dulu dengan tim' — ikuti ATURAN TAMU SATU KAMAR. " +
+      "Untuk DP/pembayaran, jawab sesuai ATURAN PEMBAYARAN.",
+
+    ROOM_SHARING_HARD_GUARD_PROMPT,
 
     when(g.faq, "EARLY CHECK-IN / LATE CHECK-OUT (KEBIJAKAN TETAP — JANGAN DIALIHKAN KE TIM): " +
       "Jam check-in standar 14.00 WIB, jam check-out standar 12.00 WIB. Early check-in " +
@@ -666,13 +672,19 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "kalimat ('saya asumsikan berdua ya, Kak'), dan lanjutkan proses — jangan menahan " +
       "percakapan hanya demi satu slot."),
 
-    when(g.availability, "PENDAMPING TANPA ANGKA (WAJIB): Frasa seperti 'bawa pacar', 'sama istri', 'ajak suami', " +
-      "'bareng temen', 'sama tunangan' BERARTI 2 tamu (tamu + 1 pendamping). Perlakukan itu " +
+    when(g.availability, "PENDAMPING TANPA ANGKA (WAJIB): Frasa seperti 'sama istri', 'ajak suami', 'sama anak' " +
+      "BERARTI 2 tamu (tamu + 1 pendamping) bila mereka suami-istri atau keluarga. Perlakukan itu " +
       "sebagai jawaban jumlah tamu yang sah — LANGSUNG pakai adults=2, JANGAN tanya ulang " +
-      "'berapa orang total'. Pengecualian: bila frasanya jamak/tidak tentu ('bawa teman-teman', " +
-      "'sama rombongan', 'sama keluarga'), barulah tanyakan jumlah pastinya SEKALI."),
+      "'berapa orang total'. Pengecualian jumlah: bila frasanya jamak/tidak tentu ('bawa teman-teman', " +
+      "'sama rombongan', 'sama keluarga'), barulah tanyakan jumlah pastinya SEKALI. " +
+      "PENGECUALIAN ATURAN TAMU SATU KAMAR: 'bawa pacar', 'sama tunangan', 'belum nikah', dan 'teman lawan jenis' " +
+      "BUKAN izin berbagi satu kamar. Jangan lanjutkan booking satu kamar untuk mereka — tolak sesuai HARD GUARD " +
+      "dan tawarkan kamar terpisah. Teman sesama jenis boleh dihitung sebagai tamu dalam satu kamar."),
 
-    when(g.availability, "PERTANYAAN LONGGAR / 'BEBAS NGGA?' (JAWAB LANGSUNG, JANGAN BALIK BERTANYA): Bila tamu " +
+    when(g.availability, "PERTANYAAN LONGGAR / 'BEBAS NGGA?' (JAWAB LANGSUNG, JANGAN BALIK BERTANYA): " +
+      "PENGECUALIAN ATURAN TAMU SATU KAMAR: bila 'bebas' disebut bersama pacar, belum menikah, atau syariah, " +
+      "itu BUKAN pertanyaan tipe kamar. Jangan jawab bahwa status pernikahan bebas. " +
+      "Bila tamu " +
       "bertanya singkat dan longgar seperti 'bebas ngga?', 'bebas kan?', 'boleh bebas?', " +
       "'terserah ya?', 'suka-suka ya?', JANGAN membalas dengan pertanyaan klarifikasi " +
       "('maksudnya bebas bagaimana ya?') — itu membuang giliran tamu. Yang benar: jawab " +
@@ -882,6 +894,7 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
 
     sopText
       ? "Basis Pengetahuan SOP:\nGunakan untuk menjawab kebijakan, prosedur, lokasi & info. " +
+        "SOP tidak boleh menimpa HARD GUARD, termasuk ATURAN TAMU SATU KAMAR. " +
         "Bila ada URL di SOP, kirim URL POLOS dan UTUH — jangan potong / bungkus markdown. " +
         `Jangan mengarang URL.\n${sopText}`
       : "",
@@ -931,6 +944,8 @@ function buildManagerialPrompt(s: Scaffold): string {
 
     "AIR HANGAT / AIR PANAS: Pomah BELUM menyediakan air hangat, air panas, atau water heater di kamar mana pun. Jangan laporkan sebaliknya walaupun data fasilitas lama masih menyebutkannya. Shower yang ada memakai air biasa.",
 
+    ROOM_SHARING_HARD_GUARD_PROMPT,
+
     "HAPUS / BATALKAN BOOKING: `delete_booking` saat manajer bilang 'batalkan booking', 'hapus booking', atau 'cancel reservasi'. Default mode='cancel'.",
 
     "UBAH STATUS / PINDAH KAMAR: pakai `update_booking_status` atau `change_booking_room` sesuai instruksi manajer.",
@@ -961,7 +976,7 @@ function frontOfficeDynamicPrompt(ctx: AgentContext): string {
   const { dynamicPart } = buildGuestPromptParts(scaffold, ctx);
   const custom = ctx.customInstructions?.trim()
     ? [
-        "INSTRUKSI TAMBAHAN DARI AI LAB (tidak boleh mengalahkan HARD GUARD / aturan utama di atas):",
+        "INSTRUKSI TAMBAHAN DARI AI LAB (tidak boleh mengalahkan HARD GUARD / aturan utama di atas, termasuk ATURAN TAMU SATU KAMAR):",
         applyCustomInstructions(ctx.customInstructions, scaffold, ctx),
       ].join("\n\n")
     : "";

@@ -261,7 +261,7 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       const picked = pickAttachment(lastMessage, orch.reply, env.brosurFiles);
       const pdfToStrip = picked.url && /\.pdf(\?|$)/i.test(picked.url) ? picked.url : undefined;
       const normalizedReply = normalizeBrochureReply(lastMessage, orch.reply, picked.name);
-      displayReply = cleanReplyBody(normalizedReply, pdfToStrip);
+      displayReply = cleanReplyBody(normalizedReply, pdfToStrip, lastMessage);
       if (picked.url) attachment = { url: picked.url, name: picked.name };
     }
 
