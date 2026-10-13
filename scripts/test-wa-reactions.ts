@@ -132,3 +132,15 @@ const reactionMsg = {
   console.error(e);
   process.exit(1);
 });
+
+// Koreksi keyboard di kolom balasan WhatsApp admin
+import { readFileSync } from "node:fs";
+import { WA_KEYBOARD_TEXT_PROPS } from "../src/admin/modules/whatsapp/wa-keyboard";
+assert.equal(WA_KEYBOARD_TEXT_PROPS.spellCheck, true);
+assert.equal(WA_KEYBOARD_TEXT_PROPS.autoCorrect, "on");
+assert.equal(WA_KEYBOARD_TEXT_PROPS.autoCapitalize, "sentences");
+assert.equal(WA_KEYBOARD_TEXT_PROPS.lang, "id");
+const composerSrc = readFileSync("src/admin/modules/whatsapp/wa-reply-composer.tsx", "utf8");
+assert.equal(composerSrc.match(/\{\.\.\.WA_KEYBOARD_TEXT_PROPS\}/g)?.length, 2, "kedua textarea composer");
+assert.ok(!/spellCheck=\{false\}|autoCorrect="off"/.test(composerSrc));
+console.log("wa-keyboard: OK");

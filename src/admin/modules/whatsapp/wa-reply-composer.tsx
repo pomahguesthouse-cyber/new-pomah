@@ -1,4 +1,5 @@
 import { memo, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { WA_KEYBOARD_TEXT_PROPS } from "./wa-keyboard";
 import { FileText, Paperclip, Send, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -229,6 +230,7 @@ export const ReplyComposer = memo(function ReplyComposer({
                   submit();
                 }
               }}
+              {...WA_KEYBOARD_TEXT_PROPS}
               enterKeyHint="enter"
               className="max-h-[120px] min-h-11 min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl px-3 py-2.5 text-base leading-5 md:text-base"
             />
@@ -244,6 +246,7 @@ export const ReplyComposer = memo(function ReplyComposer({
             <Textarea
               ref={textareaRef}
               placeholder="Type a reply…  ⌘/Ctrl + Enter to send"
+              {...WA_KEYBOARD_TEXT_PROPS}
               rows={2}
               value={draft}
               onChange={(e) => {
