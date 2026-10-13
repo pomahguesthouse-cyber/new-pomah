@@ -64,6 +64,7 @@ import {
 } from "@/admin/functions/whatsapp.functions";
 import { getAiLabConfig, formatAgentBadge, type AiLabConfig } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { WA_KEYBOARD_TEXT_PROPS } from "./wa-keyboard";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { isLegacyReactionBubble, summarizeReactions } from "@/services/wa-reactions";
 import { useIsDesktop } from "@/hooks/use-desktop";
@@ -1573,6 +1574,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                   className="mt-2 w-full resize-none rounded-md border border-[#E2E8F0] bg-[#F8FAFC] p-2 text-xs text-[#0F172A] placeholder:text-[#64748B] focus:outline-none focus:ring-1 focus:ring-rose-400"
                   rows={2}
                   placeholder="Catatan untuk super admin (wajib)…"
+                  {...WA_KEYBOARD_TEXT_PROPS}
                   value={manualAlertNote}
                   onChange={(e) => setManualAlertNote(e.target.value)}
                 />
@@ -1772,6 +1774,7 @@ function WhatsappSummary({
             placeholder="Belum ada ringkasan obrolan. Chatbot akan merangkum otomatis setelah obrolan idle 5 menit, atau Anda dapat menulis ringkasan manual di sini..."
             rows={4}
             value={summary}
+            {...WA_KEYBOARD_TEXT_PROPS}
             onChange={(e) => setSummary(e.target.value)}
             className="resize-none text-xs leading-relaxed"
           />
