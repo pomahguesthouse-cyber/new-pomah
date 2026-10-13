@@ -32,6 +32,8 @@ import {
   type InboundSkipReason,
 } from "@/services/wa-inbound-enqueue";
 
+import { handleInboundReaction, isReactionMessage, type MetaReactionPayload } from "@/services/wa-reactions";
+
 type Admin = { from: (t: string) => any; rpc: (fn: string, args?: Record<string, unknown>) => any };
 
 interface MetaMessage {
@@ -46,6 +48,8 @@ interface MetaMessage {
   sticker?: { id?: string };
   button?: { text?: string };
   interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } };
+  reaction?: MetaReactionPayload;
+  timestamp?: string;
 }
 
 interface MetaStatus {
@@ -272,6 +276,13 @@ export async function handleMetaInboundMessage(
   if (!m.from || !m.id) {
     logInboundSkip("MetaInbox", "missing_sender_or_id", { is_retry: isRetry, has_from: !!m.from, has_id: !!m.id });
     return { enqueued: false, recoveredDuplicate: false, skipReason: "missing_sender_or_id" };
+  }
+  // Reaction emoji: tempel ke pesan yang direaksi. Bukan bubble baru,
+  // tidak memicu balasan AI, tidak masuk OCR bukti bayar.
+  if (isReactionMessage(m)) {
+    const r = await handleInboundReaction(admin, m);
+    console.log(`[MetaInbox] reaction ${r.reason} message=${m.id}`);
+    return { enqueued: false, recoveredDuplicate: false, skipReason: null };
   }
   const contacts = value.contacts as Array<{ profile?: { name?: string } }> | undefined;
   const name = contacts?.[0]?.profile?.name ?? m.from;
