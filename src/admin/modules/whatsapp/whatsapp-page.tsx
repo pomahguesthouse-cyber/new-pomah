@@ -65,6 +65,7 @@ import {
 import { getAiLabConfig, formatAgentBadge, type AiLabConfig } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
+import { isLegacyReactionBubble, summarizeReactions } from "@/services/wa-reactions";
 import { useIsDesktop } from "@/hooks/use-desktop";
 import { useKeyboardOpen } from "@/hooks/use-keyboard-open";
 import {
@@ -2142,6 +2143,7 @@ const MessageBubble = memo(function MessageBubble({
           {failed && <span className="font-medium text-red-600 dark:text-red-300">Gagal</span>}
         </div>
       </div>
+      <ReactionPills metadata={m.metadata} out={m.direction === "out"} />
       {m.direction !== "out" && <OcrMatchNote metadata={m.metadata} />}
       <MessageBadges m={m} aiLabConfig={aiLabConfig} />
       {canRetryMessage(m) && (
@@ -2163,6 +2165,35 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
+/** Reaction emoji menempel di tepi bawah bubble, seperti WhatsApp. */
+function ReactionPills({ metadata, out }: { metadata: unknown; out: boolean }) {
+  const pills = summarizeReactions(metadata);
+  if (!pills.length) return null;
+  const label = pills.map((p) => (p.count > 1 ? `${p.emoji} ${p.count}` : p.emoji)).join(" ");
+  return (
+    <div
+      className={cn(
+        "relative z-[1] -mt-1.5 mb-1 flex max-w-[min(85%,34rem)] flex-wrap gap-0.5",
+        out ? "mr-2 justify-end" : "ml-2 justify-start",
+      )}
+      aria-label={`Reaksi: ${label}`}
+      title={`Reaksi: ${label}`}
+    >
+      {pills.map((p) => (
+        <span
+          key={p.emoji}
+          className="inline-flex h-[22px] items-center gap-0.5 rounded-full border border-[#e9edef] bg-white px-1.5 text-[13px] leading-none shadow-sm dark:border-[#0b141a] dark:bg-[#202c33]"
+        >
+          <span>{p.emoji}</span>
+          {p.count > 1 && (
+            <span className="font-sans text-[10px] text-[#667781] dark:text-[#8596a0]">{p.count}</span>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 const MessageStream = memo(function MessageStream({
   messages,
   aiLabConfig,
@@ -2175,6 +2206,7 @@ const MessageStream = memo(function MessageStream({
   const groups: { label: string; items: any[] }[] = [];
   let last = "";
   for (const m of messages) {
+    if (isLegacyReactionBubble(m)) continue;
     const lbl = dateLabel(m.sent_at);
     if (lbl !== last) {
       groups.push({ label: lbl, items: [] });
