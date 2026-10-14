@@ -49,6 +49,14 @@ import {
   submitCartBooking,
   getMediaAssetByName,
 } from "@/public/functions/public.functions";
+import {
+  formatReviewDate,
+  googleAggregate,
+  reviewSourceLabel,
+  type ReviewSource,
+  type SourceBadge,
+} from "@/public/lib/review-display";
+import { liveReviewCountDesc } from "@/public/lib/review-display";
 import { getGoogleReviews, type GoogleReview, type GoogleReviewsResult } from "@/public/functions/google-reviews.functions";
 import {
   mergeHomepageConfig,
@@ -150,20 +158,6 @@ const FACILITIES = [
   { icon: Coffee, title: "Mini Cafe", desc: "Mini Cafe" },
 ];
 
-/** Trust badges shown as an icon row just under the hero / date picker. */
-const FEATURE_BADGES = [
-  { icon: Star, title: "Rating Google", desc: "76 ulasan" },
-  { icon: BedDouble, title: "Kamar Bersih", desc: "Nyaman & terawat" },
-  { icon: Users, title: "Cocok untuk", desc: "Keluarga" },
-  { icon: MapPin, title: "Lokasi Strategis", desc: "Dekat kampus & kota" },
-  { icon: Headphones, title: "Pelayanan Ramah", desc: "Siap membantu" },
-];
-
-const REVIEWS = [
-  "Kmr nya bersih, rapih dekat dgn Unnes.... pelayanan ramah sekali",
-  "Tempatnya nyaman, cocok untuk keluarga. Parkir luas dan aman.",
-  "Penginapan murah tapi kualitas oke, staff sangat membantu.",
-];
 
 const ID_DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const ID_MONTHS = [
@@ -305,9 +299,11 @@ export function PomahHomeView({
     staleTime: 10 * 60 * 1000,
   });
 
-  const gRating = gr?.rating ?? 4.8;
-  const gTotal = gr?.total ?? 76;
+  // Hanya angka Google asli; tanpa data → badge & JSON-LD rating tidak tampil.
+  const gAgg = googleAggregate(gr?.rating, gr?.total);
   const gReviews = gr?.reviews ?? [];
+  const gCheckedAt = formatReviewDate(gr?.checkedAt ?? null);
+  const gSourceBadges = gr?.sourceBadges ?? [];
 
   // Diagnostic: log why the Google reviews widget falls back to static.
   useEffect(() => {
@@ -583,7 +579,7 @@ export function PomahHomeView({
           fallbackTitle={`Selamat Datang Di ${propertyName}`}
           h1Text={resolveHomepageH1(cfg.seo.h1)}
           accent={cfg.hero.accent}
-          rating={{ score: gRating, total: gTotal }}
+          rating={gAgg ? { score: gAgg.rating, total: gAgg.total } : undefined}
           actions={
             <>
               <Link
@@ -724,7 +720,7 @@ export function PomahHomeView({
           __html: JSON.stringify(
             homepageLodgingGraph({
               rooms,
-              reviews: { rating: gRating, total: gTotal },
+              reviews: gAgg ? { rating: gAgg.rating, total: gAgg.total } : null,
               property,
               faqs: HOMEPAGE_FAQS,
             }),
@@ -847,7 +843,9 @@ export function PomahHomeView({
                         )}
                       </span>
                       <p className="mt-2 text-xs font-semibold text-stone-800 md:text-sm">{item.title}</p>
-                      <p className="text-[10px] text-stone-400 md:text-xs">{item.desc}</p>
+                      <p className="text-[10px] text-stone-400 md:text-xs">
+                        {liveReviewCountDesc(item.desc, gAgg?.total ?? null)}
+                      </p>
                     </div>
                   );
                 })}
@@ -894,33 +892,39 @@ export function PomahHomeView({
                   </SectionHeading>
                 </div>
               )}
-              <div className="flex flex-col items-center">
-                <p className="flex items-center gap-2 text-sm font-medium text-stone-600">
-                  <span className="text-base font-bold">G</span> Google Rating
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex gap-0.5">
-                    {[0, 1, 2, 3, 4].map((i) => (
-                      <Star
-                        key={i}
-                        className={`h-5 w-5 ${
-                          i < Math.round(gRating)
-                            ? "fill-amber-400 text-amber-400"
-                            : "fill-stone-200 text-stone-200"
-                        }`}
-                      />
-                    ))}
+              {gAgg && (
+                <div className="flex flex-col items-center">
+                  <p className="flex items-center gap-2 text-sm font-medium text-stone-600">
+                    <span className="text-base font-bold">G</span> Google Rating
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex gap-0.5">
+                      {[0, 1, 2, 3, 4].map((i) => (
+                        <Star
+                          key={i}
+                          className={`h-5 w-5 ${
+                            i < Math.round(gAgg.rating)
+                              ? "fill-amber-400 text-amber-400"
+                              : "fill-stone-200 text-stone-200"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-2xl font-bold text-stone-800">{gAgg.rating.toFixed(1)}</span>
                   </div>
-                  <span className="text-2xl font-bold text-stone-800">{gRating.toFixed(1)}</span>
+                  <p className="mt-1 text-xs text-stone-400">
+                    Berdasarkan {gAgg.total} ulasan Google{gCheckedAt ? ` · per ${gCheckedAt}` : ""}
+                  </p>
                 </div>
-                <p className="mt-1 text-xs text-stone-400">Berdasarkan {gTotal} ulasan Google</p>
-              </div>
+              )}
+              <SourceBadges badges={gSourceBadges} />
               <ReviewSlider
-                items={
-                  gReviews.length > 0
-                    ? gReviews.map((rv: GoogleReview) => ({ text: rv.text, author: rv.author, isGoogle: true }))
-                    : REVIEWS.map((r) => ({ text: r, author: null, isGoogle: false }))
-                }
+                items={gReviews.map((rv: GoogleReview) => ({
+                  text: rv.text,
+                  author: rv.author,
+                  source: rv.source ?? "google",
+                  date: rv.date ?? null,
+                }))}
               />
             </section>
           </PbZone>
@@ -1266,7 +1270,43 @@ export function PomahHomeView({
 /* Review slider                                                        */
 /* ------------------------------------------------------------------ */
 
-type ReviewSliderItem = { text: string; author: string | null; isGoogle?: boolean };
+type ReviewSliderItem = {
+  text: string;
+  author: string | null;
+  source: ReviewSource;
+  date: string | null;
+};
+
+/** Badge rating situs lain (data dari DB), mis. Booking.com 10/10 (2 ulasan). */
+function SourceBadges({ badges }: { badges: SourceBadge[] }) {
+  if (!badges.length) return null;
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-center gap-2 px-2">
+      {badges.map((b) => {
+        const body = (
+          <>
+            <span className="font-semibold text-stone-700">{b.label}</span>
+            <span className="font-bold text-stone-800">
+              {Number.isInteger(b.score) ? b.score : b.score.toFixed(1)}/{b.scale}
+            </span>
+            <span className="text-stone-500">({b.count} ulasan)</span>
+          </>
+        );
+        const cls =
+          "inline-flex items-center gap-1 rounded-full border border-stone-200 bg-white px-3 py-1 text-xs shadow-sm";
+        return b.url ? (
+          <a key={b.source} href={b.url} target="_blank" rel="noopener noreferrer nofollow" className={`${cls} hover:bg-amber-50`}>
+            {body}
+          </a>
+        ) : (
+          <span key={b.source} className={cls}>
+            {body}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 function ReviewSlider({ items }: { items: ReviewSliderItem[] }) {
   const [i, setI] = useState(0);
@@ -1290,10 +1330,11 @@ function ReviewSlider({ items }: { items: ReviewSliderItem[] }) {
         <p className="mt-3 text-sm leading-relaxed text-stone-600">&ldquo;{cur.text}&rdquo;</p>
         {cur.author && <p className="mt-4 text-xs font-semibold text-stone-700">— {cur.author}</p>}
       </div>
-      {cur.isGoogle && (
+      {cur.source !== "other" && (
         <div className="mt-2 flex items-center justify-end gap-1.5 text-xs text-stone-500 pr-2">
-          <span className="font-bold text-stone-700">G</span>
-          <span>Google</span>
+          {cur.source === "google" && <span className="font-bold text-stone-700">G</span>}
+          <span>{reviewSourceLabel(cur.source)}</span>
+          {formatReviewDate(cur.date) && <span>· {formatReviewDate(cur.date)}</span>}
           <div className="flex gap-0.5">
             {[0, 1, 2, 3, 4].map((star) => (
               <Star key={star} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
