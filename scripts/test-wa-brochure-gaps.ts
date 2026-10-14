@@ -14,6 +14,7 @@ import { buildPropertyFaqReply } from "../src/services/property-faq";
 import {
   emptyMediaDelivery,
   guardUnverifiedMediaClaims,
+  hasUnverifiedMediaClaim,
   isBrochureRequest,
 } from "../src/services/reply-postprocess";
 import { isOurBrochureFilename } from "../src/services/wa-autoreply/brochure-source";
@@ -268,6 +269,35 @@ assert.equal(
 assert.equal(
   isPaymentProofCandidate({ mediaType: "document", mimeType: "application/pdf", fileName: "bukti.pdf" }),
   true,
+);
+
+// ─── Insiden 14 Okt 2026 (…9129): konsonan dobel & klaim "sudah Rani kirimkan" ───
+assert.equal(normalizeGuestMediaText("boleh liatt kamarnya dlu kakk?"), "boleh liat kamarnya dlu kak?");
+for (const keep of ["mall", "full", "all", "will", "staff", "access"]) {
+  assert.equal(normalizeGuestMediaText(keep), keep, `kata ${keep} tidak diubah`);
+}
+assert.equal(isMediaRequest("boleh liatt kamarnya dlu kakk?"), true, "…9129 wajib dikenali minta foto");
+assert.equal(isMediaRequest("boleh lihatt kamarnya kak"), true);
+assert.equal(isMediaRequest("lagi di mall kak"), false);
+
+const fakeClaim =
+  "Baik Kak, foto-fotonya sudah Rani kirimkan ke chat Kakak ya.\n\nAda yang bisa Rani bantu lagi terkait ketersediaan atau booking?";
+const none = emptyMediaDelivery();
+assert.equal(hasUnverifiedMediaClaim(fakeClaim, none), true, "klaim 'sudah Rani kirimkan' tanpa kiriman terdeteksi");
+assert.ok(!/sudah Rani kirimkan/.test(guardUnverifiedMediaClaims(fakeClaim, none)));
+assert.equal(hasUnverifiedMediaClaim("Fotonya sudah saya kirimkan ya Kak.", none), true);
+assert.equal(hasUnverifiedMediaClaim("Rani kirimkan foto kamarnya ya Kak.", none), true);
+assert.equal(
+  hasUnverifiedMediaClaim(fakeClaim, { ...none, brochureSent: true }),
+  false,
+  "setelah brosur benar-benar terkirim, klaim tidak lagi palsu",
+);
+// Penyelamatan brosur mengikuti batas kirim ulang yang sama.
+assert.equal(decideBrochureRepeat({ text: "", rooms: [], now: Date.now(), threadSendAts: [] }).action, "send");
+assert.equal(
+  decideBrochureRepeat({ text: "", rooms: [], now: Date.now(), threadSendAts: [Date.now() - 60_000] }).action,
+  "already_sent",
+  "brosur baru saja dikirim → tidak dikirim lagi",
 );
 
 console.log("test-wa-brochure-gaps: OK");

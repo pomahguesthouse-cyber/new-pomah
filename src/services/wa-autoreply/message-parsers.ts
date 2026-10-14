@@ -346,7 +346,7 @@ export function looksLikeBookingInquiry(message: string): boolean {
  * "datang survei") BUKAN permintaan media — lihat `IN_PERSON_VISIT_RE`.
  */
 const VIEW_ROOM_RE =
-  /\b(?:me|di)?(?:lihat|liat)(?:in|kan)?(?:[-\s]+(?:me|di)?(?:lihat|liat)(?:in|kan)?)?\b|\b(?:me)?(?:perlihat|tunjuk|nunjuk)(?:kan|in)?\b|\bshow(?:\s+me)?\b|\bsee\b/i;
+  /\b(?:me|di)?(?:lihatt?|liatt?)(?:in|kan)?(?:[-\s]+(?:me|di)?(?:lihatt?|liatt?)(?:in|kan)?)?\b|\b(?:me)?(?:perlihat|tunjuk|nunjuk)(?:kan|in)?\b|\bshow(?:\s+me)?\b|\bsee\b/i;
 const VIEW_ROOM_TARGET_RE =
   /\b(?:kamar(?:2|-kamar)?(?:nya)?(?!\s+mandi)|rooms?|interior(?:nya)?)\b/i;
 const IN_PERSON_VISIT_RE = /\b(langsung|datang|survei|survey|ke lokasi|on ?site|in person)\b/i;

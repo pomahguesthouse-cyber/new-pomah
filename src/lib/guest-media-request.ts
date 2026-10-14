@@ -13,8 +13,25 @@
  * Huruf dobel di tengah ("hello", "book") dan kata Inggris "see" tidak diubah.
  */
 export function normalizeGuestMediaText(text: string): string {
-  return (text ?? "").replace(/([aiuoAIUO])\1+(?=\b)/g, "$1");
+  return (text ?? "")
+    .replace(/([aiuoAIUO])\1+(?=\b)/g, "$1")
+    .replace(/\b([A-Za-z]*?)([b-df-hj-np-tv-zB-DF-HJ-NP-TV-Z])\2+\b/g, (word, _stem, _c) =>
+      DOUBLE_CONSONANT_KEEP.has(word.toLowerCase()) ? word : word.replace(/(.)\1+$/, "$1"),
+    );
 }
+
+/**
+ * Konsonan dobel di akhir kata diketik berlebih oleh tamu ("liatt", "kakk").
+ * Kata Inggris/umum yang memang berakhiran huruf dobel tidak diubah.
+ */
+const DOUBLE_CONSONANT_KEEP = new Set([
+  "all", "mall", "full", "will", "still", "well", "call", "small", "tall", "hall", "ball", "wall",
+  "fall", "bill", "fill", "kill", "skill", "pill", "hill", "till", "sell", "tell", "bell", "cell",
+  "shell", "spell", "smell", "dull", "pull", "null", "add", "odd", "egg", "off", "staff", "stuff",
+  "cliff", "buzz", "jazz", "fizz", "pass", "class", "glass", "grass", "mass", "boss", "loss", "less",
+  "kiss", "miss", "press", "dress", "guess", "access", "express", "success", "business", "process",
+  "inn", "err", "putt", "watt", "mitt", "butt", "app", "nett", "bass", "cross",
+]);
 
 /** Kata foto/gambar, termasuk imbuhan di-/ -in/-kan, slang poto/pap, dan pict/pic. */
 export const GUEST_PHOTO_WORD_RE =

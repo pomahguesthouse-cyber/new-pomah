@@ -26,6 +26,7 @@ import {
   deniesMediaCapability,
   emptyMediaDelivery,
   guardUnverifiedMediaClaims,
+  hasUnverifiedMediaClaim,
 } from "@/services/reply-postprocess";
 import { checkConversation } from "@/services/conversation-monitor.service";
 import {
@@ -2241,6 +2242,30 @@ export async function executeAutoreplyForPhone(
       anyMediaFailed: !!(orchResult?.mediaDelivery?.anyMediaFailed || turnDelivery.anyMediaFailed),
       genericPhotoSent: !!(orchResult?.mediaDelivery?.genericPhotoSent || turnDelivery.genericPhotoSent),
     };
+    // AI mengklaim foto/brosur sudah dikirim padahal belum (insiden 14 Okt 2026,
+    // "boleh liatt kamarnya dlu kakk?"). Kirim brosur betulan bila batas
+    // kirim ulang mengizinkan, supaya klaimnya jadi benar; kalau tidak,
+    // kalimat klaim dibuang oleh guard di bawah.
+    if (!isManager && !attachUrl && !brochureDelivered && hasUnverifiedMediaClaim(finalReply, delivery)) {
+      try {
+        const sends = await loadThreadBrochureSendTimes(c.thread_id);
+        const repeat = decideBrochureRepeat({ text: "", rooms: [], now: Date.now(), threadSendAts: sends });
+        if (repeat.action === "send") {
+          await quickAck.beforeReplySend();
+          const outcome = await sendBrochureFastPath(c.wpp_token, sendTarget, phone, c.thread_id);
+          if (outcome.status === "sent") {
+            brochureDelivered = true;
+            delivery.brochureSent = true;
+            console.warn(`[Autoreply] unbacked media claim for ${phone.slice(-6)} — brochure sent to back it`);
+          } else if (outcome.status === "failed") {
+            brochureFailureUrl = outcome.file.url;
+            delivery.anyMediaFailed = true;
+          }
+        }
+      } catch (e) {
+        console.warn("[Autoreply] unbacked-claim brochure rescue failed (non-fatal):", e);
+      }
+    }
     finalReply = guardUnverifiedMediaClaims(finalReply, delivery);
   }
   if (brochureFailureUrl && !finalReply.includes(brochureFailureUrl)) {
