@@ -242,10 +242,10 @@ function claimsTechnicalFailure(sentence: string): boolean {
 
 function claimsMediaSent(sentence: string): boolean {
   return (
-    /\b(foto|gambar|brosur|katalog)\w*\b[\s\S]{0,80}\b(sudah\s+(?:kami\s+)?(?:kirim|dikirim)|telah\s+(?:kami\s+)?dikirim|terkirim)\b/i.test(
+    /\b(foto|gambar|brosur|katalog)\w*\b[\s\S]{0,80}\b(sudah\s+(?:(?:kami|saya|rani|aku)\s+)?(?:kirim(?:kan)?|dikirim(?:kan)?)|telah\s+(?:(?:kami|saya|rani)\s+)?(?:kirim(?:kan)?|dikirim(?:kan)?)|terkirim)\b/i.test(
       sentence,
     ) ||
-    /\b(sudah\s+(?:kami\s+)?kirim(?:kan)?|kami\s+kirimkan|kita kirimkan)\b[\s\S]{0,60}\b(foto|gambar|brosur|katalog)\w*/i.test(
+    /\b(sudah\s+(?:(?:kami|saya|rani|aku)\s+)?kirim(?:kan)?|(?:kami|saya|rani|aku|kita)\s+(?:sudah\s+)?kirim(?:kan)?)\b[\s\S]{0,60}\b(foto|gambar|brosur|katalog)\w*/i.test(
       sentence,
     )
   );
@@ -256,6 +256,12 @@ function claimsMediaSent(sentence: string): boolean {
  * hasil kirim di turn ini. Contoh insiden: pesan panjang minta "foto kamar
  * terbaru", model mengarang Family Suite terkirim dan Family Room 222 gagal.
  */
+/** True bila balasan mengklaim media terkirim padahal belum ada pengiriman di turn ini. */
+export function hasUnverifiedMediaClaim(reply: string, delivery: MediaDelivery): boolean {
+  const source = (reply ?? "").trim();
+  return !!source && guardUnverifiedMediaClaims(source, delivery) !== source;
+}
+
 export function guardUnverifiedMediaClaims(reply: string, delivery: MediaDelivery): string {
   const source = (reply ?? "").trim();
   if (!source) return source;
