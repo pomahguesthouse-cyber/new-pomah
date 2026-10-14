@@ -239,8 +239,8 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   if (VISITOR_PICKUP_TOPIC_RE.test(raw)) {
     return {
       reply:
-        "Tidak apa-apa Kak, kalau keluarga hanya datang menjemput atau menunggu sebentar sebelum check-out, itu tidak dihitung sebagai tambahan tamu menginap.\n\n" +
-        "Silakan saja, yang penting tetap menjaga kenyamanan dan tidak menginap di kamar ya Kak 🙏",
+        "Tidak apa-apa, Kak. Keluarga yang hanya menjemput atau menunggu sebentar sebelum check-out tidak dihitung sebagai tamu tambahan.\n\n" +
+        "Silakan saja, asalkan tetap menjaga kenyamanan dan tidak ikut menginap ya 🙏",
       intent: "visitor_pickup_policy",
     };
   }
@@ -249,7 +249,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   // thanks/penutup karena pesan sering berisi "terima kasih" di ujung kalimat.
   if (VISIT_SURVEY_TOPIC_RE.test(raw)) {
     return {
-      reply: "Baik Kak, kami tunggu ya. Rencana jam berapa Kak?",
+      reply: "Boleh sekali, Kak. Rencana datang jam berapa? Biar kami siapkan untuk menyambut 😊",
       intent: "visit_survey_plan",
     };
   }
@@ -259,7 +259,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   if (NEGOTIATION_RE.test(raw) && NEGOTIATION_CLOSING_RE.test(raw)) {
     return {
       reply:
-        "Baik Kak, tarif yang tampil sudah merupakan harga terbaik kami saat ini. Tidak apa-apa jika belum cocok. Terima kasih sudah mempertimbangkan Pomah Guesthouse, semoga lain waktu kami bisa menyambut Kakak 🙏",
+        "Baik Kak, tarif yang tampil sudah harga terbaik kami saat ini. Tidak apa-apa kalau belum cocok. Terima kasih sudah mempertimbangkan Pomah Guesthouse, semoga lain waktu kami bisa menyambut Kakak 🙏",
       intent: "negotiation_closed",
     };
   }
@@ -276,7 +276,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   ) {
     return {
       reply:
-        "Mohon maaf Kak, saat ini Pomah belum menyediakan air hangat atau air panas di kamar mana pun. Shower yang ada memakai air biasa. Ada yang lain yang bisa saya bantu, misalnya cek ketersediaan atau fasilitas kamar yang memang ada?",
+        "Mohon maaf Kak, saat ini belum ada air hangat di kamar mana pun, shower memakai air biasa. Ada yang lain yang bisa Rani bantu, misalnya cek kamar kosong atau info fasilitas lainnya?",
       intent: "faq_hot_water",
     };
   }
@@ -290,7 +290,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
     return {
       reply: hasSingle
         ? "Betul Kak, kamar Single juga sudah memiliki kamar mandi di dalam kamar. Semua tipe kamar Pomah Guesthouse menggunakan kamar mandi dalam."
-        : "Betul Kak, semua kamar di Pomah Guesthouse sudah memiliki kamar mandi di dalam kamar.",
+        : "Betul Kak, semua kamar di Pomah Guesthouse sudah dilengkapi kamar mandi dalam (termasuk kamar Single).",
       intent: "faq_private_bathroom",
     };
   }
@@ -333,7 +333,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
     return {
       reply:
         `Halo Kak${verifiedFirstName ? ` ${verifiedFirstName}` : ""}, terima kasih sudah menghubungi ${propertyName} 🙏\n` +
-        `Ada yang bisa kami bantu — mau cek ketersediaan kamar, harga, atau info fasilitas?`,
+        `Saya Rani, siap membantu. Kakak ingin cek kamar kosong, harga, atau info fasilitas?`,
       intent: "greeting",
     };
   }
@@ -341,7 +341,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   // — Terima kasih / penutup —
   if (THANKS_RE.test(core) || THANKS_RE.test(raw)) {
     return {
-      reply: `Sama-sama Kak 🙏 Kalau ada yang perlu ditanyakan lagi, silakan chat kami ya.`,
+      reply: `Sama-sama, Kak 🙏 Kalau ada yang ingin ditanyakan lagi, kabari Rani kapan saja ya.`,
       intent: "thanks",
     };
   }
@@ -417,9 +417,9 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   ) {
     return {
       reply:
-        `${opener}Waktu check-in mulai pukul *${checkInTime}* dan check-out paling lambat *${checkOutTime}*.\n` +
-        `Early check-in / late check-out dikenakan ${idr(EARLY_LATE_HOURLY_FEE_IDR)} per jam berjalan, ` +
-        `menyesuaikan ketersediaan kamar ya Kak 🙏`,
+        `${opener}Check-in mulai pukul *${checkInTime}* dan check-out paling lambat *${checkOutTime}*, Kak.\n` +
+        `Early check-in / late check-out bisa, dikenakan ${idr(EARLY_LATE_HOURLY_FEE_IDR)} per jam berjalan ` +
+        `dan menyesuaikan ketersediaan kamar 🙏`,
       intent: "policy_question",
     };
   }
@@ -429,7 +429,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
     return {
       reply:
         `${opener}Mohon maaf Kak, saat ini kami belum menyediakan sarapan. ` +
-        `Tapi lokasi kami dekat dengan banyak pilihan kuliner enak, jadi gampang cari makan pagi 🙏`,
+        `Tapi di sekitar Pomah ada banyak pilihan kuliner, jadi mudah cari makan pagi 🙏`,
       intent: "faq_breakfast",
     };
   }
@@ -490,15 +490,15 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
 
   // — WiFi — (satu-baris → batas panjang O5)
   if (raw.length <= ONE_LINER_MAX_LEN && /\b(wifi|wi-fi|internet)(?:nya)?\b/i.test(raw)) {
-    return { reply: "Iya Kak, tersedia WiFi untuk tamu.", intent: "faq_wifi" };
+    return { reply: "Iya Kak, ada WiFi gratis untuk tamu.", intent: "faq_wifi" };
   }
 
   // — Parkir — (satu-baris → batas panjang O5)
   if (raw.length <= ONE_LINER_MAX_LEN && /\b(parkir(?:an)?|parking|mobil|motor)(?:nya)?\b/i.test(raw)) {
     return {
       reply:
-        "Iya Kak, tersedia area parkir untuk tamu. Untuk kendaraan besar atau rombongan, " +
-        "kabari kami dulu ya agar bisa dibantu arahkan.",
+        "Iya Kak, ada area parkir untuk tamu. Kalau membawa kendaraan besar atau rombongan, " +
+        "kabari kami dulu ya supaya bisa dibantu arahkan.",
       intent: "faq_parking",
     };
   }

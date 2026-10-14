@@ -356,7 +356,7 @@ export const startBookingDetails: ToolHandler = async (
       `Baik, data booking ${roomsDescription} sudah saya catat atas nama "${guestName}". ` +
       `Mohon lengkapi jumlah tamu untuk melanjutkan pemesanan.`;
   } else {
-    message = `Baik Kak, untuk memproses pemesanan kamar ${roomsDescription}, mohon ketikkan nama lengkap Kakak (bisa langsung sekaligus dengan nomor HP, contoh: "atas nama: Budi, nomor: 08123456789"):`;
+    message = `Baik Kak, Rani proses pemesanan kamar ${roomsDescription} ya. Boleh dibantu nama lengkap Kakak? Bisa sekaligus dengan nomor HP, contoh: "atas nama: Budi, nomor: 08123456789".`;
   }
 
   await updateBookingState(ctx.supabaseAdmin, ctx.phone, "COLLECTING_DATA", context);

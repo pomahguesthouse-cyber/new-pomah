@@ -17,7 +17,7 @@ export const WA_INBOUND_MAX_BYTES = 16 * 1024 * 1024;
 export const PAYMENT_PROOF_PLACEHOLDER = "[Tamu mengirim lampiran bukti transfer pembayaran]";
 
 export const PAYMENT_PROOF_ACK_REPLY =
-  "Terima kasih Kak, bukti transfernya sudah kami terima dan sedang kami cek. Kami kabari setelah terverifikasi ya 🙏";
+  "Terima kasih 🙏 Bukti transfernya sudah kami terima. Kami cek terlebih dahulu ya, Kak. Begitu terverifikasi, langsung kami kabari di chat ini.";
 
 /** Notifikasi staf + balasan tamu hanya untuk media yang baru masuk. */
 export const PAYMENT_PROOF_FRESH_MS = 15 * 60 * 1000;

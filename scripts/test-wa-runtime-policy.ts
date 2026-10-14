@@ -13,15 +13,15 @@ import {
 assert.equal(buildStateAwareFallback(), FALLBACK_MESSAGE);
 assert.equal(
   buildStateAwareFallback("WAITING_DATE_CHANGE"),
-  "Baik Kak, untuk melanjutkan booking, tanggal barunya kapan dan berapa malam?",
+  "Baik Kak, untuk melanjutkan booking, rencana check-in tanggal berapa dan untuk berapa malam?",
 );
 assert.equal(
   buildStateAwareFallback("CONFIRMING_NAME"),
-  "Baik Kak, mohon ketikkan nama lengkap untuk booking ini.",
+  "Baik Kak, boleh dibantu nama lengkap untuk booking ini?",
 );
 assert.equal(
   buildStateAwareFallback("AWAITING_PHONE"),
-  "Baik Kak, mohon ketikkan nomor WhatsApp yang bisa dihubungi.",
+  "Baik Kak, boleh dibantu nomor WhatsApp yang bisa kami hubungi?",
 );
 assert.equal(
   buildStateAwareFallback("CONFIRMING_BOOKING"),
@@ -41,7 +41,7 @@ assert.equal(pickAiBudgetMs(""), AI_TIMEOUT_LIGHT_MS);
 assert.ok(!/\blanjut\b/i.test(FALLBACK_MESSAGE));
 assert.ok(/maaf/i.test(FALLBACK_MESSAGE));
 assert.ok(MANAGER_FALLBACK_MESSAGE.includes("Admin"));
-assert.ok(QUICK_ACK_MESSAGE.includes("cekkan"));
+assert.ok(QUICK_ACK_MESSAGE === "Kami cek terlebih dahulu ya, Kak.");
 
 const serviceSource = fs.readFileSync("src/services/wa-autoreply.service.ts", "utf8");
 assert.ok(
@@ -66,3 +66,16 @@ for (const forbidden of [
 }
 
 console.log("✓ WhatsApp runtime policy regression and wiring cases passed");
+
+// Tanpa janji batas waktu verifikasi pembayaran.
+import { PAYMENT_PROOF_ACK_REPLY } from "../src/services/wa-inbound-media";
+import { FORM_EXPIRY_MESSAGE } from "../src/services/booking-form-followup.service";
+import { readFileSync as _rf } from "node:fs";
+assert.ok(PAYMENT_PROOF_ACK_REPLY.includes("Kami cek terlebih dahulu ya, Kak."));
+assert.ok(!/24\s*jam/.test(PAYMENT_PROOF_ACK_REPLY));
+assert.ok(!/1\s*[x×]\s*24/.test(_rf("src/admin/modules/ai-lab/ai-lab.functions.ts", "utf8")));
+assert.ok(_rf("src/ai/agents/front-office.agent.ts", "utf8").includes("Kami cek terlebih dahulu ya, Kak."));
+// Pesan kedaluwarsa formulir: satu sumber, dipakai booking-machine.
+assert.ok(_rf("src/ai/state-machine/booking-machine.ts", "utf8").includes("FORM_EXPIRY_MESSAGE"));
+assert.ok(FORM_EXPIRY_MESSAGE.startsWith("Mohon maaf Kak, tautan formulir"));
+console.log("rani-tone: OK");

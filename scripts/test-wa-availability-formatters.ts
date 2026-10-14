@@ -45,7 +45,7 @@ const fullRaw = JSON.stringify({
 const needDates = buildAvailabilityNeedDatesReply("Halo, ada kamar?");
 assert.equal(needDates.intent, "deterministic_availability_need_dates");
 assert.match(needDates.reply, /^Halo Kak,/);
-assert.match(needDates.reply, /tanggal berapa sampai tanggal berapa/);
+assert.match(needDates.reply, /check-in dan check-out tanggal berapa/);
 
 const sourceAware = buildAvailabilityNeedDatesReply("ada kamar?", ["Saya lihat dari TikTok"]);
 assert.match(sourceAware.reply, /^Terima kasih infonya Kak\./);
@@ -56,7 +56,7 @@ assert.equal(available.intent, "deterministic_availability");
 assert.match(available.reply, /^Halo Kak, untuk tanggal 11-12 Juli 2026/);
 assert.match(available.reply, /Single: 1 kamar tersedia, Rp150\.000\/malam/);
 assert.match(available.reply, /Family: 2 kamar tersedia, Rp350\.000\/malam/);
-assert.match(available.reply, /Kakak rencana untuk berapa orang\?/);
+assert.match(available.reply, /Rencananya untuk berapa orang, Kak\?/);
 
 const full = formatAvailabilityReply(fullRaw);
 assert.ok(full);

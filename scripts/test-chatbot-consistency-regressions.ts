@@ -3,7 +3,7 @@
  *
  * Percakapan yang memicu perbaikan ini:
  *   tamu: "apakah ada gambarnya kak?"
- *   bot : "Sebentar Kak, saya cekkan dulu ya."
+ *   bot : "Sebentar Kak, saya cekkan dulu ya."   (kini: "Kami cek terlebih dahulu ya, Kak.")
  *   bot : "Maaf Kak, sistem sedang lambat ... ketik 'lanjut'"      ← buntu
  *   tamu: "yang ini bisa berapa orang ya"
  *   tamu: "harganya berapa ya ka"

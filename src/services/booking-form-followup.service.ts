@@ -123,10 +123,10 @@ export function buildNudgeMessage(row: FollowupTokenRow, baseUrl: string, nowMs:
   const remainingMin = Math.max(1, Math.round((new Date(row.expires_at).getTime() - nowMs) / 60_000));
   const url = `${baseUrl.replace(/\/+$/, "")}/booking/form/${row.token}`;
   return (
-    "Halo Kak, formulir pemesanannya belum masuk nih 🙏 " +
-    "Apakah ada kendala saat membuka linknya? Kalau lebih nyaman, " +
-    "saya bisa bantu isikan datanya langsung di chat ini — balas pesan ini saja.\n\n" +
-    `Kalau mau lanjut lewat formulir, linknya masih aktif sekitar ${remainingMin} menit lagi:\n${url}`
+    "Halo Kak, formulir pemesanannya belum kami terima 🙏 " +
+    "Ada kendala saat membuka tautannya? Kalau lebih praktis, " +
+    "balas saja pesan ini, nanti Rani bantu isikan langsung di chat ini.\n\n" +
+    `Tautan formulir masih aktif sekitar ${remainingMin} menit lagi:\n${url}`
   );
 }
 
@@ -137,7 +137,7 @@ export function buildNudgeMessage(row: FollowupTokenRow, baseUrl: string, nowMs:
  * berbeda untuk situasi yang sama.
  */
 export const FORM_EXPIRY_MESSAGE =
-  "Mohon maaf Kak, link formulir booking tadi sudah kedaluwarsa (berlaku 30 menit). " +
-  "Tidak apa-apa — saya bantu lanjutkan pengisian langsung di chat ini ya. " +
-  "Data yang sudah ada (kamar & tanggal) masih tersimpan. " +
-  "Mohon ketikkan nama lengkap Kakak untuk melanjutkan:";
+  "Mohon maaf Kak, tautan formulir tadi sudah kedaluwarsa (berlaku 30 menit). " +
+  "Tidak apa-apa, kita lanjutkan langsung di chat ini ya. " +
+  "Kamar dan tanggal yang dipilih masih tersimpan. " +
+  "Boleh dibantu nama lengkap Kakak?";

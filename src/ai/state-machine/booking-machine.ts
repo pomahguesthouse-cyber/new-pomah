@@ -1949,8 +1949,8 @@ export async function processBookingState(
       return {
         handled: true,
         reply:
-          "Baik Kak, proses reservasi sudah dibatalkan dan draft invoice juga sudah saya bersihkan. " +
-          "Kalau nanti ingin mulai ulang, tinggal sebut tanggal & tipe kamarnya ya 🙏.",
+          "Baik Kak, reservasinya sudah dibatalkan dan draft invoice sudah dihapus. " +
+          "Kalau nanti ingin pesan lagi, cukup kabari tanggal dan tipe kamarnya ya 🙏",
       };
     }
 
@@ -1978,8 +1978,8 @@ export async function processBookingState(
     return {
       handled: true,
       reply:
-        "Baik Kak, tidak masalah 🙏 prosesnya saya hentikan dulu ya. Kalau nanti berubah pikiran " +
-        "atau mau tanya-tanya soal kamar dan tanggal lain, kabari saya kapan saja. Terima kasih, Kak! 😊",
+        "Baik Kak, tidak apa-apa 🙏 Prosesnya Rani hentikan dulu ya. Kalau nanti ingin tanya " +
+        "kamar atau tanggal lain, kabari kapan saja. Terima kasih, Kak!",
     };
   }
 
@@ -2771,8 +2771,8 @@ export async function processBookingState(
       return {
         handled: true,
         reply: ticketed
-          ? "Baik Kak, permintaan Kakak sudah saya teruskan ke staf kami. Mohon ditunggu ya, pemesanannya akan dibantu dicatat langsung. " +
-            "Data pesanan Kakak tetap tersimpan, tidak perlu diisi ulang."
+          ? "Baik Kak, permintaan Kakak sudah Rani teruskan ke staf kami dan pemesanannya akan dibantu dicatat langsung. " +
+            "Data Kakak tetap tersimpan, jadi tidak perlu diisi ulang. Mohon ditunggu sebentar ya 🙏"
           : "Baik Kak. Mohon maaf, saya belum berhasil meneruskan ke staf lewat sistem. " +
             'Silakan hubungi admin kami lewat chat ini, atau balas "Ya" supaya saya coba catat pemesanannya lagi.',
       };
@@ -3168,9 +3168,9 @@ export async function processBookingState(
       return {
         handled: true,
         reply:
-          `Terima kasih Kak ${context.guestName}! Pemesanan berhasil dibuat ` +
+          `Terima kasih, Kak ${context.guestName} 🙏 Pemesanan berhasil dibuat ` +
           `dengan kode ${result.reference_code}. ` +
-          `Berikut detail invoice dan pembayarannya:`,
+          `Berikut invoice dan cara pembayarannya:`,
         followUp: "send_invoice",
         followUpRef: result.reference_code,
       };
@@ -3180,8 +3180,8 @@ export async function processBookingState(
       return {
         handled: true,
         reply:
-          "Saya tangkap Kakak ingin membatalkan reservasi ini. " +
-          'Untuk memastikan, balas "Ya, batalkan". Kalau tidak jadi batal, balas "Jangan".',
+          "Baik Kak, Kakak ingin membatalkan reservasi ini ya? " +
+          'Untuk memastikan, balas "Ya, batalkan". Kalau tidak jadi, balas "Jangan".',
       };
     } else if (SUMMARY_REQUEST_RE.test(message)) {
       return await buildBookingSummaryAsync(ctx, context);
@@ -3229,9 +3229,9 @@ export async function processBookingState(
       return {
         handled: true,
         reply:
-          `Email ${emailCandidate} sudah saya catat untuk booking` +
+          `Email ${emailCandidate} sudah Rani catat untuk booking` +
           (context.bookingCode ? ` *${context.bookingCode}*` : "") +
-          ` ya Kak 📧. Invoice tetap bisa diakses kapan saja lewat tautan yang saya kirim sebelumnya.`,
+          ` ya, Kak. Invoice tetap bisa dibuka kapan saja lewat tautan yang tadi dikirim.`,
       };
     }
     // Auto-reset bila tamu jelas memulai booking baru (mis. "mau pesan kamar

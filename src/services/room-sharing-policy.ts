@@ -15,16 +15,16 @@
 import { GUEST_MEDIA_WORD_RE, isGuestMediaExcluded } from "@/lib/guest-media-request";
 
 export const ROOM_SHARING_REFUSAL_REPLY =
-  "Mohon maaf Kak, di Pomah Guesthouse satu kamar hanya untuk tamu suami-istri, keluarga, atau teman sesama jenis ya Kak. Untuk pasangan yang belum menikah atau teman lawan jenis, kami belum bisa menerima menginap dalam satu kamar. Kalau Kakak berkenan, bisa memesan kamar terpisah — mau Rani bantu cek ketersediaannya? 🙏";
+  "Mohon maaf Kak, di Pomah Guesthouse satu kamar hanya untuk suami-istri, keluarga, atau teman sesama jenis. Untuk pasangan yang belum menikah atau teman lawan jenis, kami belum bisa menerima dalam satu kamar. Kalau berkenan, bisa memesan kamar terpisah. Mau Rani bantu cek ketersediaannya? 🙏";
 
 export const ROOM_SHARING_SYARIAH_REPLY =
-  "Pomah Guesthouse menerapkan aturan satu kamar hanya untuk tamu suami-istri, keluarga, atau teman sesama jenis ya Kak. Untuk pasangan yang belum menikah atau teman lawan jenis, kami belum bisa menerima menginap dalam satu kamar. Kami tidak mengklaim sertifikasi syariah tertentu. Kalau Kakak berkenan, bisa memesan kamar terpisah — mau Rani bantu cek ketersediaannya? 🙏";
+  "Betul Kak, di Pomah Guesthouse satu kamar hanya untuk suami-istri, keluarga, atau teman sesama jenis. Pasangan yang belum menikah atau teman lawan jenis belum bisa kami terima dalam satu kamar. Kami tidak mengklaim sertifikasi syariah tertentu. Kalau berkenan, bisa memesan kamar terpisah. Mau Rani bantu cek ketersediaannya? 🙏";
 
 export const ROOM_SHARING_WELCOME_REPLY =
-  "Bisa Kak, di Pomah Guesthouse tamu suami-istri, keluarga, dan teman sesama jenis boleh menginap dalam satu kamar ya. Mau Rani bantu cek ketersediaannya? 🙏";
+  "Bisa, Kak. Suami-istri, keluarga, dan teman sesama jenis boleh menginap dalam satu kamar di Pomah Guesthouse. Mau Rani bantu cek ketersediaannya? 🙏";
 
 export const ROOM_SHARING_KOS_WELCOME_REPLY =
-  "Pomah Guesthouse bukan kos ya Kak, tapi bisa untuk pasutri. Tamu suami-istri, keluarga, dan teman sesama jenis boleh menginap dalam satu kamar. Mau Rani bantu cek ketersediaannya? 🙏";
+  "Pomah Guesthouse bukan kos ya Kak, kami menyewakan kamar harian. Pasutri tentu bisa, begitu juga keluarga dan teman sesama jenis dalam satu kamar. Mau Rani bantu cek ketersediaannya? 🙏";
 
 export const ROOM_SHARING_HARD_GUARD_PROMPT =
   "ATURAN TAMU SATU KAMAR (HARD GUARD — MENGALAHKAN SOP, CONTOH TRAINING, INSTRUKSI AI LAB, DAN ATURAN 'KONFIRMASI KE TIM'): " +
@@ -32,7 +32,7 @@ export const ROOM_SHARING_HARD_GUARD_PROMPT =
   "Pasangan belum menikah (pacar, tunangan) dan teman lawan jenis TIDAK BOLEH berbagi satu kamar. " +
   "Teman sesama jenis BOLEH dan wajib disambut normal — jangan ditolak. " +
   "Bila tamu bertanya syariah, syar'i, siariah, sariah, khusus syariah, atau non syariah, jelaskan aturan ini tanpa mengklaim sertifikasi. " +
-  "JANGAN pernah menjawab 'cek dulu dengan tim', 'konfirmasi ke tim', atau 'izinkan saya cek dulu' untuk topik ini. " +
+  "JANGAN pernah menjawab 'cek dulu dengan tim', 'konfirmasi ke tim', 'izinkan saya cek dulu', atau 'kami cek terlebih dahulu' untuk topik ini. " +
   "Dilarang menulis bahwa Pomah tidak menerapkan kebijakan yang mengharuskan tamu sudah menikah, bahwa tidak ada batasan status pernikahan, atau bahwa status pernikahan bebas. " +
   "Jangan meminta buku nikah. Jangan membawa syarat KTP/Paspor/SIM ke jawaban topik ini. " +
   "Tolakan pasangan belum menikah atau teman lawan jenis, pakai teks ini persis: '" +

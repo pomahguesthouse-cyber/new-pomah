@@ -188,7 +188,7 @@ export function buildAvailabilityNeedDatesReply(
   return {
     intent: "deterministic_availability_need_dates",
     reply:
-      `${prefix}Untuk cek ketersediaan kamar, boleh tahu rencana menginap tanggal berapa sampai tanggal berapa?`,
+      `${prefix}${prefix.endsWith(", ") ? "supaya" : "Supaya"} Rani bisa cek kamar yang kosong, boleh tahu rencana check-in dan check-out tanggal berapa, Kak?`,
   };
 }
 
@@ -210,8 +210,8 @@ function unknownAvailabilityReply(data: any): FastFaqResult | null {
   const reply =
     typeof data?.reply_to_guest === "string" && data.reply_to_guest.trim()
       ? data.reply_to_guest.trim()
-      : "Mohon maaf Kak, sistem ketersediaan kami sedang tersendat sebentar. " +
-        "Boleh saya cek ulang dalam beberapa saat ya? 🙏";
+      : "Mohon maaf, sistem cek kamar kami sedang lambat 🙏 " +
+        "Kami cek terlebih dahulu ya, Kak, lalu segera kami kabari.";
 
   console.warn("[availability-formatters] status ketersediaan tidak diketahui — tidak mengklaim penuh");
   return { intent: "deterministic_availability_unknown", reply };
@@ -272,8 +272,8 @@ export function formatAvailabilityReply(
     return {
       intent: "deterministic_availability_full",
       reply:
-        `${greet ? "Halo Kak, mohon" : "Mohon"} maaf Kak, untuk tanggal ${period} kamar kami sudah penuh.\n\n` +
-        "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cek lagi.",
+        `${greet ? "Halo Kak, mohon" : "Mohon"} maaf, untuk tanggal ${period} semua kamar kami sudah penuh 🙏\n\n` +
+        "Kalau tanggalnya bisa digeser, kabari tanggal lain, nanti kami cek terlebih dahulu ya, Kak.",
     };
   }
 
@@ -289,8 +289,8 @@ export function formatAvailabilityReply(
         return {
           intent: "deterministic_availability_focus",
           reply:
-            `Masih ada Kak, untuk tanggal ${period} ${focusRoomName} tersisa ${count} unit.${priceText}\n\n` +
-            "Kakak rencana untuk berapa orang, biar saya siapkan bookingnya?",
+            `Masih ada, Kak. Untuk tanggal ${period}, ${focusRoomName} tersisa ${count} unit.${priceText}\n\n` +
+            "Rencananya untuk berapa orang? Biar Rani siapkan bookingnya.",
         };
       }
       const others = available
@@ -306,8 +306,8 @@ export function formatAvailabilityReply(
         reply:
           `Mohon maaf Kak, untuk tanggal ${period} ${focusRoomName} sudah penuh.` +
           (others.length > 0
-            ? `\n\nYang masih tersedia:\n${others.join("\n")}\n\nMau saya bantu amankan salah satunya?`
-            : "\n\nKalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cek lagi."),
+            ? `\n\nPilihan yang masih tersedia:\n${others.join("\n")}\n\nMau Rani bantu amankan salah satunya?`
+            : "\n\nKalau tanggalnya bisa digeser, kabari tanggal lain, nanti kami cek terlebih dahulu ya, Kak."),
       };
     }
   }
@@ -322,8 +322,8 @@ export function formatAvailabilityReply(
   return {
     intent: "deterministic_availability",
     reply:
-      `${greet ? "Halo Kak, untuk" : "Untuk"} tanggal ${period}, masih tersedia:\n${lines.join("\n")}\n\n` +
-      "Kakak rencana untuk berapa orang?",
+      `${greet ? "Halo Kak, untuk" : "Untuk"} tanggal ${period}, kamar yang masih tersedia:\n${lines.join("\n")}\n\n` +
+      "Rencananya untuk berapa orang, Kak? Nanti Rani bantu pilihkan yang pas.",
   };
 }
 

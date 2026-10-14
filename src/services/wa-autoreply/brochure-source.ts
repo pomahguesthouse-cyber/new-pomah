@@ -131,7 +131,7 @@ export function pickBrochure(input: {
 /** Balasan teks saat dokumen brosur gagal dikirim: sertakan tautan langsung. */
 export function brochureLinkFallbackReply(url: string): string {
   return (
-    `Dengan senang hati Kak 😊 Ini brosur Pomah Guesthouse ya, bisa dibuka lewat tautan berikut:\n${url}\n\n` +
+    `Dengan senang hati, Kak 😊 Brosur Pomah Guesthouse bisa dibuka lewat tautan ini:\n${url}\n\n` +
     "Rencana menginap tanggal berapa dan untuk berapa orang?"
   );
 }

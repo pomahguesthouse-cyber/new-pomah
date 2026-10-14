@@ -96,8 +96,8 @@ export function formatTonightAvailabilityReply(
       return {
         intent: "deterministic_tonight_availability_unknown",
         reply:
-          "Mohon maaf Kak, sistem ketersediaan kami sedang tersendat sebentar. " +
-          "Boleh saya cek ulang dalam beberapa saat ya? 🙏",
+          "Mohon maaf, sistem cek kamar kami sedang lambat 🙏 " +
+          "Kami cek terlebih dahulu ya, Kak, lalu segera kami kabari.",
       };
     }
 

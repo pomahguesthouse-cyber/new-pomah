@@ -79,7 +79,7 @@ for (const message of ["teman cewek semua 3 orang", "teman cowok semua", "cowok 
   assert.equal(hit?.intent, "room_sharing_welcome", `sesama jenis disambut: ${message}`);
   assert.equal(hit?.reply, ROOM_SHARING_WELCOME_REPLY);
   assert.match(hit!.reply, /teman sesama jenis boleh/i);
-  assert.doesNotMatch(hit!.reply, /belum bisa menerima|mohon maaf|cek dulu|konfirmasi ke tim/i);
+  assert.doesNotMatch(hit!.reply, /belum bisa menerima|mohon maaf|cek dulu|cek terlebih dahulu|konfirmasi ke tim/i);
 }
 
 for (const message of ["ini siariah kak?", "syar'i ga kak?", "hotel sariah?", "khusus syari'ah?"]) {
@@ -101,7 +101,7 @@ for (const reply of [
   ROOM_SHARING_KOS_WELCOME_REPLY,
 ]) {
   assert.doesNotMatch(reply, /buku nikah|ktp|sertifikat resmi/i);
-  assert.doesNotMatch(reply, /cek dulu|konfirmasi ke tim|izinkan saya/i);
+  assert.doesNotMatch(reply, /cek dulu|cek terlebih dahulu|konfirmasi ke tim|izinkan saya/i);
 }
 assert.match(ROOM_SHARING_SYARIAH_REPLY, /tidak mengklaim sertifikasi syariah/i);
 assert.match(ROOM_SHARING_SYARIAH_REPLY, /suami-istri, keluarga, atau teman sesama jenis/);
@@ -207,3 +207,6 @@ const custom = frontOfficeAgent.buildDynamicPrompt!({
 assert.match(custom, /tidak boleh mengalahkan HARD GUARD[\s\S]*ATURAN TAMU SATU KAMAR/);
 
 console.log("✓ room sharing policy regressions passed");
+
+// Nada baru (14 Okt 2026): "kami cek terlebih dahulu" juga dilarang untuk topik ini.
+assert.match(ROOM_SHARING_HARD_GUARD_PROMPT, /kami cek terlebih dahulu/);

@@ -185,8 +185,8 @@ for (const reply of [
   assert.ok(!/\b(jangan|dilarang|tidak boleh|harus)\b/i.test(reply), `tanpa teguran: ${reply}`);
   assert.ok(!/https?:\/\//i.test(reply), `tanpa URL di teks: ${reply}`);
 }
-assert.match(MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY, /Dengan senang hati Kak/);
-assert.match(MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY, /foto-foto lengkap tiap tipe kamar/);
+assert.match(MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY, /Dengan senang hati, Kak/);
+assert.match(MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY, /lengkap dengan foto tiap tipe kamar/);
 
 assert.equal(planMediaFastPath(inbound("harganya berapa ya ka"), rooms), null);
 assert.equal(
