@@ -1,17 +1,31 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin, supabasePublic } from "@/integrations/supabase/client.server";
+import {
+  parseSourceBadges,
+  parseStoredReviews,
+  type ReviewSource,
+  type SourceBadge,
+} from "@/public/lib/review-display";
 
 export interface GoogleReview {
   author: string;
   text: string;
   rating: number;
+  /** Sumber ulasan; data lama tanpa sumber dianggap Google. */
+  source?: ReviewSource;
+  date?: string | null;
 }
 
 export interface GoogleReviewsResult {
+  /** Rating & jumlah ulasan Google saja (dipakai JSON-LD). */
   rating: number | null;
   total: number | null;
   reviews: GoogleReview[];
   status: string;
+  /** Tanggal angka Google terakhir dicek (ISO), bila diisi admin. */
+  checkedAt?: string | null;
+  /** Badge rating situs lain (Booking.com, Trip.com). */
+  sourceBadges?: SourceBadge[];
 }
 
 const empty = (status: string): GoogleReviewsResult => ({
@@ -19,6 +33,8 @@ const empty = (status: string): GoogleReviewsResult => ({
   total: null,
   reviews: [],
   status,
+  checkedAt: null,
+  sourceBadges: [],
 });
 
 const REVIEWS_OK_TTL_MS = 10 * 60_000;
@@ -77,23 +93,11 @@ async function fetchGoogleReviews(): Promise<GoogleReviewsResult> {
 
   const customRating = row.custom_google_rating !== null && row.custom_google_rating !== undefined ? Number(row.custom_google_rating) : null;
   const customTotal = row.custom_google_reviews_total !== null && row.custom_google_reviews_total !== undefined ? Number(row.custom_google_reviews_total) : null;
-  let customReviews: GoogleReview[] = [];
-  if (row.custom_google_reviews_json) {
-    try {
-      const parsed = typeof row.custom_google_reviews_json === "string"
-        ? JSON.parse(row.custom_google_reviews_json)
-        : row.custom_google_reviews_json;
-      if (Array.isArray(parsed)) {
-        customReviews = parsed.map((item: any) => ({
-          author: String(item.author || item.author_name || "Tamu"),
-          text: String(item.text || ""),
-          rating: Number(item.rating ?? 5),
-        }));
-      }
-    } catch (e) {
-      console.error("Error parsing custom google reviews JSON:", e);
-    }
-  }
+  // Kolom baru (migration 20261014090000) — boleh belum ada.
+  const customReviews: GoogleReview[] = parseStoredReviews(row.custom_google_reviews_json);
+  const checkedAtRaw = row.custom_google_reviews_checked_at;
+  const checkedAt = typeof checkedAtRaw === "string" && checkedAtRaw ? checkedAtRaw : null;
+  const sourceBadges = parseSourceBadges(row.review_source_badges);
 
   if (customRating !== null) {
     return {
@@ -101,6 +105,8 @@ async function fetchGoogleReviews(): Promise<GoogleReviewsResult> {
       total: customTotal,
       reviews: customReviews,
       status: "OK",
+      checkedAt,
+      sourceBadges,
     } satisfies GoogleReviewsResult;
   }
 
@@ -150,8 +156,10 @@ async function fetchGoogleReviews(): Promise<GoogleReviewsResult> {
     return {
       rating: typeof result.rating === "number" ? result.rating : null,
       total: typeof result.user_ratings_total === "number" ? result.user_ratings_total : null,
-      reviews,
+      reviews: reviews.map((r) => ({ ...r, source: "google" as const, date: null })),
       status: "OK",
+      checkedAt: new Date().toISOString(),
+      sourceBadges,
     } satisfies GoogleReviewsResult;
   } catch (error) {
     return empty(`FETCH_ERROR: ${error instanceof Error ? error.message : "unknown"}`);

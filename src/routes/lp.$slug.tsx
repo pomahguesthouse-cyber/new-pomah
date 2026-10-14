@@ -12,6 +12,7 @@ import {
   getPublicSiteData,
   checkRoomTypeAvailability,
 } from "@/public/functions/public.functions";
+import { reviewSourceLabel } from "@/public/lib/review-display";
 import { getGoogleReviews, type GoogleReview, type GoogleReviewsResult } from "@/public/functions/google-reviews.functions";
 import { DatePickerID } from "@/public/components/lazy-public-widgets";
 import { publicCopy } from "@/public/lib/public-copy";
@@ -1134,7 +1135,12 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
   });
 
   // Source: live Google reviews, with a graceful fallback to manual items.
-  const googleItems = (gr?.reviews ?? []).map((rv: GoogleReview) => ({ name: rv.author, text: rv.text, isGoogle: true }));
+  const googleItems = (gr?.reviews ?? []).map((rv: GoogleReview) => ({
+    name: rv.author,
+    text: rv.text,
+    isGoogle: true,
+    sourceLabel: reviewSourceLabel(rv.source ?? "google"),
+  }));
   const items = useGoogle
     ? (googleItems.length > 0 ? googleItems : (s.items ?? []).map((i) => ({ ...i, isGoogle: false })))
     : (s.items ?? []).map((i) => ({ ...i, isGoogle: false }));
@@ -1164,8 +1170,10 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
             </div>
             {item.isGoogle && (
               <div className="mt-2 flex items-center justify-end gap-1.5 pr-2 text-xs text-stone-500">
-                <span className="font-bold text-stone-700">G</span>
-                <span>Google</span>
+                {((item as { sourceLabel?: string }).sourceLabel ?? "Google") === "Google" && (
+                  <span className="font-bold text-stone-700">G</span>
+                )}
+                <span>{(item as { sourceLabel?: string }).sourceLabel ?? "Google"}</span>
                 <div className="flex gap-0.5">
                   {[0, 1, 2, 3, 4].map((star) => (
                     <Star key={star} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />

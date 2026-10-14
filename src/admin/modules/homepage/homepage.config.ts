@@ -359,7 +359,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontStyle: "bold",
     color: "#7c4a21",
     items: [
-      { iconName: "Star", title: "Rating Google", desc: "76 ulasan" },
+      { iconName: "Star", title: "Rating Google", desc: "{jumlah} ulasan" },
       { iconName: "BedDouble", title: "Kamar Bersih", desc: "Nyaman & terawat" },
       { iconName: "Users", title: "Cocok untuk", desc: "Keluarga" },
       { iconName: "MapPin", title: "Lokasi Strategis", desc: "Dekat kampus & kota" },
