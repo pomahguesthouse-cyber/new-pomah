@@ -13,12 +13,12 @@ import { isClearGreeting, isClearThanks, isEmojiOnly } from "@/ai/router/message
 import { isMediaRequest, looksLikeBookingInquiry } from "@/services/wa-autoreply/message-parsers";
 
 export const FALLBACK_MESSAGE =
-  "Mohon maaf Kak, balasannya sedikit lebih lama dari biasanya. Pertanyaan Kakak sudah kami terima dan sedang kami siapkan jawabannya ya 🙏";
+  "Mohon maaf menunggu, Kak 🙏 Pesan Kakak sudah kami terima, jawabannya sedang kami siapkan dan segera kami kirim.";
 
 export const MANAGER_FALLBACK_MESSAGE =
   "Maaf Admin, sistem AI sedang lambat dan belum berhasil memproses perintah ini. Silakan coba lagi sebentar lagi.";
 
-export const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
+export const QUICK_ACK_MESSAGE = "Kami cek terlebih dahulu ya, Kak.";
 
 /**
  * Ack "Sebentar Kak…" hanya kalau jawaban belum siap setelah ambang ini,
@@ -92,13 +92,13 @@ export function shouldArmQuickAck(message: string): boolean {
 
 export function buildStateAwareFallback(state?: string): string {
   if (state === "WAITING_DATE_CHANGE" || state === "WAITING_DATE_CHANGE_CONFIRMATION") {
-    return "Baik Kak, untuk melanjutkan booking, tanggal barunya kapan dan berapa malam?";
+    return "Baik Kak, untuk melanjutkan booking, rencana check-in tanggal berapa dan untuk berapa malam?";
   }
   if (state === "AWAITING_NAME" || state === "CONFIRMING_NAME") {
-    return "Baik Kak, mohon ketikkan nama lengkap untuk booking ini.";
+    return "Baik Kak, boleh dibantu nama lengkap untuk booking ini?";
   }
   if (state === "AWAITING_PHONE" || state === "CONFIRMING_PHONE") {
-    return "Baik Kak, mohon ketikkan nomor WhatsApp yang bisa dihubungi.";
+    return "Baik Kak, boleh dibantu nomor WhatsApp yang bisa kami hubungi?";
   }
   if (state === "CONFIRMING_BOOKING") {
     return "Apakah data booking sudah sesuai? Kakak bisa balas Ya, Lanjut, atau Batal.";

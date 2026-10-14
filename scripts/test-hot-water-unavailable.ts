@@ -180,9 +180,9 @@ const ask = (message: string, mode: "early" | "late" = "late") =>
 
 const hot = ask("tipe deluxe ada air hangat kak?");
 assert.equal(hot?.intent, "faq_hot_water");
-assert.match(hot!.reply, /belum menyediakan air hangat atau air panas/i);
+assert.match(hot!.reply, /belum ada air hangat di kamar mana pun/i);
 assert.match(hot!.reply, /air biasa/);
-assert.match(hot!.reply, /bisa saya bantu/i);
+assert.match(hot!.reply, /bisa Rani bantu/i);
 assert.doesNotMatch(hot!.reply, /ada shower dengan air hangat/i);
 
 assert.equal(ask("ada hot water?", "early")?.intent, "faq_hot_water");

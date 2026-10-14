@@ -264,7 +264,7 @@ const HANDLE_ONE_DEADLINE_MS = 26_000;
 // Cloudflare yang CPU-nya ketat. Biarkan retry terjadi di level queue, bukan
 // mengulang orchestration berat dalam satu request worker.
 const AI_MAX_ATTEMPTS = 1;
-const PER_ROOM_RENTAL_REPLY = "Betul Kak, kita sistemnya sewa per kamar harian.";
+const PER_ROOM_RENTAL_REPLY = "Betul Kak, kami sewa per kamar dengan tarif harian.";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -1004,8 +1004,8 @@ export async function executeAutoreplyForPhone(
             .limit(1);
           if (!recentAck || recentAck.length === 0) {
             const ackBody =
-              "Terima kasih Kak 🙏 Pesan Kakak sudah kami terima. " +
-              "Admin manusia kami akan segera membalas ya, mohon ditunggu sebentar.";
+              "Terima kasih, Kak 🙏 Pesan Kakak sudah kami terima. " +
+              "Tim kami akan segera membalas langsung di chat ini, mohon ditunggu sebentar ya.";
             const ackRowId = await saveOutboundMessage(supabaseAdmin, {
               threadId: c.thread_id,
               body: ackBody,
@@ -2177,7 +2177,7 @@ export async function executeAutoreplyForPhone(
     (t: string) => t === "Room - Kirim Foto ke WA Tamu" || t === "Room - Kirim Link Virtual Tour 360°",
   );
   if (!reply && mediaAlreadySent) {
-    adoptReply("Dengan senang hati Kak 😊 Ini foto kamarnya ya. Rencana menginap tanggal berapa dan untuk berapa orang?");
+    adoptReply("Dengan senang hati, Kak 😊 Ini foto kamarnya. Rencana menginap tanggal berapa dan untuk berapa orang? Nanti Rani cekkan kamarnya.");
   }
   if (!reply && isGenericFallback && queueEntryId && queueAttempt < QUEUE_MAX_ATTEMPTS) {
     await quickAck.beforeReplySend();

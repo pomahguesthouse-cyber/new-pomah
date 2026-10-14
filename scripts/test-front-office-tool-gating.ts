@@ -103,7 +103,7 @@ assert.ok(hasNone(managerial, ["start_booking_details"]), "manager tidak memakai
 
 const CORE_MARKERS = [
   "Anda adalah Rani",
-  "TONE: Ramah",
+  "TONE: Hangat",
   "JANGAN PERNAH gunakan sapaan waktu",
   "ANTI-PENGULANGAN SAPAAN",
   "FORMAT TANGGAL",

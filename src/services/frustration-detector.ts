@@ -115,18 +115,18 @@ export function buildFrustrationReply(
 
   if (kind === "trust_question") {
     const body =
-      "Halo Kak, saya paham kalau Kakak ingin memastikan dulu — itu wajar 🙏.\n\n" +
+      "Wajar sekali Kakak ingin memastikan dulu 🙏\n\n" +
       TRUST_VERIFICATION +
-      "\n\nKalau ingin saya teruskan ke admin manusia, balas saja \"admin\" ya.";
+      "\n\nKalau ingin bicara langsung dengan tim kami, balas \"admin\" ya.";
     return { reply: body, shouldHandoff: false };
   }
 
   // frustrated → handoff
   const head =
-    "Mohon maaf ya Kak kalau prosesnya terasa membingungkan. Saya rangkum dulu " +
-    "info yang sudah Kakak kirim, lalu saya teruskan ke admin manusia kami.";
+    "Mohon maaf ya Kak, prosesnya jadi membingungkan. Rani rangkum dulu " +
+    "info dari Kakak, lalu teruskan ke tim kami.";
   const body =
-    [head, summary, TRUST_VERIFICATION, "Admin akan segera membalas dari nomor yang sama ya, Kak 🙏."]
+    [head, summary, TRUST_VERIFICATION, "Tim kami akan segera membalas di chat ini ya, Kak 🙏"]
       .filter(Boolean)
       .join("\n\n");
   return { reply: body, shouldHandoff: true };

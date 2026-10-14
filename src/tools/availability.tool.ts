@@ -317,8 +317,8 @@ export const checkRoomAvailability: ToolHandler = async (
       // (cenderung menyimpulkan "penuh"). Teruskan teks ini apa adanya.
       relay_verbatim: true,
       reply_to_guest:
-        "Mohon maaf Kak, sistem ketersediaan kami sedang tersendat sebentar. " +
-        "Boleh saya cek ulang dalam beberapa saat? 🙏",
+        "Mohon maaf, sistem cek kamar kami sedang lambat 🙏 " +
+        "Kami cek terlebih dahulu ya, Kak, lalu segera kami kabari.",
       instruction_to_agent:
         "Pengecekan ketersediaan GAGAL secara teknis — status kamar TIDAK diketahui. " +
         "JANGAN menyimpulkan kamar penuh atau tersedia. Kirim `reply_to_guest` apa adanya.",
