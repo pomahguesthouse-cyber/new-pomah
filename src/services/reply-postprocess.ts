@@ -240,6 +240,23 @@ function claimsTechnicalFailure(sentence: string): boolean {
   );
 }
 
+/**
+ * Janji kirim media di turn ini ("foto kamarnya langsung kami kirimkan ya",
+ * "brosurnya segera saya kirim"). Insiden Azairul 16 Okt 2026 23:03: brosur
+ * sudah dikirim fast path satu menit sebelumnya, lalu balasan AI turn
+ * berikutnya menjanjikan foto lagi → tamu menerima teks dobel.
+ */
+function promisesMedia(sentence: string): boolean {
+  return (
+    /\b(foto|gambar|brosur|katalog)\w*\b[\s\S]{0,60}\b(?:langsung|segera|akan|nanti|sebentar\s+lagi)\s+(?:(?:kami|saya|rani|aku|kita)\s+)?(?:kirim(?:kan)?|dikirim(?:kan)?)\b/i.test(sentence) ||
+    /\b(?:langsung|segera|akan|nanti)\s+(?:(?:kami|saya|rani|aku|kita)\s+)?kirim(?:kan)?\b[\s\S]{0,40}\b(foto|gambar|brosur|katalog)\w*/i.test(sentence) ||
+    /\b(foto|gambar|brosur)\w*\s+(?:langsung\s+)?(?:kami|saya|rani)\s+kirim(?:kan)?\s+(?:ya|yaa|ya\s+kak)\b/i.test(sentence)
+  );
+}
+
+/** "Sambil menunggu fotonya, Kak, ..." — buang pembuka yang menyiratkan media akan datang. */
+const WAITING_FOR_MEDIA_PREFIX_RE = /^sambil\s+menunggu\s+(?:foto|gambar|brosur)\w*\s*,?\s*(?:kak\s*,?\s*)?/i;
+
 function claimsMediaSent(sentence: string): boolean {
   return (
     /\b(foto|gambar|brosur|katalog)\w*\b[\s\S]{0,80}\b(sudah\s+(?:(?:kami|saya|rani|aku)\s+)?(?:kirim(?:kan)?|dikirim(?:kan)?)|telah\s+(?:(?:kami|saya|rani)\s+)?(?:kirim(?:kan)?|dikirim(?:kan)?)|terkirim)\b/i.test(
@@ -282,7 +299,15 @@ export function guardUnverifiedMediaClaims(reply: string, delivery: MediaDeliver
         continue;
       }
     }
-    if (claimsMediaSent(sentence)) {
+    let current = sentence;
+    if (WAITING_FOR_MEDIA_PREFIX_RE.test(current) && !delivery.brochureSent && !delivery.genericPhotoSent && delivery.photoRoomsSent.length === 0) {
+      const rest = current.replace(WAITING_FOR_MEDIA_PREFIX_RE, "").trim();
+      stripped = true;
+      if (!rest) continue;
+      current = rest.charAt(0).toUpperCase() + rest.slice(1);
+    }
+    if (claimsMediaSent(current) || promisesMedia(current)) {
+      const sentence = current;
       const room = claimedRoom(sentence);
       if (room) {
         if (!roomListed(room, delivery.photoRoomsSent)) {
@@ -299,7 +324,7 @@ export function guardUnverifiedMediaClaims(reply: string, delivery: MediaDeliver
         continue;
       }
     }
-    kept.push(sentence);
+    kept.push(current);
   }
   if (!stripped) return source;
   if (kept.length === 0) {
