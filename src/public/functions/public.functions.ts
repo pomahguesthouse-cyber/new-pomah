@@ -8,6 +8,7 @@ import {
   getDailyRatesForRange,
   resolveRoomNightlyRates,
 } from "@/services/pricing/daily-rate.service";
+import { capAvailabilityWithStopSell } from "@/services/pricing/stop-sell-availability";
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 import { stripPastEventsFromExploreConfig } from "@/lib/explore-event-date";
@@ -1044,6 +1045,7 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
         availability: {} as Record<string, boolean>,
         availableRooms: {} as Record<string, number>,
         rates: {} as Record<string, { base_rate: number; extrabed_rate: number }>,
+        stopSellDates: {} as Record<string, string[]>,
         debug: { rows: 0, error: null },
       };
     }
@@ -1077,6 +1079,7 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
       .select("id, base_rate, extrabed_rate");
 
     const rates: Record<string, { base_rate: number; extrabed_rate: number }> = {};
+    const stopSellDates: Record<string, string[]> = {};
     if (rts && rts.length > 0) {
       const overrides = await getDailyRatesForRange(
         supabasePublic,
@@ -1111,6 +1114,19 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
           base_rate: avgRate,
           extrabed_rate: avgExtraBed,
         };
+
+        // Stop-sell closes the room type for the stay regardless of stock.
+        const capped = capAvailabilityWithStopSell(
+          availableRooms[rt.id] ?? 0,
+          checkIn,
+          checkOut,
+          overrides.get(rt.id),
+        );
+        if (capped.stop_sell_dates.length > 0) {
+          availableRooms[rt.id] = 0;
+          availability[rt.id] = false;
+          stopSellDates[rt.id] = capped.stop_sell_dates;
+        }
       }
     }
 
@@ -1118,6 +1134,7 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
       availability,
       availableRooms,
       rates,
+      stopSellDates,
       debug: { rows: (rows ?? []).length, error: error?.message ?? null },
     };
   });
