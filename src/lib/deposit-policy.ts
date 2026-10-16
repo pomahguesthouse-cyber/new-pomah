@@ -1,10 +1,9 @@
 /**
  * Owner payment policy (16 Oct 2026): "untuk pemesanan 2 malam ke bawah harus lunas".
  *
- *   • 1–2 nights  → paid in full, no 50% DP option.
- *       1 night keeps the existing owner rule: full payment may be settled at
- *       check-in (lunas di tempat) or by transfer.
- *       2 nights: full payment by transfer (no DP).
+ *   • 1–2 nights  → paid in full by transfer before arrival, no 50% DP option.
+ *   • Pay-at-check-in (bayar di tempat) is disabled for new bookings (owner
+ *     decision 16 Oct 2026). Existing bookings marked onsite keep displaying so.
  *   • 3+ nights  → existing rule: DP 50% (or pay in full).
  *
  * Every place that decides or communicates the deposit must use these helpers.
@@ -36,9 +35,9 @@ export function allowsDeposit(nights: number | null | undefined): boolean {
   return n != null && n > FULL_PAYMENT_MAX_NIGHTS;
 }
 
-/** 1-night stays may still settle the full amount at check-in (owner rule). */
-export function allowsPayAtCheckin(nights: number | null | undefined): boolean {
-  return validNights(nights) === 1;
+/** Pay-at-check-in is disabled for every new booking (owner decision 16 Oct 2026). */
+export function allowsPayAtCheckin(_nights?: number | null): boolean {
+  return false;
 }
 
 /**

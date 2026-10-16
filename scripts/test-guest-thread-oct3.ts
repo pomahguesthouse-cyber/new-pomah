@@ -380,10 +380,13 @@ assert.equal(conflicting.accountNumber, OFFICIAL_TRANSFER_ACCOUNT.accountNumber)
 assert.equal(conflicting.bankName, "BCA");
 
 const oneNight = buildPaymentPolicyAnswer({ nights: 1, totalPrice: 350000 });
-assert.match(oneNight, /bayar langsung di tempat/i);
+// 16 Okt 2026: bayar di tempat dinonaktifkan; 1 malam wajib transfer lunas sebelum kedatangan.
+assert.match(oneNight, /pemesanan 1–2 malam wajib lunas/);
+assert.match(oneNight, /sebelum kedatangan/);
+assert.doesNotMatch(oneNight, /bayar langsung di tempat|lunas di tempat/i);
 assert.match(oneNight, /0095584379/);
 assert.match(oneNight, /Faizal Abdurachman/);
-assert.match(oneNight, /tanpa DP/i);
+assert.match(oneNight, /tidak ada opsi DP/i);
 assert.doesNotMatch(oneNight, /tidak bisa bayar di tempat/i);
 assert.doesNotMatch(oneNight, /DP dulu 50%/);
 
@@ -407,7 +410,8 @@ const faqOne = buildPropertyFaqReply({
   mode: "early",
 });
 assert.equal(faqOne?.intent, "faq_payment_policy");
-assert.match(faqOne?.reply ?? "", /bayar langsung di tempat/i);
+assert.match(faqOne?.reply ?? "", /wajib lunas/i);
+assert.doesNotMatch(faqOne?.reply ?? "", /bayar langsung di tempat/i);
 assert.match(faqOne?.reply ?? "", /0095584379/);
 assert.doesNotMatch(faqOne?.reply ?? "", /tidak bisa bayar di tempat/i);
 assert.doesNotMatch(faqOne?.reply ?? "", /123/);
@@ -421,7 +425,7 @@ const onePlan = planInitialBookingPayment({
 });
 assert.equal(onePlan.paymentStatus, "unpaid");
 assert.equal(onePlan.paidAmount, 0);
-assert.equal(onePlan.expiresAt, null);
+assert.ok(onePlan.expiresAt); // 1 malam kini wajib transfer lunas (batas waktu bayar berlaku)
 const twoPlan = planInitialBookingPayment({
   nights: 2,
   total: 700000,
@@ -453,10 +457,9 @@ const invoiceOne = buildInvoicePaymentLines({
   bankDetails: "\n\nTransfer Pembayaran:\nBANK LAMA",
 });
 assert.match(invoiceOne, /tanpa DP/);
-assert.match(invoiceOne, /0095584379/);
-assert.doesNotMatch(invoiceOne, /dibatalkan/);
-assert.doesNotMatch(invoiceOne, /Menunggu pembayaran/);
-assert.doesNotMatch(invoiceOne, /BANK LAMA/);
+assert.match(invoiceOne, /pemesanan 1–2 malam wajib lunas/);
+assert.match(invoiceOne, /Menunggu pembayaran/);
+assert.doesNotMatch(invoiceOne, /di tempat/);
 const invoiceTwo = buildInvoicePaymentLines({
   paymentStatus: "unpaid",
   paidAmount: 0,
@@ -479,7 +482,8 @@ assert.match(invoiceTwo, /dibatalkan/);
       baseContext({ checkOut: "2026-10-11", adults: 2, totalPrice: 350000 }),
     ),
   );
-  assert.match(ask.reply ?? "", /bayar langsung di tempat/i);
+  assert.match(ask.reply ?? "", /wajib lunas/i);
+  assert.doesNotMatch(ask.reply ?? "", /bayar langsung di tempat/i);
   assert.match(ask.reply ?? "", /0095584379/);
   assert.doesNotMatch(ask.reply ?? "", /tidak bisa bayar di tempat/i);
   assert.doesNotMatch(ask.reply ?? "", /DP dulu 50%/);

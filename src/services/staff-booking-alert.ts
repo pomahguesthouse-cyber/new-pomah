@@ -342,10 +342,10 @@ export function formatStaffPaymentLine(input: StaffPaymentInput): string {
   const method = String(input.paymentMethod ?? "").trim().toLowerCase();
   const status = String(input.paymentStatus ?? "").toLowerCase();
 
-  // 1 malam tanpa transfer = bayar di tempat (kebijakan, atau method onsite/cash).
-  // Method lain yang eksplisit (bukan kosong) tetap "Belum bayar".
-  if (paid <= 0 && nights > 0 && nights < 2 && !isExplicitTransfer(method)) {
-    if (isMarkedPayAtCheckin(method) || method === "") return "Bayar di tempat";
+  // Bayar di tempat sudah tidak ditawarkan (16 Okt 2026). Hanya booking lama
+  // yang eksplisit ditandai onsite/cash yang masih tampil "Bayar di tempat".
+  if (paid <= 0 && isMarkedPayAtCheckin(method) && !isExplicitTransfer(method)) {
+    return "Bayar di tempat";
   }
 
   if (paid <= 0 && requiresFullPayment(nights) && total > 0) {

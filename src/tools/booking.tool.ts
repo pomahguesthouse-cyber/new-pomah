@@ -44,8 +44,8 @@ function readExpectedSummary(value: unknown): BookingSummarySnapshot | null {
 }
 
 /**
- * Rencana pembayaran awal. Menginap 1 malam tidak memakai DP (lunas di tempat)
- * dan 2 malam wajib lunas (tanpa DP); DP hanya 3+ malam. Menginap 1 malam
+ * Rencana pembayaran awal. 1–2 malam wajib lunas via transfer sebelum
+ * kedatangan (tanpa DP, tanpa bayar di tempat); DP hanya 3+ malam. Dulu 1 malam
  * dan tidak di-expire (payment_status unpaid tetap valid). 2 malam atau lebih
  * mempertahankan hitungan DP yang sudah ada.
  */
@@ -56,7 +56,7 @@ export function planInitialBookingPayment(input: {
   dpAmount?: number | null;
   now?: number;
 }): { paidAmount: number; paymentStatus: "paid" | "partial" | "unpaid"; expiresAt: string | null } {
-  if (!(input.nights >= 2)) {
+  if (!(input.nights >= 1)) {
     return { paidAmount: 0, paymentStatus: "unpaid", expiresAt: null };
   }
   // 1–2 malam wajib lunas: permintaan DP diabaikan (tanpa opsi DP 50%).

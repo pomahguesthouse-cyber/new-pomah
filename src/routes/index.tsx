@@ -1742,7 +1742,8 @@ function CartBookingDialog({
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [payment, setPayment] = useState<"transfer" | "onsite">("transfer");
+  // Bayar di tempat tidak lagi ditawarkan (16 Okt 2026): selalu transfer.
+  const payment = "transfer" as const;
   const [pending, setPending] = useState(false);
 
   const nights = Math.max(
@@ -1854,22 +1855,8 @@ function CartBookingDialog({
           </div>
           <div>
             <Label className="mb-2 block text-xs font-medium">Metode Pembayaran</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {(["transfer", "onsite"] as const).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPayment(p)}
-                  className={cn(
-                    "rounded-md border px-3 py-2 text-xs font-medium transition",
-                    payment === p
-                      ? "border-amber-500 bg-amber-50 text-amber-800"
-                      : "border-input bg-background hover:bg-muted",
-                  )}
-                >
-                  {p === "transfer" ? "Transfer Bank" : "Bayar di Tempat"}
-                </button>
-              ))}
+            <div className="rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+              Transfer Bank — dibayar sebelum kedatangan
             </div>
           </div>
         </div>

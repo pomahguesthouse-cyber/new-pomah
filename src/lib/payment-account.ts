@@ -69,11 +69,10 @@ export function toPaymentAccountFields(property?: PropertyPaymentFields | null):
 export function botPaymentRuleText(): string {
   const transfer = formatTransferAccountLine();
   return (
-    "ATURAN PEMBAYARAN (PEMILIK): Menginap 1 malam TIDAK ada DP. " +
-    `Tamu bisa bayar langsung di tempat (lunas saat check-in) atau transfer ke ${transfer}. ` +
-    "Booking 1 malam tetap dicatat tanpa DP; JANGAN pernah menjawab 'tidak bisa bayar di tempat'. " +
-    "Pemesanan 1–2 malam WAJIB LUNAS (tidak ada opsi DP 50%); menginap 2 malam dibayar lunas via " +
-    `transfer ke ${transfer}. ` +
+    "ATURAN PEMBAYARAN (PEMILIK): Pemesanan 1–2 malam WAJIB LUNAS (tidak ada opsi DP 50%), " +
+    `dibayar penuh via transfer ke ${transfer} sebelum kedatangan. ` +
+    "TIDAK ADA opsi bayar di tempat / saat check-in untuk booking baru; bila tamu menanyakannya, " +
+    "jelaskan dengan sopan bahwa pembayaran dilakukan via transfer sebelum kedatangan. " +
     "DP 50% hanya untuk menginap 3 malam atau lebih (jangan ubah persentase atau nominal DP). " +
     `Untuk DP 3 malam atau lebih, sebut juga transfer ke ${transfer}. ` +
     "Bila tamu 1–2 malam minta DP, jelaskan dengan sopan: 'pemesanan 1–2 malam wajib lunas'."
