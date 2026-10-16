@@ -61,11 +61,11 @@ const baseInput = {
     "Sen, 23 Nov 2026",
     "2",
     "Rp460.000",
-    "DP 50% Rp230.000 belum dibayar",
+    "Wajib lunas Rp460.000 belum dibayar", // 1–2 malam wajib lunas,
     "Rp460.000",
   ]);
   assert.match(alert.message, /Total: Rp460\.000/);
-  assert.match(alert.message, /DP\/Pembayaran: DP 50% Rp230\.000 belum dibayar/);
+  assert.match(alert.message, /DP\/Pembayaran: Wajib lunas Rp460\.000 belum dibayar/);
   assert.match(alert.message, /Sisa: Rp460\.000/);
   assert.doesNotMatch(alert.message, /Source:|Sumber:/);
   for (const value of alert.params) {
@@ -81,8 +81,16 @@ const baseInput = {
     paidAmount: 230_000,
     paymentStatus: "partial",
   });
-  assert.equal(partial.params[7], "Rp230.000");
+  // 2 malam wajib lunas: pembayaran sebagian ditandai belum lunas.
+  assert.equal(partial.params[7], "Rp230.000 (wajib lunas Rp460.000, belum lunas)");
   assert.equal(partial.params[8], "Rp230.000");
+  const partial3 = buildStaffBookingAlert({
+    ...baseInput,
+    nights: 3,
+    paidAmount: 230_000,
+    paymentStatus: "partial",
+  });
+  assert.equal(partial3.params[7], "Rp230.000");
 }
 
 {
@@ -128,13 +136,14 @@ const baseInput = {
     paymentMethod: "transfer",
     totalAmount: 200_000,
   });
-  assert.equal(transfer.params[7], "Belum bayar");
+  assert.equal(transfer.params[7], "Wajib lunas Rp200.000 belum dibayar");
   assert.equal(transfer.params[8], "Rp200.000");
 }
 
 {
   const fromPayments = buildStaffBookingAlert({
     ...baseInput,
+    nights: 3, // DP hanya 3+ malam
     paidAmount: 0,
     payments: [
       { amount: 50_000, status: "failed" },

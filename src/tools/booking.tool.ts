@@ -7,6 +7,7 @@
  */
 
 import { guestCountWasStated, resolveAdultsForBooking } from "@/lib/guest-count";
+import { allowsDeposit } from "@/lib/deposit-policy";
 import { isDateString, fmtDateID } from "@/lib/date";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 import { toPaymentAccountFields } from "@/lib/payment-account";
@@ -43,7 +44,8 @@ function readExpectedSummary(value: unknown): BookingSummarySnapshot | null {
 }
 
 /**
- * Rencana pembayaran awal. Menginap kurang dari 2 malam tidak memakai DP
+ * Rencana pembayaran awal. Menginap 1 malam tidak memakai DP (lunas di tempat)
+ * dan 2 malam wajib lunas (tanpa DP); DP hanya 3+ malam. Menginap 1 malam
  * dan tidak di-expire (payment_status unpaid tetap valid). 2 malam atau lebih
  * mempertahankan hitungan DP yang sudah ada.
  */
@@ -57,7 +59,8 @@ export function planInitialBookingPayment(input: {
   if (!(input.nights >= 2)) {
     return { paidAmount: 0, paymentStatus: "unpaid", expiresAt: null };
   }
-  const isDP = (input.paymentType ?? "").toLowerCase() === "dp";
+  // 1–2 malam wajib lunas: permintaan DP diabaikan (tanpa opsi DP 50%).
+  const isDP = allowsDeposit(input.nights) && (input.paymentType ?? "").toLowerCase() === "dp";
   const requested = isDP ? Math.max(0, Number(input.dpAmount) || 0) : 0;
   const paidAmount = isDP ? Math.min(requested, input.total) : 0;
   const paymentStatus =

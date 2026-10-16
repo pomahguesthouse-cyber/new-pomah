@@ -387,9 +387,14 @@ assert.match(oneNight, /tanpa DP/i);
 assert.doesNotMatch(oneNight, /tidak bisa bayar di tempat/i);
 assert.doesNotMatch(oneNight, /DP dulu 50%/);
 
+// Kebijakan 16 Okt 2026: pemesanan 1–2 malam wajib lunas; DP 50% hanya 3+ malam.
 const twoNights = buildPaymentPolicyAnswer({ nights: 2, totalPrice: 700000 });
-assert.match(twoNights, /DP dulu 50%/);
-assert.match(twoNights, /Rp350\.000/);
+assert.match(twoNights, /pemesanan 1–2 malam wajib lunas/);
+assert.doesNotMatch(twoNights, /DP dulu 50%/);
+assert.match(twoNights, /Rp700\.000/);
+const threeNights = buildPaymentPolicyAnswer({ nights: 3, totalPrice: 1050000 });
+assert.match(threeNights, /DP dulu 50%/);
+assert.match(threeNights, /Rp525\.000/);
 assert.match(twoNights, /0095584379/);
 assert.doesNotMatch(twoNights, /tidak bisa bayar di tempat/i);
 
@@ -424,9 +429,20 @@ const twoPlan = planInitialBookingPayment({
   dpAmount: 350000,
   now: Date.parse("2026-10-03T00:00:00.000Z"),
 });
-assert.equal(twoPlan.paymentStatus, "partial");
-assert.equal(twoPlan.paidAmount, 350000);
+// 2 malam wajib lunas: permintaan DP diabaikan.
+assert.equal(twoPlan.paymentStatus, "unpaid");
+assert.equal(twoPlan.paidAmount, 0);
 assert.ok(twoPlan.expiresAt);
+const threePlan = planInitialBookingPayment({
+  nights: 3,
+  total: 1050000,
+  paymentType: "dp",
+  dpAmount: 525000,
+  now: Date.parse("2026-10-03T00:00:00.000Z"),
+});
+assert.equal(threePlan.paymentStatus, "partial");
+assert.equal(threePlan.paidAmount, 525000);
+assert.ok(threePlan.expiresAt);
 
 const invoiceOne = buildInvoicePaymentLines({
   paymentStatus: "unpaid",

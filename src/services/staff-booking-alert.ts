@@ -23,6 +23,7 @@
  *   Sisa: {{9}}
  */
 import { sanitizeTemplateParam } from "@/services/whatsapp-meta.service";
+import { allowsDeposit, requiredDepositAmount, requiresFullPayment } from "@/lib/deposit-policy";
 
 /** Nama yang dipakai bila env di-set. Tidak dipakai otomatis selama belum disetujui Meta. */
 export const STAFF_BOOKING_TEMPLATE_NAME_DEFAULT = "new_booking_alert";
@@ -347,16 +348,22 @@ export function formatStaffPaymentLine(input: StaffPaymentInput): string {
     if (isMarkedPayAtCheckin(method) || method === "") return "Bayar di tempat";
   }
 
-  if (paid <= 0 && nights >= 2 && total > 0) {
-    return `DP 50% ${formatStaffRupiah(Math.round(total * 0.5))} belum dibayar`;
+  if (paid <= 0 && requiresFullPayment(nights) && total > 0) {
+    return `Wajib lunas ${formatStaffRupiah(total)} belum dibayar`;
+  }
+  if (paid <= 0 && allowsDeposit(nights) && total > 0) {
+    return `DP 50% ${formatStaffRupiah(requiredDepositAmount(nights, total))} belum dibayar`;
   }
 
   if (paid <= 0) return "Belum bayar";
 
   if (status === "paid" || (total > 0 && paid >= total - 0.5)) return formatStaffRupiah(paid);
 
-  if (nights >= 2 && total > 0) {
-    const dp = Math.round(total * 0.5);
+  if (requiresFullPayment(nights) && total > 0) {
+    return `${formatStaffRupiah(paid)} (wajib lunas ${formatStaffRupiah(total)}, belum lunas)`;
+  }
+  if (allowsDeposit(nights) && total > 0) {
+    const dp = requiredDepositAmount(nights, total);
     if (paid < dp - 0.5) {
       return `${formatStaffRupiah(paid)} (DP 50% ${formatStaffRupiah(dp)} belum lunas)`;
     }

@@ -7,6 +7,7 @@ import { computeExtraBedTotal, computeGrandTotal, totalsMatch, toRupiah } from "
 import { markBookingDraft, saveBookingDraft } from "@/services/booking-draft.service";
 import { runDeferred } from "@/lib/cf-context";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
+import { FULL_PAYMENT_POLICY_TEXT, requiresFullPayment } from "@/lib/deposit-policy";
 import { capAvailabilityWithStopSell } from "@/services/pricing/stop-sell-availability";
 import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
@@ -614,6 +615,8 @@ function buildBookingSummary(
   const paymentLine =
     nights != null && nights < 2
       ? `• Pembayaran: Lunas di tempat saat check-in (tanpa DP), atau transfer ke ${transfer}\n`
+      : requiresFullPayment(nights)
+        ? `• Pembayaran: Wajib lunas${grandTotal > 0 ? ` ${fmtRp(grandTotal)}` : ""} via transfer ke ${transfer} (${FULL_PAYMENT_POLICY_TEXT}, tanpa DP)\n`
       : context.paymentType === "dp"
         ? `• Pembayaran: DP${context.dpAmount ? ` ${fmtRp(context.dpAmount)}` : " dulu"} (transfer ke ${transfer})\n`
         : context.paymentType === "full"
@@ -2927,6 +2930,23 @@ export async function processBookingState(
     if (stayNights != null && stayNights < 2) {
       context.paymentType = undefined;
       context.dpAmount = undefined;
+    } else if (requiresFullPayment(stayNights)) {
+      // 2 malam: wajib lunas, permintaan DP tidak berlaku.
+      if (context.paymentType !== "full" || context.dpAmount !== undefined) {
+        context.paymentType = "full";
+        context.dpAmount = undefined;
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+      }
+      if (dpMatch && !fullPayMatch && !CONFIRM_PATTERN.test(message)) {
+        return {
+          handled: true,
+          reply: buildPaymentPolicyAnswer({
+            nights: stayNights,
+            totalPrice: context.totalPrice,
+            property: ctx.property,
+          }),
+        };
+      }
     } else if (dpMatch && !fullPayMatch) {
       context.paymentType = "dp";
       // Coba ekstrak nominal DP kalau disebut (mis. "DP 200rb", "DP 50%").
@@ -3018,6 +3038,9 @@ export async function processBookingState(
         context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : 0;
       if (confirmNights < 2) {
         context.paymentType = undefined;
+        context.dpAmount = undefined;
+      } else if (requiresFullPayment(confirmNights)) {
+        context.paymentType = "full";
         context.dpAmount = undefined;
       }
       noteDeclinedExtraBed(context);
