@@ -5,6 +5,7 @@
  * the reservation details, price breakdown and payment instructions.
  */
 import * as React from "react";
+import { FULL_PAYMENT_POLICY_TEXT, requiresFullPayment } from "@/lib/deposit-policy";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Printer, Loader2, Download, Send } from "lucide-react";
@@ -452,6 +453,11 @@ function ConfirmationPage() {
                     ) : (
                       <p className="mt-1 font-medium text-stone-700">
                         Status pembayaran: menunggu pembayaran.
+                      </p>
+                    )}
+                    {!isPartial && requiresFullPayment(Number(inv.nights)) && (
+                      <p className="mt-1 text-stone-700">
+                        Jumlah yang harus dibayar: {formatIDR(totalAmount)} — {FULL_PAYMENT_POLICY_TEXT} (tanpa DP).
                       </p>
                     )}
 

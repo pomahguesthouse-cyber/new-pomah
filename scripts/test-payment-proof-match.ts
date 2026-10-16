@@ -24,7 +24,7 @@ const NOW = new Date("2026-10-09T05:00:00.000Z");
 function booking(over: Partial<PaymentMatchCandidate> & Pick<PaymentMatchCandidate, "bookingCode" | "total">): PaymentMatchCandidate {
   return {
     paid: 0,
-    nights: 2,
+    nights: 3, // DP hanya 3+ malam (kebijakan 16 Okt 2026)
     checkIn: "2026-10-07",
     checkOut: "2026-10-12",
     status: "confirmed",
@@ -54,7 +54,7 @@ function ocr(over: Partial<PaymentProofOcrInput> = {}): PaymentProofOcrInput {
 const rita = booking({
   bookingCode: "PG-GET5N",
   total: 475000,
-  nights: 2,
+  nights: 3, // DP hanya 3+ malam (kebijakan 16 Okt 2026)
   checkIn: "2026-10-08",
   checkOut: "2026-10-10",
   createdAt: "2026-10-06T03:00:00.000Z",
@@ -63,7 +63,7 @@ const rita = booking({
 const firstDeluxe = booking({
   bookingCode: "PG-2WA7S",
   total: 460000,
-  nights: 2,
+  nights: 3, // DP hanya 3+ malam (kebijakan 16 Okt 2026)
   checkIn: "2026-10-07",
   checkOut: "2026-10-09",
   createdAt: "2026-10-06T01:00:00.000Z",
@@ -140,7 +140,7 @@ const firstDeluxe = booking({
     bookingCode: "PG-DLX2",
     total: 460000,
     paid: 0,
-    nights: 2,
+    nights: 3, // DP hanya 3+ malam (kebijakan 16 Okt 2026)
     checkIn: "2026-10-10",
     checkOut: "2026-10-12",
     createdAt: "2026-10-09T01:00:00.000Z",
@@ -568,7 +568,7 @@ function fakeDb(tables: Record<string, Record<string, unknown>[]>) {
         reference_code: "PG-GET5N",
         total_amount: 475000,
         paid_amount: 0,
-        nights: 2,
+        nights: 3, // DP hanya 3+ malam (kebijakan 16 Okt 2026)
         check_in: "2026-10-08",
         check_out: "2026-10-10",
         status: "confirmed",
@@ -621,7 +621,7 @@ function fakeDb(tables: Record<string, Record<string, unknown>[]>) {
     reference_code: "PG-2WA7S",
     total_amount: 460000,
     paid_amount: 0,
-    nights: 2,
+    nights: 3, // DP hanya 3+ malam (kebijakan 16 Okt 2026)
     check_in: "2026-10-07",
     check_out: "2026-10-09",
     status: "confirmed",
@@ -650,7 +650,7 @@ function fakeDb(tables: Record<string, Record<string, unknown>[]>) {
           reference_code: "PG-DLX2",
           total_amount: 460000,
           paid_amount: 0,
-          nights: 2,
+          nights: 3, // DP hanya 3+ malam (kebijakan 16 Okt 2026)
           check_in: "2026-10-10",
           check_out: "2026-10-12",
           status: "pending",

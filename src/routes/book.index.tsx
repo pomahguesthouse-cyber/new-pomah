@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useMemo, useState, useRef } from "react";
+import { FULL_PAYMENT_POLICY_TEXT, requiresFullPayment } from "@/lib/deposit-policy";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -669,6 +670,11 @@ function BookPage() {
                     <span className="text-stone-600 font-medium">Total pembayaran</span>
                     <span className="font-serif text-2xl font-semibold text-stone-900">Rp{grandTotal.toLocaleString("id-ID")}</span>
                   </div>
+                  {requiresFullPayment(nights) && (
+                    <p className="-mt-4 mb-6 text-xs text-amber-700">
+                      Mohon diperhatikan: {FULL_PAYMENT_POLICY_TEXT} (tanpa DP).
+                    </p>
+                  )}
                   
                   <div className="space-y-3">
                     <Button 

@@ -7,6 +7,7 @@
  */
 
 import { OFFICIAL_TRANSFER_ACCOUNT } from "@/lib/payment-account";
+import { allowsDeposit, requiredDepositAmount } from "@/lib/deposit-policy";
 
 export type PaymentMatchStatus =
   | "matched_dp"
@@ -320,8 +321,9 @@ function expectationsFor(candidate: PaymentMatchCandidate): Expectation[] {
   const remaining = remainingBalance(candidate);
   const nights = stayNights(candidate);
   const list: Expectation[] = [];
-  if (nights != null && nights >= 2 && total > 0) {
-    list.push({ kind: "dp", amount: Math.round(total / 2) });
+  // 1–2 malam wajib lunas: hanya total/sisa yang dicocokkan, tanpa DP.
+  if (allowsDeposit(nights) && total > 0) {
+    list.push({ kind: "dp", amount: requiredDepositAmount(nights, total) });
   }
   if (remaining > 0) list.push({ kind: "remaining", amount: remaining });
   if (total > 0) list.push({ kind: "full", amount: total });
@@ -628,8 +630,8 @@ export function matchProofToCandidates(
 function dpAmount(candidate: PaymentMatchCandidate): number | null {
   const nights = stayNights(candidate);
   const total = positiveRupiah(candidate.total);
-  if (nights == null || nights < 2 || total == null) return null;
-  return Math.round(total / 2);
+  if (!allowsDeposit(nights) || total == null) return null;
+  return requiredDepositAmount(nights, total);
 }
 
 export function collectRoomNames(row: Record<string, unknown> | null | undefined): string[] {

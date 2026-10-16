@@ -1,4 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { FULL_PAYMENT_POLICY_TEXT, requiresFullPayment } from "@/lib/deposit-policy";
 import { fmtDateID } from "@/lib/date";
 import { formatTransferAccountLine, resolveBotTransferAccount, type PropertyPaymentFields } from "@/lib/payment-account";
 import { findNotificationThreadId } from "./notification-thread-resolver";
@@ -45,7 +46,10 @@ export function buildInvoicePaymentLines(opts: {
         minute: "2-digit",
       })} WIB). Booking otomatis dibatalkan jika belum dibayar.`
     : "";
-  return `• Status Pembayaran: Menunggu pembayaran ⏳` + deadlineText + (opts.bankDetails ?? "");
+  const fullLine = requiresFullPayment(opts.nights)
+    ? `\n• Jumlah yang harus dibayar: Rp ${Math.max(0, opts.totalAmount).toLocaleString("id-ID")} (lunas — ${FULL_PAYMENT_POLICY_TEXT}, tanpa DP)`
+    : "";
+  return `• Status Pembayaran: Menunggu pembayaran ⏳` + fullLine + deadlineText + (opts.bankDetails ?? "");
 }
 
 async function resolveOrCreateNotificationThread({
