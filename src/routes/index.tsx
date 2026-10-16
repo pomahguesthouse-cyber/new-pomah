@@ -526,6 +526,7 @@ export function PomahHomeView({
   });
   const availability = availData?.availability ?? null;
   const availableRooms = availData?.availableRooms ?? null;
+  const stopSellDates = availData?.stopSellDates ?? null;
 
   const resolvedRates = availData?.rates ?? null;
   const displayRooms = useMemo(() => {
@@ -1025,6 +1026,7 @@ export function PomahHomeView({
                       rc={cfg.roomCarousel}
                       availability={availability}
                       availableRooms={availableRooms}
+                      stopSellDates={stopSellDates}
                       checkIn={checkIn}
                       checkOut={checkOut}
                       guests={guests}
@@ -2144,6 +2146,7 @@ function RoomCarousel({
   rc,
   availability,
   availableRooms,
+  stopSellDates,
   checkIn,
   checkOut,
   guests = 1,
@@ -2157,6 +2160,7 @@ function RoomCarousel({
   rc: HomepageConfig["roomCarousel"];
   availability: Record<string, boolean> | null;
   availableRooms?: Record<string, number> | null;
+  stopSellDates?: Record<string, string[]> | null;
   checkIn?: string;
   checkOut?: string;
   guests?: number;
@@ -2302,6 +2306,13 @@ function RoomCarousel({
                     <div className="absolute left-3 top-3 z-10">
                       {(() => {
                         const count = availableRooms[rt.id] ?? 0;
+                        if (count === 0 && (stopSellDates?.[rt.id]?.length ?? 0) > 0) {
+                          return (
+                            <span className="rounded-full bg-stone-700/90 backdrop-blur px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
+                              Tidak Dijual di Tanggal Ini
+                            </span>
+                          );
+                        }
                         if (count === 0) {
                           return (
                             <span className="rounded-full bg-red-600/90 backdrop-blur px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">

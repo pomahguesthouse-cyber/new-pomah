@@ -7,6 +7,7 @@ import { computeExtraBedTotal, computeGrandTotal, totalsMatch, toRupiah } from "
 import { markBookingDraft, saveBookingDraft } from "@/services/booking-draft.service";
 import { runDeferred } from "@/lib/cf-context";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
+import { capAvailabilityWithStopSell } from "@/services/pricing/stop-sell-availability";
 import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
@@ -1537,6 +1538,15 @@ async function loadRoomAvailability(
       const available = Number(row.available);
       map.set(id, Number.isFinite(available) ? available : null);
     }
+    // Stop-sell closes a room type even when the RPC still reports stock
+    // (older RPC versions do not read room_daily_rates).
+    const ids = [...map.keys()];
+    const overrides = await getDailyRatesForRange(supabase, ids, checkIn, checkOut);
+    for (const id of ids) {
+      const current = map.get(id);
+      if (current == null) continue;
+      map.set(id, capAvailabilityWithStopSell(current, checkIn, checkOut, overrides.get(id)).available);
+    }
     return map;
   } catch (e) {
     console.warn("[BookingState] room availability untuk alternatif kapasitas gagal:", e);
@@ -2783,15 +2793,9 @@ export async function processBookingState(
     // mengganti kamar — bukan menyetujui ringkasan kamar sebelumnya.
     const requestedRoom = detectRequestedRoomChange(message, ctx.rooms, context.roomId);
     if (requestedRoom && context.checkIn && context.checkOut) {
-      const { data: availabilityRows, error: availabilityError } = await supabase.rpc("room_type_availability_detail", {
-        p_check_in: context.checkIn,
-        p_check_out: context.checkOut,
-      });
-      const rows = Array.isArray(availabilityRows)
-        ? (availabilityRows as Array<{ room_type_id?: unknown; available?: unknown }>)
-        : [];
-      const availability = rows.find((row) => row.room_type_id === requestedRoom.id);
-      const availableCount = Number(availability?.available ?? 0);
+      const availabilityMap = await loadRoomAvailability(supabase, context.checkIn, context.checkOut);
+      const availabilityError = availabilityMap == null;
+      const availableCount = Number(availabilityMap?.get(requestedRoom.id) ?? 0);
 
       if (availabilityError || availableCount < 1) {
         return {
