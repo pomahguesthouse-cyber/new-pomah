@@ -245,8 +245,10 @@ async function findDuplicateActiveBooking(
   const { data, error } = await (ctx.supabaseAdmin as any)
     .from("bookings")
     .select(EXISTING_BOOKING_SELECT)
-    .eq("check_in", checkIn)
-    .eq("check_out", checkOut)
+    // Tumpang-tindih (bukan hanya tanggal identik): tamu yang mengganti kamar
+    // untuk tanggal yang sama tidak boleh mendapat booking kedua.
+    .lt("check_in", checkOut)
+    .gt("check_out", checkIn)
     .in("status", ["pending", "confirmed", "checked_in"])
     .order("created_at", { ascending: false })
     .limit(20);
@@ -268,7 +270,8 @@ async function findDuplicateActiveBooking(
   return buildExistingBookingPayload(ctx, match, {
     duplicate_prevented: true,
     note:
-      `Tamu ini sudah punya booking aktif ${match.reference_code} untuk tanggal yang sama. ` +
+      `Tamu ini sudah punya booking aktif ${match.reference_code} yang tanggalnya bertabrakan. ` +
+      `Untuk ganti tipe kamar, teruskan ke staf (perubahan booking), bukan booking baru. ` +
       `Gunakan booking ini — JANGAN buat booking baru. Sampaikan detail booking yang sudah ada ke tamu.`,
   });
 }

@@ -30,7 +30,16 @@ import {
   parseCapacityFollowup,
   type RoomStock,
 } from "./capacity-alternatives";
-import { todayWIB } from "@/lib/date";
+import { todayWIB, fmtDateID } from "@/lib/date";
+import {
+  computeRoomChangeQuote,
+  findOverlappingBooking,
+  formatRoomChangeQuoteReply,
+  formatRoomChangeStaffSummary,
+  loadActiveUpcomingBookings,
+  type ActiveBookingSnapshot,
+  type RoomChangeQuote,
+} from "@/services/room-change-quote";
 import { nowForStayParsing, resolveRelativeDayRange } from "@/lib/id-date";
 import { extractRequestedExtraBeds, messageMentionsExtraBed } from "./extra-bed-parser";
 import {
@@ -79,6 +88,8 @@ export interface AlternativeRoomOption {
 }
 
 export interface BookingContext {
+  /** Penawaran pindah kamar untuk booking yang SUDAH ada, menunggu "ya" tamu. */
+  pendingRoomChange?: RoomChangeQuote;
   checkIn?: string;
   checkOut?: string;
   roomId?: string;
@@ -1843,6 +1854,152 @@ async function notifyStaffOfBookingChange(
   }
 }
 
+// ─── Pindah kamar untuk booking yang sudah ada ────────────────────────────────
+
+/** Sinyal tamu ingin mengubah/ganti tipe kamar (dipakai juga oleh orchestrator saat IDLE). */
+export const ROOM_CHANGE_INTENT_RE =
+  /\b(ubah|diubah|ganti|diganti|pindah|dipindah|upgrade|tukar|switch)\b|\bjadi(?:nya)?\s+(?:ambil|pakai|pilih)\b/i;
+const ROOM_CHANGE_DENY_RE = /\b(tidak|tdk|gak|ga|nggak|ngga|enggak|engga|batal|gak jadi|nggak jadi|tidak jadi|cancel|no)\b/i;
+
+export interface RoomChangeDeps {
+  loadActiveBookings?: (phones: string[], today: string) => Promise<ActiveBookingSnapshot[]>;
+  computeQuote?: (booking: ActiveBookingSnapshot, roomType: RoomTypeRow) => Promise<RoomChangeQuote>;
+  createHandoff?: (input: { phone: string; triggerMessage: string; context: unknown }) => Promise<unknown>;
+}
+
+async function handleExistingBookingRoomChange(
+  ctx: ToolContext,
+  phone: string,
+  message: string,
+  state: BookingState,
+  context: BookingContext,
+  deps?: RoomChangeDeps,
+): Promise<StateMachineResult | null> {
+  const supabase = ctx.supabaseAdmin;
+  const createHandoff =
+    deps?.createHandoff ??
+    (async (input: { phone: string; triggerMessage: string; context: unknown }) => {
+      const { createHandoffTicket } = await import("@/services/frustration-detector");
+      return createHandoffTicket(supabase, { ...input, kind: "room_change_request" });
+    });
+
+  // 1) Menunggu jawaban atas penawaran pindah kamar.
+  const pending = context.pendingRoomChange;
+  if (pending) {
+    const text = message.trim();
+    if (ROOM_CHANGE_DENY_RE.test(text) && !/\bya\b/i.test(text)) {
+      await updateBookingState(supabase, phone, "IDLE", {});
+      return {
+        handled: true,
+        reply: `Baik Kak, booking ${pending.referenceCode} tetap memakai kamar ${pending.oldRoomTypeName ?? "semula"} ya. 🙏`,
+      };
+    }
+    if (CONFIRM_PATTERN.test(text) && !text.includes("?")) {
+      await createHandoff({
+        phone,
+        triggerMessage: formatRoomChangeStaffSummary(pending),
+        context: { bookingCode: pending.referenceCode, roomChangeQuote: pending },
+      });
+      await updateBookingState(supabase, phone, "IDLE", {});
+      const pay = pending.refundDue > 0
+        ? `Kelebihan bayar Rp${pending.refundDue.toLocaleString("id-ID")} akan dibantu staf.`
+        : `Sisa yang perlu ditransfer setelah dikonfirmasi: Rp${pending.amountDue.toLocaleString("id-ID")}.`;
+      return {
+        handled: true,
+        reply:
+          `Baik Kak, permintaan pindah ke kamar ${pending.newRoomTypeName} untuk booking ${pending.referenceCode} ` +
+          `sudah Rani teruskan ke staf. Total baru Rp${pending.newTotal.toLocaleString("id-ID")}, sudah dibayar ` +
+          `Rp${pending.paid.toLocaleString("id-ID")}. ${pay} Staf akan mengonfirmasi perubahannya di chat ini ya. 🙏`,
+      };
+    }
+    // Pesan lain: lepas penawaran, biarkan alur normal/LLM menjawab.
+    await updateBookingState(supabase, phone, "IDLE", {});
+    return { handled: false };
+  }
+
+  // 2) Tentukan tipe kamar baru yang diminta.
+  const rooms = (ctx.rooms ?? []) as RoomTypeRow[];
+  const inFlow = isDataEntryState(state) || state === "CONFIRMING_BOOKING" || state === "ROOM_SELECTED";
+  const explicit = ROOM_CHANGE_INTENT_RE.test(message) ? findMentionedRoomType(message, rooms) : null;
+  const flowRoom =
+    inFlow && context.checkIn && context.checkOut && context.roomId
+      ? rooms.find((r) => r.id === context.roomId) ?? null
+      : null;
+  if (!explicit && !flowRoom) return null;
+
+  let bookings: ActiveBookingSnapshot[];
+  try {
+    const today = ctx.today || todayWIB();
+    bookings = deps?.loadActiveBookings
+      ? await deps.loadActiveBookings(phoneCandidates(phone, context.guestPhone), today)
+      : await loadActiveUpcomingBookings(supabase, phoneCandidates(phone, context.guestPhone), today);
+  } catch (e) {
+    console.warn("[BookingState] room-change: gagal memuat booking aktif (non-fatal):", e);
+    return null;
+  }
+  if (bookings.length === 0) return null;
+
+  // Alur booking baru yang tanggalnya bertabrakan dengan booking aktif tamu
+  // = sebenarnya perubahan booking lama. Permintaan eksplisit ("ganti ke
+  // Deluxe") tanpa tanggal memakai booking aktif terdekat.
+  const booking =
+    flowRoom && context.checkIn && context.checkOut
+      ? findOverlappingBooking(bookings, context.checkIn, context.checkOut)
+      : explicit
+        ? bookings[0]
+        : null;
+  if (!booking) return null;
+  const target = explicit ?? flowRoom;
+  if (!target) return null;
+
+  let quote: RoomChangeQuote;
+  try {
+    quote = deps?.computeQuote
+      ? await deps.computeQuote(booking, target)
+      : await computeRoomChangeQuote(supabase, booking, target);
+  } catch (e) {
+    console.warn("[BookingState] room-change: gagal menghitung quote:", e);
+    await createHandoff({
+      phone,
+      triggerMessage: `Permintaan pindah kamar ${booking.referenceCode} ke ${target.name} (quote gagal dihitung).`,
+      context: { bookingCode: booking.referenceCode },
+    });
+    await updateBookingState(supabase, phone, "IDLE", {});
+    return {
+      handled: true,
+      reply:
+        `Kakak sudah punya booking ${booking.referenceCode} untuk tanggal tersebut. Permintaan pindah ke ` +
+        `${target.name} Rani teruskan ke staf supaya rincian biayanya dihitung dengan tepat ya, Kak. 🙏`,
+    };
+  }
+
+  const fmt = (d: string) => fmtDateID(d);
+  // Alur booking (bukan permintaan eksplisit) untuk tipe kamar yang SAMA:
+  // biarkan guard lain (booking aktif 90 menit / anti-dobel create_booking).
+  if (!quote.ok && quote.reason === "same_room_type" && !explicit) return null;
+  if (!quote.ok) {
+    if (quote.reason === "multi_room") {
+      await createHandoff({
+        phone,
+        triggerMessage: formatRoomChangeStaffSummary(quote),
+        context: { bookingCode: quote.referenceCode, roomChangeQuote: quote },
+      });
+    }
+    await updateBookingState(supabase, phone, "IDLE", {});
+    return { handled: true, reply: formatRoomChangeQuoteReply(quote, fmt) };
+  }
+
+  console.info(
+    `[BookingState] room-change quote ${quote.referenceCode}: ${quote.oldRoomTypeName} → ${quote.newRoomTypeName}, ` +
+      `due ${quote.amountDue}`,
+  );
+  await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", {
+    bookingCode: quote.referenceCode,
+    pendingRoomChange: quote,
+  } as BookingContext);
+  return { handled: true, reply: formatRoomChangeQuoteReply(quote, fmt) };
+}
+
 export async function processBookingState(
   ctx: ToolContext,
   phone: string,
@@ -1866,12 +2023,20 @@ export async function processBookingState(
     knownGuestCount?: number | null;
     /** Hanya untuk test: ganti penulis booking (default: tool `createBooking`). */
     createBookingImpl?: typeof createBooking;
+    /** Hanya untuk test: sumber booking aktif & kalkulasi quote pindah kamar. */
+    roomChange?: RoomChangeDeps;
   },
 ): Promise<StateMachineResult> {
   const supabase = ctx.supabaseAdmin;
   const { state } = currentStateRecord;
   // `context` is reassigned below on booking-form submission; `state` is not.
   let { context } = currentStateRecord;
+
+  // Pindah kamar untuk booking yang SUDAH ada: jangan buat booking baru,
+  // beri rincian total baru / sudah dibayar / sisa, lalu teruskan ke staf.
+  const roomChangeResult = await handleExistingBookingRoomChange(ctx, phone, message, state, context, opts?.roomChange);
+  if (roomChangeResult) return roomChangeResult;
+
 
   // Geser jendela 15 menit setiap pesan tamu selama alur masih berjalan.
   // update_conversation_topic tidak mengubah updated_at, jadi tanpa ini
