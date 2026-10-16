@@ -613,9 +613,7 @@ function buildBookingSummary(
   const ratePrefix = overrides?.hasDynamicBreakdown ? "rata-rata " : "";
   const transfer = formatTransferAccountLine();
   const paymentLine =
-    nights != null && nights < 2
-      ? `• Pembayaran: Lunas di tempat saat check-in (tanpa DP), atau transfer ke ${transfer}\n`
-      : requiresFullPayment(nights)
+    requiresFullPayment(nights)
         ? `• Pembayaran: Wajib lunas${grandTotal > 0 ? ` ${fmtRp(grandTotal)}` : ""} via transfer ke ${transfer} (${FULL_PAYMENT_POLICY_TEXT}, tanpa DP)\n`
       : context.paymentType === "dp"
         ? `• Pembayaran: DP${context.dpAmount ? ` ${fmtRp(context.dpAmount)}` : " dulu"} (transfer ke ${transfer})\n`
@@ -2264,8 +2262,8 @@ export async function processBookingState(
   if (paymentQuestion && state === "CONFIRMING_BOOKING" && !CONFIRM_PATTERN.test(message)) {
     const stayNights =
       context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : null;
-    if (stayNights != null && stayNights < 2) {
-      context.paymentType = undefined;
+    if (requiresFullPayment(stayNights)) {
+      context.paymentType = "full";
       context.dpAmount = undefined;
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
     }
@@ -2913,8 +2911,8 @@ export async function processBookingState(
     const dpMatch = message.match(/\b(dp|down\s*payment|uang\s*muka|dp\s*dulu|bayar\s*sebagian)\b/i);
     const fullPayMatch = message.match(/\b(lunas|full\s*pay|bayar\s*penuh|langsung\s*lunas)\b/i);
     if (isGuestPaymentQuestion(message) && !CONFIRM_PATTERN.test(message)) {
-      if (stayNights != null && stayNights < 2) {
-        context.paymentType = undefined;
+      if (requiresFullPayment(stayNights)) {
+        context.paymentType = "full";
         context.dpAmount = undefined;
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
       }
@@ -2927,11 +2925,8 @@ export async function processBookingState(
         }),
       };
     }
-    if (stayNights != null && stayNights < 2) {
-      context.paymentType = undefined;
-      context.dpAmount = undefined;
-    } else if (requiresFullPayment(stayNights)) {
-      // 2 malam: wajib lunas, permintaan DP tidak berlaku.
+    if (requiresFullPayment(stayNights)) {
+      // 1–2 malam: wajib lunas via transfer, permintaan DP tidak berlaku.
       if (context.paymentType !== "full" || context.dpAmount !== undefined) {
         context.paymentType = "full";
         context.dpAmount = undefined;
@@ -3036,10 +3031,7 @@ export async function processBookingState(
       // bila pesan "ya" diproses dua kali (retry webhook / tamu ketuk dua kali).
       const confirmNights =
         context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : 0;
-      if (confirmNights < 2) {
-        context.paymentType = undefined;
-        context.dpAmount = undefined;
-      } else if (requiresFullPayment(confirmNights)) {
+      if (requiresFullPayment(confirmNights)) {
         context.paymentType = "full";
         context.dpAmount = undefined;
       }

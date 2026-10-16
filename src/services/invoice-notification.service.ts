@@ -10,7 +10,7 @@ import {
 } from "./guest-whatsapp.service";
 import { toMetaRecipient } from "./whatsapp-meta.service";
 
-/** Teks status pembayaran di pesan invoice. 1 malam tidak memaksa DP atau batas 1 jam. */
+/** Teks status pembayaran di pesan invoice. 1–2 malam wajib lunas via transfer; tidak ada bayar di tempat. */
 export function buildInvoicePaymentLines(opts: {
   paymentStatus: string;
   paidAmount: number;
@@ -30,13 +30,6 @@ export function buildInvoicePaymentLines(opts: {
     );
   }
   if (opts.paymentStatus === "paid") return `• Status Pembayaran: LUNAS ✅`;
-  if (opts.nights < 2 && opts.paidAmount <= 0) {
-    return (
-      `• Status Pembayaran: Lunas di tempat saat check-in (tanpa DP)\n` +
-      `• Bisa juga transfer ke ${formatTransferAccountLine()}\n` +
-      `• Booking sudah tercatat. Tidak ada DP dan tidak ada batas waktu pembatalan otomatis.`
-    );
-  }
   const deadlineText = opts.expiresAt
     ? `\n⏰ Batas waktu pembayaran: 1 jam sejak booking dibuat (${new Date(opts.expiresAt).toLocaleString("id-ID", {
         timeZone: "Asia/Jakarta",

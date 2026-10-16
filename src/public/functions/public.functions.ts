@@ -460,7 +460,8 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
         special_requests: specialRequests,
         check_in_time: data.checkInTime || null,
         check_out_time: data.checkOutTime || null,
-        payment_method: data.paymentMethod || null,
+        // Bayar di tempat dinonaktifkan untuk booking baru: selalu transfer.
+        payment_method: "transfer",
         expires_at: computeBookingExpiryIso(),
       })
       .select("id, reference_code")
@@ -610,7 +611,8 @@ export const submitCartBooking = createServerFn({ method: "POST" })
         special_requests: finalSpecialRequests,
         check_in_time: data.checkInTime || null,
         check_out_time: data.checkOutTime || null,
-        payment_method: data.paymentMethod || null,
+        // Bayar di tempat dinonaktifkan untuk booking baru: selalu transfer.
+        payment_method: "transfer",
         expires_at: computeBookingExpiryIso(),
       })
       .select("id, reference_code")

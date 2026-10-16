@@ -125,7 +125,8 @@ const baseInput = {
     paymentMethod: null,
     totalAmount: 200_000,
   });
-  assert.equal(unmarkedOneNight.params[7], "Bayar di tempat");
+  // Booking baru tanpa tanda onsite tidak lagi dianggap bayar di tempat.
+  assert.equal(unmarkedOneNight.params[7], "Wajib lunas Rp200.000 belum dibayar");
 }
 
 {
