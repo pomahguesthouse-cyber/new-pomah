@@ -330,7 +330,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     type: "function",
     function: {
       name: "change_booking_room",
-      description: "Pindahkan booking ke kamar lain (ubah nomor kamar yang di-assign).",
+      description:
+        "Pindahkan booking ke kamar lain (ubah nomor kamar yang di-assign). Bila TIPE kamar berubah, " +
+        "tarif/total booking dan status pembayaran dihitung ulang; hasil menyebut total lama → baru, sudah dibayar, dan sisa.",
       parameters: {
         type: "object",
         properties: {

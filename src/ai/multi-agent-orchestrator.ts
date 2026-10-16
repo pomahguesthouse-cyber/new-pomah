@@ -36,7 +36,7 @@ import { ASK_AGENT_TOOL_NAME } from "./agents/manager.agent";
 import { executeTool } from "@/tools/executor";
 import { parseManagerCommand, formatManagerCommandResult, formatRoomRatesList } from "./manager-command-parser";
 import type { ToolContext } from "@/tools/types";
-import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
+import { getBookingState, processBookingState, isDataEntryState, ROOM_CHANGE_INTENT_RE } from "./state-machine/booking-machine";
 import { getMissingSlots, formatPartialBookingSummary, extractAllSlots } from "./state-machine/flexible-slot-extractor";
 import { resolveContext, seedEntityFromSummary } from "./router/context-resolver";
 import { rewriteQuery } from "./router/query-rewriter";
@@ -565,12 +565,18 @@ async function runAgent(
       `• Menginap: ${ab.checkIn} → ${ab.checkOut}\n` +
       `• Status: ${ab.status}${ab.paymentStatus ? ` / pembayaran: ${ab.paymentStatus}` : ""}\n` +
       (roomLines ? `• Kamar & harga yang sudah disepakati:\n${roomLines}\n` : "") +
-      `• Total: ${idr(ab.totalAmount)}` +
-      (ab.paidAmount && ab.paidAmount > 0 ? `, sudah dibayar ${idr(ab.paidAmount)}` : "") +
+      `• Total: ${idr(ab.totalAmount)}\n` +
+      `• Sudah dibayar: ${idr(Math.max(0, ab.paidAmount ?? 0))}\n` +
+      `• Sisa yang belum dibayar: ${idr(Math.max(0, ab.totalAmount - Math.max(0, ab.paidAmount ?? 0)))}` +
       `\nATURAN: Jika tamu bertanya soal harga/kamar untuk booking yang SAMA ini, ` +
       `pakai HARGA TERKUNCI di atas — JANGAN meng-quote ulang harga dinamis terbaru ` +
       `yang bisa berbeda. Jangan menaikkan harga yang sudah disepakati. Kalau tamu ` +
-      `minta tanggal/kamar BARU di luar booking ini, barulah cek harga terkini seperti biasa.`;
+      `minta tanggal/kamar BARU di luar booking ini, barulah cek harga terkini seperti biasa.\n` +
+      `ATURAN PINDAH/UPGRADE KAMAR: Bila tamu ingin mengganti tipe kamar booking ini, yang harus ` +
+      `dibayar = TOTAL BARU − SUDAH DIBAYAR (di atas), BUKAN sekadar selisih harga per malam. ` +
+      `Sebutkan total lama → total baru, tambahan biaya, sudah dibayar, dan sisa yang perlu ditransfer. ` +
+      `JANGAN memulai booking baru (start_booking/create_booking) untuk tanggal yang sama; ` +
+      `perubahan diproses staf.`;
   }
 
   if (agentCtx.bookingInProgress) {
@@ -975,7 +981,13 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   // 3. State Machine Interception
   const stateRecord = await getBookingState(input.toolCtx.supabaseAdmin, input.phone);
 
-  if (stateRecord.state !== "IDLE" || /^\[FORM_SUBMITTED:[^\]]+\]\s*$/i.test(lastUserMsg)) {
+  if (
+    stateRecord.state !== "IDLE" ||
+    /^\[FORM_SUBMITTED:[^\]]+\]\s*$/i.test(lastUserMsg) ||
+    // Tamu dengan booking aktif minta ganti kamar: quote deterministik
+    // (total baru, sudah dibayar, sisa) dari state machine, bukan hitungan LLM.
+    (input.agentCtx.activeBooking?.referenceCode && ROOM_CHANGE_INTENT_RE.test(lastUserMsg))
+  ) {
     console.info(`[MultiAgent] Intercepted by Booking State Machine | State: ${stateRecord.state}`);
     const stateResult = await processBookingState(input.toolCtx, input.phone, lastUserMsg, stateRecord, {
       knownGuestName: input.agentCtx.chatSummaryJson?.guest_name ?? null,
