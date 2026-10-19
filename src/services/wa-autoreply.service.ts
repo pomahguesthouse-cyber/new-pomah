@@ -2403,6 +2403,40 @@ export async function executeAutoreplyForPhone(
     const priorInbound = inbound.slice(0, Math.max(0, inbound.length - burstCount));
     finalReply = stripUnrequestedPriceList(stripEchoedGuestQuestions(finalReply, priorInbound), burst);
   }
+  // Klaim "tanggal sudah diubah" untuk booking yang sudah tercatat (jalur AI)
+  // diganti jawaban jujur + admin diberi tahu. Booking tidak diubah di sini.
+  if (!isManager) {
+    try {
+      const guard = await import("@/services/wa-autoreply/date-change-claim-guard");
+      if (guard.claimsDateUpdated(finalReply)) {
+        const { loadActiveUpcomingBookings } = await import("@/services/room-change-quote");
+        const bookings = await loadActiveUpcomingBookings(supabaseAdmin as any, [phone], todayWIB());
+        const toolsUsed = ((orchResult?.toolsUsed ?? []) as unknown[]).map(String);
+        if (guard.shouldReplaceDateUpdateClaim({ reply: finalReply, hasRecordedBooking: bookings.length > 0, toolsUsed })) {
+          const ref = bookings[0]?.referenceCode || null;
+          console.warn(`[Autoreply] False date-update claim replaced for ${phone.slice(-6)} (${ref ?? "-"})`);
+          finalReply = guard.buildHonestDateChangeReply(ref);
+          const b = bookings[0];
+          deferAfterReply("Autoreply.dateChangeNotify", async () => {
+            const { notifyBookingChangeRequest } = await import("@/services/manager-notifier.service");
+            await notifyBookingChangeRequest(supabaseAdmin as any, {
+              phone,
+              bookingCode: ref ?? "-",
+              guestName: c.display_name ?? null,
+              recordedCheckIn: b?.checkIn ?? null,
+              recordedCheckOut: b?.checkOut ?? null,
+              requestedChange: (lastMessage ?? "").slice(0, 240),
+              threadId: c.thread_id ?? null,
+              dedupeKey: `${ref ?? phone}:${(lastMessage ?? "").trim().slice(0, 80).toLowerCase()}`,
+            });
+          });
+          await startAdminHandoff("booking_change_request", lastMessage ?? "", { notify: false });
+        }
+      }
+    } catch (e) {
+      console.warn("[Autoreply] date-claim guard failed (non-fatal):", e);
+    }
+  }
   if (!orchResult?.fastPath) {
     const delivery = {
       ...(orchResult?.mediaDelivery ?? emptyMediaDelivery()),
