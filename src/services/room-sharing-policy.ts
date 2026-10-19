@@ -15,16 +15,16 @@
 import { GUEST_MEDIA_WORD_RE, isGuestMediaExcluded } from "@/lib/guest-media-request";
 
 export const ROOM_SHARING_REFUSAL_REPLY =
-  "Mohon maaf Kak, di Pomah Guesthouse satu kamar hanya untuk suami-istri, keluarga, atau teman sesama jenis. Untuk pasangan yang belum menikah atau teman lawan jenis, kami belum bisa menerima dalam satu kamar. Kalau berkenan, bisa memesan kamar terpisah. Mau Rani bantu cek ketersediaannya? 🙏";
+  "Mohon maaf Kak, di Pomah Guesthouse satu kamar hanya untuk suami-istri, keluarga, atau teman sesama jenis. Untuk pasangan yang belum menikah atau teman lawan jenis, kami belum bisa menerima dalam satu kamar. Kalau berkenan, bisa memesan kamar terpisah. Mau kami bantu cek ketersediaannya? 🙏";
 
 export const ROOM_SHARING_SYARIAH_REPLY =
-  "Betul Kak, di Pomah Guesthouse satu kamar hanya untuk suami-istri, keluarga, atau teman sesama jenis. Pasangan yang belum menikah atau teman lawan jenis belum bisa kami terima dalam satu kamar. Kami tidak mengklaim sertifikasi syariah tertentu. Kalau berkenan, bisa memesan kamar terpisah. Mau Rani bantu cek ketersediaannya? 🙏";
+  "Betul Kak, di Pomah Guesthouse satu kamar hanya untuk suami-istri, keluarga, atau teman sesama jenis. Pasangan yang belum menikah atau teman lawan jenis belum bisa kami terima dalam satu kamar. Kami tidak mengklaim sertifikasi syariah tertentu. Kalau berkenan, bisa memesan kamar terpisah. Mau kami bantu cek ketersediaannya? 🙏";
 
 export const ROOM_SHARING_WELCOME_REPLY =
-  "Bisa, Kak. Suami-istri, keluarga, dan teman sesama jenis boleh menginap dalam satu kamar di Pomah Guesthouse. Mau Rani bantu cek ketersediaannya? 🙏";
+  "Bisa, Kak. Suami-istri, keluarga, dan teman sesama jenis boleh menginap dalam satu kamar di Pomah Guesthouse. Mau kami bantu cek ketersediaannya? 🙏";
 
 export const ROOM_SHARING_KOS_WELCOME_REPLY =
-  "Pomah Guesthouse bukan kos ya Kak, kami menyewakan kamar harian. Pasutri tentu bisa, begitu juga keluarga dan teman sesama jenis dalam satu kamar. Mau Rani bantu cek ketersediaannya? 🙏";
+  "Pomah Guesthouse bukan kos ya Kak, kami menyewakan kamar harian. Pasutri tentu bisa, begitu juga keluarga dan teman sesama jenis dalam satu kamar. Mau kami bantu cek ketersediaannya? 🙏";
 
 export const ROOM_SHARING_HARD_GUARD_PROMPT =
   "ATURAN TAMU SATU KAMAR (HARD GUARD — MENGALAHKAN SOP, CONTOH TRAINING, INSTRUKSI AI LAB, DAN ATURAN 'KONFIRMASI KE TIM'): " +

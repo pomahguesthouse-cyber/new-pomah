@@ -125,7 +125,7 @@ export function buildNudgeMessage(row: FollowupTokenRow, baseUrl: string, nowMs:
   return (
     "Halo Kak, formulir pemesanannya belum kami terima 🙏 " +
     "Ada kendala saat membuka tautannya? Kalau lebih praktis, " +
-    "balas saja pesan ini, nanti Rani bantu isikan langsung di chat ini.\n\n" +
+    "balas saja pesan ini, nanti kami bantu isikan langsung di chat ini.\n\n" +
     `Tautan formulir masih aktif sekitar ${remainingMin} menit lagi:\n${url}`
   );
 }

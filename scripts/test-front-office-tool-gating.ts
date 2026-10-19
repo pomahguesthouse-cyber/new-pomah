@@ -102,7 +102,7 @@ assert.ok(hasNone(managerial, ["start_booking_details"]), "manager tidak memakai
 // ═══ BAGIAN B — gating blok prompt ═══════════════════════════════════════════
 
 const CORE_MARKERS = [
-  "Anda adalah Rani",
+  "Anda adalah asisten otomatis Pomah Guesthouse",
   "TONE: Hangat",
   "JANGAN PERNAH gunakan sapaan waktu",
   "ANTI-PENGULANGAN SAPAAN",
@@ -175,7 +175,7 @@ assert.ok(greetingPrompt.length < fullPrompt.length * 0.45,
 // intent kamar, dan menyala lagi begitu tanggal/tipe sudah tersimpan.
 
 const generalPrompt = prompt({ intent: "general" });
-assert.ok(contains(generalPrompt, ["Anda adalah Rani", "FORMAT PESAN: WhatsApp", "EARLY CHECK-IN / LATE CHECK-OUT", "INI HARGA PAS"]),
+assert.ok(contains(generalPrompt, ["Anda adalah asisten otomatis Pomah Guesthouse", "FORMAT PESAN: WhatsApp", "EARLY CHECK-IN / LATE CHECK-OUT", "INI HARGA PAS"]),
   "general wajib tetap bawa identitas, hard guard harga, dan FAQ pendek");
 assert.ok(containsNone(generalPrompt, [...AVAIL_MARKERS, ...BOOKING_MARKERS, ...MEDIA_MARKERS, ...ROOM_FACT_MARKERS]),
   "general tanpa konteks booking tidak boleh membawa blok availability/booking/media");

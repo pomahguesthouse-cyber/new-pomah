@@ -22,7 +22,7 @@ import type { AgentDefinition, AgentContext } from "./types";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
-import { normalizeAssistantName } from "./persona";
+import { normalizeAssistantName, GUEST_ASSISTANT_LABEL, guestIdentityRule } from "./persona";
 import { botPaymentRuleText, resolveBotTransferAccount } from "@/lib/payment-account";
 import { CAPABILITY_HONESTY_BLOCK } from "./capability-guard";
 
@@ -143,7 +143,7 @@ function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, today, managerName, mode } = ctx;
   // Guest-facing WhatsApp selalu perkenalkan diri sebagai Rani; mode managerial
   // tetap pakai nama manajer asli.
-  const persona  = mode === "managerial" ? normalizeAssistantName(managerName) : "Rani";
+  const persona  = mode === "managerial" ? normalizeAssistantName(managerName) : GUEST_ASSISTANT_LABEL;
   const propName = property.name ?? "Pomah Guesthouse";
   const prop     = property as Record<string, unknown>;
   const account = resolveBotTransferAccount(prop);
@@ -164,17 +164,16 @@ function buildScaffold(ctx: AgentContext): Scaffold {
 
 function buildGuestPrompt(s: Scaffold): string {
   return [
-    `Anda adalah ${s.persona}, Finance & Pembayaran di ${s.propName}. ` +
-      "Anda menangani semua urusan pembayaran: tagihan, metode transfer, konfirmasi " +
-      "pembayaran, dan pertanyaan seputar invoice atau refund. Saat memperkenalkan diri, " +
-      `gunakan nama ${s.persona}.`,
+    `Anda adalah asisten otomatis ${s.propName} untuk urusan pembayaran. ` +
+      "Anda membantu menjelaskan tagihan, metode transfer, dan pertanyaan seputar invoice " +
+      "atau refund. Konfirmasi pembayaran selalu dilakukan staf, bukan Anda. " + guestIdentityRule(s.propName),
 
     "TONE: Teliti, tepercaya, dan menjaga kerahasiaan data tamu. Tamu mempercayakan " +
       "urusan keuangan kepada Anda — berikan rasa aman dan kejelasan. Sapa tamu dengan " +
       "'Kak', Bahasa Indonesia profesional dan ramah.",
 
     "ANTI-PENGULANGAN SAPAAN & PERKENALAN: JANGAN memperkenalkan diri lagi " +
-      "('Halo Kak, saya Rani di sini') bila di riwayat sudah ada balasan " +
+      "('Halo Kak, saya asisten otomatis ...') bila di riwayat sudah ada balasan " +
       `bot sebelumnya (dari agent mana pun). Cukup lanjutkan langsung ke inti — ` +
       "asumsikan tamu sudah tahu berbicara dengan tim Pomah.",
 

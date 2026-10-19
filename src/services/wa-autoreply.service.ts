@@ -749,7 +749,7 @@ export async function executeAutoreplyForPhone(
   const sendTarget = String(c.send_target || c.external_chat_id || phone);
   const rawManager = await resolveManagerByPhone(phone);
   // Satu-satunya kanal WhatsApp adalah nomor resmi Meta: semua pengirim
-  // (termasuk manager) selalu dilayani Rani, bukan Asisten Admin.
+  // (termasuk manager) selalu dilayani kami, bukan Asisten Admin.
   const viaOfficialNumber = true;
   // Manager bisa mengaktifkan "guest mode" untuk menguji alur tamu (booking,
   // invoice, pembayaran) tanpa ter-route ke agen manajerial.
@@ -2178,7 +2178,7 @@ export async function executeAutoreplyForPhone(
     (t: string) => t === "Room - Kirim Foto ke WA Tamu" || t === "Room - Kirim Link Virtual Tour 360°",
   );
   if (!reply && mediaAlreadySent) {
-    adoptReply("Dengan senang hati, Kak 😊 Ini foto kamarnya. Rencana menginap tanggal berapa dan untuk berapa orang? Nanti Rani cekkan kamarnya.");
+    adoptReply("Dengan senang hati, Kak 😊 Ini foto kamarnya. Rencana menginap tanggal berapa dan untuk berapa orang? Nanti kami cekkan kamarnya.");
   }
   if (!reply && isGenericFallback && queueEntryId && queueAttempt < QUEUE_MAX_ATTEMPTS) {
     await quickAck.beforeReplySend();

@@ -115,7 +115,8 @@ export function buildFrustrationReply(
 
   if (kind === "trust_question") {
     const body =
-      "Wajar sekali Kakak ingin memastikan dulu 🙏\n\n" +
+      "Wajar sekali Kakak ingin memastikan dulu 🙏 Pesan ini dibalas oleh asisten otomatis " +
+      "Pomah Guesthouse, bukan staf manusia.\n\n" +
       TRUST_VERIFICATION +
       "\n\nKalau ingin bicara langsung dengan tim kami, balas \"admin\" ya.";
     return { reply: body, shouldHandoff: false };
@@ -123,7 +124,7 @@ export function buildFrustrationReply(
 
   // frustrated → handoff
   const head =
-    "Mohon maaf ya Kak, prosesnya jadi membingungkan. Rani rangkum dulu " +
+    "Mohon maaf ya Kak, prosesnya jadi membingungkan. Kami rangkum dulu " +
     "info dari Kakak, lalu teruskan ke tim kami.";
   const body =
     [head, summary, TRUST_VERIFICATION, "Tim kami akan segera membalas di chat ini ya, Kak 🙏"]

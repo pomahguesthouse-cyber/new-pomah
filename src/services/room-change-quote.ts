@@ -140,7 +140,7 @@ export function formatRoomChangeQuoteReply(q: RoomChangeQuote, fmtDate: (d: stri
       return `Booking ${q.referenceCode} Kakak sudah memakai kamar ${q.newRoomTypeName} untuk ${stay} ya, Kak.`;
     }
     return (
-      `Untuk perubahan kamar booking ${q.referenceCode}, Rani teruskan ke staf kami dulu ya, Kak, ` +
+      `Untuk perubahan kamar booking ${q.referenceCode}, kami teruskan ke staf kami dulu ya, Kak, ` +
       `supaya rincian biayanya dihitung dengan tepat.`
     );
   }
@@ -162,7 +162,7 @@ export function formatRoomChangeQuoteReply(q: RoomChangeQuote, fmtDate: (d: stri
   }
   return (
     lines.join("\n") +
-    `\n\nKalau setuju, balas *ya* — perubahan akan Rani teruskan ke staf untuk diproses. ` +
+    `\n\nKalau setuju, balas *ya* — perubahan akan kami teruskan ke staf untuk diproses. ` +
     `Booking belum berubah sebelum staf mengonfirmasi.`
   );
 }
