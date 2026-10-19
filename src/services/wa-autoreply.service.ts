@@ -1509,6 +1509,54 @@ export async function executeAutoreplyForPhone(
     }
   }
 
+  // Knowledge base fasilitas per kamar (wifi, dapur, handuk, hairdryer,
+  // titik check-in) — sumber tunggal. Kolom kosong → handoff admin, bukan tebakan.
+  if (!reply && !isManager && !multiPendingInbound && !wantsMedia && !deferMediaToAi && lastMessage && lastMessage.length <= 220) {
+    try {
+      const kb = await import("@/services/room-facility-kb");
+      const topic = kb.detectFacilityTopic(lastMessage);
+      if (topic) {
+        const rows = await kb.loadFacilityKb(supabaseAdmin as any);
+        let roomTypeIds: string[] = [];
+        try {
+          const { loadActiveUpcomingBookings } = await import("@/services/room-change-quote");
+          const bookings = await loadActiveUpcomingBookings(supabaseAdmin as any, [phone], todayWIB());
+          roomTypeIds = (bookings[0]?.rooms ?? []).map((r) => r.roomTypeId).filter((x): x is string => !!x);
+        } catch {
+          roomTypeIds = [];
+        }
+        const placeId = typeof (p as any).google_place_id === "string" ? (p as any).google_place_id.trim() : "";
+        const answer = kb.answerFromFacilityKb({
+          topic,
+          rows,
+          roomTypeIds,
+          fallbackMapsUrl: placeId ? `https://www.google.com/maps/place/?q=place_id:${placeId}` : null,
+        });
+        if (answer.kind === "answer") {
+          adoptReply(answer.reply);
+        } else {
+          const { buildAdminHandoffGuestReply } = await import("@/services/wa-autoreply/admin-handoff");
+          adoptReply([answer.partialReply, buildAdminHandoffGuestReply("facility_unknown")].filter(Boolean).join("\n\n"));
+          await startAdminHandoff(
+            "facility_unknown",
+            `${lastMessage}\n\n[KB kosong: ${answer.missing.map((f) => kb.FACILITY_FIELD_LABEL[f]).join(", ")}]`,
+          );
+        }
+        orchResult = {
+          agentKey: "front-office",
+          intent: `facility_kb_${topic}`,
+          routingConfidence: 1,
+          escalated: answer.kind === "handoff",
+          toolsUsed: ["room-facility-kb"],
+          fastPath: true,
+        };
+        console.info(`[Autoreply] Facility KB (${topic}, ${answer.kind}) for ${phone.slice(-6)}`);
+      }
+    } catch (e) {
+      console.warn("[Autoreply] facility KB fast-path failed (falling back):", e);
+    }
+  }
+
   if (!reply && FAST_FAQ_ENABLED && !isManager && !bookingActive && !multiPendingInbound && !deferMediaToAi && (!wantsMedia || facilityAsk) && lastMessage) {
     const fastFaq = buildPropertyFaqReply({
       message: lastMessage,
@@ -1966,6 +2014,21 @@ export async function executeAutoreplyForPhone(
         `[Autoreply] Negative retrieval: ${negativeExamples.length} contoh buruk ` +
           `(top sim ${negativeExamples[0].similarity.toFixed(2)})`,
       );
+    }
+  }
+
+  // KB fasilitas ikut ke konteks AI supaya jawaban di jalur AI juga satu sumber.
+  if (!reply && !isManager) {
+    try {
+      const kb = await import("@/services/room-facility-kb");
+      const rows = await kb.loadFacilityKb(supabaseAdmin as any);
+      const names = new Map<string, string>(
+        ((rooms ?? []) as Array<{ id: string; name?: string | null }>).map((r) => [r.id, String(r.name ?? "Kamar")]),
+      );
+      const block = kb.buildFacilityKbPromptBlock(rows, names);
+      sopText = sopText ? `${block}\n\n${sopText}` : block;
+    } catch (e) {
+      console.warn("[Autoreply] facility KB context failed (non-fatal):", e);
     }
   }
 
