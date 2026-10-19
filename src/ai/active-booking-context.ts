@@ -105,7 +105,9 @@ export async function resolveActiveBookingContext(
   const block =
     `⚠️ TAMU INI SUDAH PUNYA BOOKING AKTIF (menjelang check-in). ` +
     `JANGAN tanya ulang tanggal/kamar/nama — pakai data ini sebagai fakta:\n` +
-    lines.join("\n");
+    lines.join("\n") +
+    "\nJANGAN menawarkan cek ketersediaan atau booking baru kecuali tamu memintanya secara eksplisit. " +
+    "Jawab pertanyaan tamu dalam konteks booking di atas (lokasi/titik check-in, kamar, pembayaran, fasilitas).";
 
   return { block, bookings: rows };
 }
