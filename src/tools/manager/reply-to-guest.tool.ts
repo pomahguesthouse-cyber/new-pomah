@@ -100,6 +100,7 @@ export const replyToGuest: ToolHandler = async (
     .insert({
       thread_id: thread.id,
       direction: "out",
+      from_me: true,
       body:      message,
       metadata:  { agent: "Manager Agent", via: "manager_relay", is_manual: true },
     })

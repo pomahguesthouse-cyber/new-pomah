@@ -268,6 +268,7 @@ export const sendMessage = createServerFn({ method: "POST" })
       const { error } = await context.supabase.from("whatsapp_messages").insert({
         thread_id: data.threadId,
         direction: "out",
+        from_me: true,
         body: caption,
         wpp_id: wppId,
         metadata: {
@@ -417,6 +418,7 @@ export const simulateInbound = createServerFn({ method: "POST" })
     await context.supabase.from("whatsapp_messages").insert({
       thread_id: data.threadId,
       direction: "in",
+      from_me: false,
       body: data.body,
     });
     await context.supabase
