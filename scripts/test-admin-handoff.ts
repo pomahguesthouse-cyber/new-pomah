@@ -7,6 +7,8 @@ import {
   laterPause,
   replyDefersToStaff,
   triggerAdminHandoff,
+  detectTransferClaim,
+  TRANSFER_CLAIM_REPLY,
 } from "../src/services/wa-autoreply/admin-handoff";
 
 // Pemicu dari pesan tamu
@@ -82,5 +84,15 @@ assert.equal(laterPause("2026-10-19T09:00:00Z", "2026-10-19T10:01:00Z"), "2026-1
   });
   assert.equal(res2.ticketId, null);
 }
+
+// Item 6: klaim sudah transfer → alert admin, tanpa ETA, status tetap belum lunas
+for (const t of ["sudah transfer ya kak", "Udah tf kak", "barusan saya transfer", "sudah saya bayar lunas"]) {
+  assert.equal(detectTransferClaim(t), true, t);
+}
+for (const t of ["kalau sudah transfer harus kirim bukti?", "transfer ke mana kak?", "nanti saya transfer"]) {
+  assert.equal(detectTransferClaim(t), false, t);
+}
+assert.ok(!/\d+\s*(menit|jam)|1\s*[x×]\s*24|segera|lunas/i.test(TRANSFER_CLAIM_REPLY));
+assert.match(TRANSFER_CLAIM_REPLY, /Kami cek terlebih dahulu ya, Kak/);
 
 console.log("✓ admin handoff: pemicu, balasan tanpa ETA, notifikasi, jeda bot");

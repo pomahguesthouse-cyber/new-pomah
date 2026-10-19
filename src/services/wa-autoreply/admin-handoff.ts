@@ -55,6 +55,22 @@ const COMPLAINT_PATTERNS: RegExp[] = [
   /\b(kamar|kamarnya|ac|air|wifi|shower|kran|lampu|tv)\b.{0,20}\b(rusak|mati|bocor|tidak berfungsi|gak berfungsi|ga berfungsi|tidak nyala|gak nyala|ga nyala)\b/,
 ];
 
+const TRANSFER_CLAIM_RE =
+  /\b(sudah|udah|udh|sdh|barusan|baru saja|baru aja|telah)\s+(?:saya\s+|aku\s+)?(tf|transfer|trf|ditransfer|bayar|dibayar|bayar lunas|lunas|kirim (?:uang|dana)|dp)\b/;
+
+/** Tamu bilang sudah transfer (teks, tanpa gambar bukti). */
+export function detectTransferClaim(text: string): boolean {
+  const t = norm(text);
+  if (!t || t.length > 300) return false;
+  if (/\?/.test(t) && /\b(kalau|kalo|bisa|boleh|harus|apakah)\b/.test(t)) return false;
+  return TRANSFER_CLAIM_RE.test(t);
+}
+
+/** Balasan untuk klaim transfer tanpa bukti. Status tetap belum lunas; tanpa batas waktu. */
+export const TRANSFER_CLAIM_REPLY =
+  "Terima kasih, Kak 🙏 Kami cek terlebih dahulu ya, Kak. Kalau belum, mohon kirim foto/screenshot bukti " +
+  "transfernya di chat ini supaya admin bisa mencocokkan pembayarannya.";
+
 /** Pemicu dari pesan tamu (teks). Bukti transfer dideteksi terpisah dari media. */
 export function detectGuestHandoffTrigger(text: string): AdminHandoffKind | null {
   const t = norm(text);
