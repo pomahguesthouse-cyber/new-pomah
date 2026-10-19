@@ -30,6 +30,7 @@ import {
 import { mentionsExplicitDateSignal } from "@/lib/id-date";
 import { isGeneralFacilityQuestion } from "@/lib/guest-media-request";
 import { buildRoomSharingReply } from "@/services/room-sharing-policy";
+import { detectFacilityTopic } from "@/services/room-facility-kb";
 
 export interface PropertyFaqReply {
   reply: string;
@@ -214,6 +215,10 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   if (sharing) return sharing;
 
   if (raw.length > 260) return null;
+
+  // WiFi password, dapur/alat masak, handuk, hairdryer, titik check-in dijawab
+  // dari knowledge base fasilitas (room-facility-kb), bukan template di sini.
+  if (detectFacilityTopic(raw)) return null;
 
   // Pertanyaan DP / bayar di tempat harus dijawab sebelum sinyal komplain
   // ("tidak bisa") dan sebelum FAQ_BLOCK yang memuat kata dp/bayar/malam.
