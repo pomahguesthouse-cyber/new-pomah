@@ -329,7 +329,7 @@ export function guardUnverifiedMediaClaims(reply: string, delivery: MediaDeliver
   if (!stripped) return source;
   if (kept.length === 0) {
     if (delivery.brochureSent) {
-      return "Brosurnya sudah kami kirim di atas ya, Kak. Kalau ada pertanyaan lain, Rani bantu.";
+      return "Brosurnya sudah kami kirim di atas ya, Kak. Kalau ada pertanyaan lain, kami bantu.";
     }
     return "Baik Kak, saya bantu lanjut ya. Kalau ada yang ingin ditanyakan lagi, silakan ditulis.";
   }
@@ -363,7 +363,7 @@ export function normalizeBrochureReply(
   const fileText = attachmentName.trim() ? ` (${attachmentName.trim()})` : "";
   return (
     `Dengan senang hati, Kak 😊 Ini brosur kamar Pomah Guesthouse${fileText}.\n\n` +
-    "Kalau sudah ada rencana, kabari tanggal menginap dan jumlah tamunya ya, nanti Rani bantu pilihkan kamar."
+    "Kalau sudah ada rencana, kabari tanggal menginap dan jumlah tamunya ya, nanti kami bantu pilihkan kamar."
   );
 }
 

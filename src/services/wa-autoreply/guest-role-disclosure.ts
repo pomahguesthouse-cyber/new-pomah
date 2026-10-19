@@ -3,6 +3,22 @@ const INTERNAL_GUEST_ROLE_REPLACEMENTS: Array<{
   replacement: string;
 }> = [
   {
+    // Bot bukan manusia: nama persona lama (Rani dkk.) + divisi staf diganti
+    // label jujur. Kasus 17 Okt: "Rani dari Finance & Pembayaran" bikin tamu
+    // ragu rekeningnya aman.
+    pattern:
+      /\b(Saya|saya|Aku|aku)\s+(?:Rani|Sinta|Santi|Dewi|Julia|Hana|Juminten)\b(?:\s*(?:,\s*)?(?:dari|di|sebagai|,)\s*(?:tim\s+|bagian\s+)?(?:Finance\s*(?:&|dan)\s*Pembayaran|Finance|Front Office(?:\s+(?:Agent|Specialist))?|Customer Care|Pricing (?:Specialist|Agent)|Reservasi)(?:\s+(?:di\s+)?(?:Pomah Guesthouse|sini))?)?/gu,
+    replacement: "$1 asisten otomatis Pomah Guesthouse",
+  },
+  {
+    pattern: /\b(?:Rani|Sinta|Santi)\s+dari\s+(?:tim\s+)?Finance\s*(?:&|dan)\s*Pembayaran\b/giu,
+    replacement: "asisten otomatis Pomah Guesthouse",
+  },
+  {
+    pattern: /\b(?:dari\s+)?tim\s+Finance\s*(?:&|dan)\s*Pembayaran\b/giu,
+    replacement: "dari Pomah Guesthouse",
+  },
+  {
     pattern:
       /\bSaya\s+([\p{L}][\p{L}\s.'-]{0,40}),\s*(?:seorang\s+)?(?:Pricing Specialist|Pricing Agent|Front Office Specialist|Front Office Agent|Booking Specialist|Reservation Specialist)(?:\s+di\s+sini)?[.!]?\s*/giu,
     replacement: "Saya $1 siap membantu.\n\n",

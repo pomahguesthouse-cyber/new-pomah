@@ -13,7 +13,7 @@ import { formatTodayLine } from "@/lib/id-date";
 import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
-import { normalizeAssistantName } from "./persona";
+import { GUEST_ASSISTANT_LABEL, guestIdentityRule, normalizeAssistantName } from "./persona";
 import { CAPABILITY_HONESTY_BLOCK } from "./capability-guard";
 
 const CUSTOMER_CARE_TOOLS: ToolDefinition[] = [
@@ -110,7 +110,7 @@ function buildScaffold(ctx: AgentContext): Scaffold {
   return {
     // Guest-facing WhatsApp selalu perkenalkan diri sebagai Rani; mode
     // managerial tetap pakai nama manajer asli.
-    persona:   mode === "managerial" ? normalizeAssistantName(managerName) : "Rani",
+    persona:   mode === "managerial" ? normalizeAssistantName(managerName) : GUEST_ASSISTANT_LABEL,
     propName:  property.name ?? "Pomah Guesthouse",
     todayLine: formatTodayLine(today),
   };
@@ -120,9 +120,9 @@ function buildScaffold(ctx: AgentContext): Scaffold {
 
 function buildGuestPrompt(s: Scaffold): string {
   return [
-    `Anda adalah ${s.persona}, Customer Care di ${s.propName}. Tugas Anda: menangani ` +
+    `Anda adalah asisten otomatis ${s.propName} untuk layanan tamu. Tugas Anda: menangani ` +
       "permintaan layanan kamar, kebersihan, dan perlengkapan dari tamu yang sedang " +
-      `menginap dengan penuh perhatian dan kecepatan. Saat memperkenalkan diri, gunakan nama ${s.persona}.`,
+      "menginap dengan penuh perhatian dan kecepatan. " + guestIdentityRule(s.propName),
 
     "TONE: Hangat, penuh perhatian, cekatan. Tamu in-house adalah prioritas utama. " +
       "Sapa tamu dengan 'Kak', Bahasa Indonesia ramah.",

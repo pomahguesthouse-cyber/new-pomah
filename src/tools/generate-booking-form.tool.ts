@@ -175,9 +175,9 @@ export const generateBookingForm: ToolHandler = async (args, ctx) => {
     `Supaya lebih cepat, silakan lengkapi data pemesanan di formulir singkat ${propertyName} berikut ya Kak 🙏` +
     `\n\n${url}\n` +
     contextBlock +
-    `\nCukup isi nama, email (opsional), jumlah tamu, extra bed, dan catatan. Data dari obrolan kita sudah Rani isikan. ` +
+    `\nCukup isi nama, email (opsional), jumlah tamu, extra bed, dan catatan. Data dari obrolan kita sudah kami isikan. ` +
     `Tautan berlaku ${ttlMinutes} menit.\n\n` +
-    `Setelah dikirim, ringkasan booking dan invoice langsung Rani balas di chat ini.`;
+    `Setelah dikirim, ringkasan booking dan invoice langsung kami balas di chat ini.`;
 
   return JSON.stringify({
     ok: true,

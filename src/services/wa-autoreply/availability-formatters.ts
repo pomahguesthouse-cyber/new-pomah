@@ -188,7 +188,7 @@ export function buildAvailabilityNeedDatesReply(
   return {
     intent: "deterministic_availability_need_dates",
     reply:
-      `${prefix}${prefix.endsWith(", ") ? "supaya" : "Supaya"} Rani bisa cek kamar yang kosong, boleh tahu rencana check-in dan check-out tanggal berapa, Kak?`,
+      `${prefix}${prefix.endsWith(", ") ? "supaya" : "Supaya"} kami bisa cek kamar yang kosong, boleh tahu rencana check-in dan check-out tanggal berapa, Kak?`,
   };
 }
 
@@ -290,7 +290,7 @@ export function formatAvailabilityReply(
           intent: "deterministic_availability_focus",
           reply:
             `Masih ada, Kak. Untuk tanggal ${period}, ${focusRoomName} tersisa ${count} unit.${priceText}\n\n` +
-            "Rencananya untuk berapa orang? Biar Rani siapkan bookingnya.",
+            "Rencananya untuk berapa orang? Biar kami siapkan bookingnya.",
         };
       }
       const others = available
@@ -306,7 +306,7 @@ export function formatAvailabilityReply(
         reply:
           `Mohon maaf Kak, untuk tanggal ${period} ${focusRoomName} sudah penuh.` +
           (others.length > 0
-            ? `\n\nPilihan yang masih tersedia:\n${others.join("\n")}\n\nMau Rani bantu amankan salah satunya?`
+            ? `\n\nPilihan yang masih tersedia:\n${others.join("\n")}\n\nMau kami bantu amankan salah satunya?`
             : "\n\nKalau tanggalnya bisa digeser, kabari tanggal lain, nanti kami cek terlebih dahulu ya, Kak."),
       };
     }
@@ -323,7 +323,7 @@ export function formatAvailabilityReply(
     intent: "deterministic_availability",
     reply:
       `${greet ? "Halo Kak, untuk" : "Untuk"} tanggal ${period}, kamar yang masih tersedia:\n${lines.join("\n")}\n\n` +
-      "Rencananya untuk berapa orang, Kak? Nanti Rani bantu pilihkan yang pas.",
+      "Rencananya untuk berapa orang, Kak? Nanti kami bantu pilihkan yang pas.",
   };
 }
 

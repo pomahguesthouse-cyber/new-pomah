@@ -194,7 +194,7 @@ const withDates = frontOfficeAgent.buildSystemPrompt(ctx({
   agreedDates: { checkIn: "2026-09-01", checkOut: "2026-09-02" },
 }));
 
-assert.ok(general.includes("Anda adalah Rani"));
+assert.ok(general.includes("Anda adalah asisten otomatis Pomah Guesthouse"));
 assert.ok(general.includes("EARLY CHECK-IN / LATE CHECK-OUT"));
 assert.ok(!general.includes("KETERSEDIAAN KAMAR — ATURAN TANGGAL"));
 assert.ok(!general.includes("BOOKING VIA CHAT"));

@@ -29,10 +29,10 @@ export interface GalleryRoom {
 }
 
 export const MEDIA_FAST_PATH_PHOTO_REPLY =
-  "Dengan senang hati, Kak 😊 Ini foto kamarnya. Rencana menginap tanggal berapa dan untuk berapa orang? Nanti Rani cekkan kamarnya.";
+  "Dengan senang hati, Kak 😊 Ini foto kamarnya. Rencana menginap tanggal berapa dan untuk berapa orang? Nanti kami cekkan kamarnya.";
 
 export const MEDIA_FAST_PATH_ALREADY_SENT_REPLY =
-  "Foto kamarnya sudah kami kirim di atas ya, Kak 😊 Kalau sudah ada rencana tanggal, Rani bantu cekkan kamarnya.";
+  "Foto kamarnya sudah kami kirim di atas ya, Kak 😊 Kalau sudah ada rencana tanggal, kami bantu cekkan kamarnya.";
 
 export const MEDIA_FAST_PATH_BROCHURE_REPLY =
   "Dengan senang hati, Kak 😊 Ini brosur kami. Rencana menginap tanggal berapa dan untuk berapa orang?";
@@ -41,7 +41,7 @@ export const MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY =
   "Dengan senang hati, Kak 😊 Ini brosur kamar kami, lengkap dengan foto tiap tipe kamar. Rencana menginap tanggal berapa dan untuk berapa orang?";
 
 export const MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY =
-  "Brosurnya sudah kami kirim di atas ya, Kak 😊 Kalau sudah ada rencana tanggal, Rani bantu cekkan kamarnya.";
+  "Brosurnya sudah kami kirim di atas ya, Kak 😊 Kalau sudah ada rencana tanggal, kami bantu cekkan kamarnya.";
 
 export interface RoomPhotosPlan {
   kind: "room_photos";

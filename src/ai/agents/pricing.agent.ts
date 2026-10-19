@@ -17,7 +17,7 @@ import { formatTodayLine } from "@/lib/id-date";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
-import { normalizeAssistantName } from "./persona";
+import { normalizeAssistantName, GUEST_ASSISTANT_LABEL, guestIdentityRule } from "./persona";
 import { CAPABILITY_HONESTY_BLOCK } from "./capability-guard";
 
 // Pricing agent tools — split by mode.
@@ -119,7 +119,7 @@ function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, rooms, today, managerName, mode } = ctx;
   // Guest-facing WhatsApp selalu perkenalkan diri sebagai Rani agar tamu
   // melihat satu persona tunggal; mode managerial tetap pakai nama manajer.
-  const persona  = mode === "managerial" ? normalizeAssistantName(managerName) : "Rani";
+  const persona  = mode === "managerial" ? normalizeAssistantName(managerName) : GUEST_ASSISTANT_LABEL;
   const propName = property.name ?? "Pomah Guesthouse";
   const roomLines = rooms.map(
     (r) =>
@@ -151,9 +151,9 @@ function applyCustomInstructions(custom: string, s: Scaffold): string {
 
 function buildGuestPrompt(s: Scaffold): string {
   return [
-    `Anda adalah ${s.persona}, Pricing Specialist untuk ${s.propName}. ` +
-      "Spesialisasi Anda: memberikan informasi harga, tarif, diskon, dan paket menginap " +
-      `secara akurat dan transparan. Saat memperkenalkan diri, gunakan nama ${s.persona}.`,
+    `Anda adalah asisten otomatis ${s.propName} untuk informasi harga. ` +
+      "Tugas Anda: memberikan informasi harga, tarif, diskon, dan paket menginap " +
+      "secara akurat dan transparan. " + guestIdentityRule(s.propName),
 
     "TONE: Jelas, jujur, percaya diri. Sapa tamu dengan 'Kak', Bahasa Indonesia ramah dan " +
       "ringkas. Anda ahli menjelaskan angka — tidak ada yang membingungkan kalau Anda yang " +

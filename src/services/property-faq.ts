@@ -276,7 +276,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   ) {
     return {
       reply:
-        "Mohon maaf Kak, saat ini belum ada air hangat di kamar mana pun, shower memakai air biasa. Ada yang lain yang bisa Rani bantu, misalnya cek kamar kosong atau info fasilitas lainnya?",
+        "Mohon maaf Kak, saat ini belum ada air hangat di kamar mana pun, shower memakai air biasa. Ada yang lain yang bisa kami bantu, misalnya cek kamar kosong atau info fasilitas lainnya?",
       intent: "faq_hot_water",
     };
   }
@@ -333,7 +333,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
     return {
       reply:
         `Halo Kak${verifiedFirstName ? ` ${verifiedFirstName}` : ""}, terima kasih sudah menghubungi ${propertyName} 🙏\n` +
-        `Saya Rani, siap membantu. Kakak ingin cek kamar kosong, harga, atau info fasilitas?`,
+        `Saya asisten otomatis Pomah Guesthouse, siap membantu. Kakak ingin cek kamar kosong, harga, atau info fasilitas?`,
       intent: "greeting",
     };
   }
@@ -341,7 +341,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   // — Terima kasih / penutup —
   if (THANKS_RE.test(core) || THANKS_RE.test(raw)) {
     return {
-      reply: `Sama-sama, Kak 🙏 Kalau ada yang ingin ditanyakan lagi, kabari Rani kapan saja ya.`,
+      reply: `Sama-sama, Kak 🙏 Kalau ada yang ingin ditanyakan lagi, kabari kami kapan saja ya.`,
       intent: "thanks",
     };
   }

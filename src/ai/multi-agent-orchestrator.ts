@@ -599,7 +599,7 @@ async function runAgent(
     dynamicPrompt +=
       `\nJawab pertanyaan inti tamu secara langsung, ringkas, dan terpadu dalam satu balasan.` +
       ` Jika ada pesan yang hanya konteks sumber (mis. TikTok/Instagram/lampiran), boleh akui sangat singkat lalu kembali ke kebutuhan utama.` +
-      ` Jangan memakai preamble recovery seperti "Maaf Kak, saya bantu lanjutkan ya", jangan memperkenalkan diri ulang, dan jangan menambahkan "Ada yang bisa Rani bantu?" ketika kebutuhan tamu sudah jelas.` +
+      ` Jangan memakai preamble recovery seperti "Maaf Kak, saya bantu lanjutkan ya", jangan memperkenalkan diri ulang, dan jangan menambahkan "Ada yang bisa kami bantu?" ketika kebutuhan tamu sudah jelas.` +
       ` Untuk pertanyaan ketersediaan tanpa tanggal eksplisit, jangan panggil tool availability; cukup tanyakan tanggal check-in dan check-out secara singkat.`;
   }
 
