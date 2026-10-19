@@ -371,6 +371,7 @@ Terima kasih.`;
         await supabase.from("whatsapp_messages").insert({
           thread_id: threadId,
           direction: "out",
+          from_me: true,
           body: messageBody,
           // Tag metadata pipeline-standar supaya invoice muncul di
           // /admin/routing-debug (sebelumnya invoice tidak terlacak karena
@@ -531,6 +532,7 @@ Terima kasih.`;
           await supabase.from("whatsapp_messages").insert({
             thread_id: threadId,
             direction: "out",
+            from_me: true,
             body: messageBody,
             metadata: {
               agent: "System",

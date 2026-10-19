@@ -76,6 +76,7 @@ export async function logTakeoverNote(
   await db.from("whatsapp_messages").insert({
     thread_id: threadId,
     direction: "out",
+    from_me: true,
     body: `[sistem] ${note}`,
     metadata: { is_system_command: true, takeover_mode: mode, source: "wa_command" },
   });

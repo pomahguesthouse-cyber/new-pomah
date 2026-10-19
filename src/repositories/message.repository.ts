@@ -201,6 +201,7 @@ export async function saveOutboundMessage(
     .insert({
       thread_id: params.threadId,
       direction: "out",
+      from_me: true,
       body:      params.body,
       metadata:  params.metadata ?? null,
     })
@@ -214,7 +215,11 @@ export async function saveOutboundMessage(
 
   await (client as any)
     .from("whatsapp_threads")
-    .update({ updated_at: new Date().toISOString() })
+    .update({
+      updated_at: new Date().toISOString(),
+      last_message_at: new Date().toISOString(),
+      last_message_preview: params.body.slice(0, 120),
+    })
     .eq("id", params.threadId);
 
   return (insertRes.data as { id: string } | null)?.id ?? null;
