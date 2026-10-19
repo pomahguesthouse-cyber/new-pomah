@@ -20,7 +20,8 @@ export type AdminHandoffKind =
   | "cancel_threat"
   | "complaint"
   | "unknown_answer"
-  | "facility_unknown";
+  | "facility_unknown"
+  | "booking_change_request";
 
 /** Jeda bot setelah handoff. Staf bisa mengembalikan ke AI lebih cepat. */
 export const ADMIN_HANDOFF_PAUSE_MS = 6 * 60 * 60 * 1000;
@@ -108,6 +109,11 @@ export function buildAdminHandoffGuestReply(kind: AdminHandoffKind): string {
         "Baik Kak, kami mohon maaf 🙏 Permintaan Kakak sudah kami teruskan ke admin Pomah Guesthouse " +
         "untuk ditindaklanjuti, dan admin akan membalas langsung di chat ini."
       );
+    case "booking_change_request":
+      return (
+        "Permintaan perubahan booking Kakak sudah kami teruskan ke admin Pomah Guesthouse ya, Kak 🙏 " +
+        "Booking belum berubah sampai admin mengonfirmasi. Admin akan membalas langsung di chat ini."
+      );
     case "facility_unknown":
     case "unknown_answer":
       return (
@@ -131,6 +137,7 @@ export const ADMIN_HANDOFF_KIND_LABEL: Record<AdminHandoffKind, string> = {
   complaint: "Tamu komplain",
   unknown_answer: "Bot tidak tahu jawabannya",
   facility_unknown: "Data fasilitas kamar belum diisi",
+  booking_change_request: "Tamu minta ubah tanggal booking (BELUM diubah)",
 };
 
 export interface AdminHandoffNoticeInput {
