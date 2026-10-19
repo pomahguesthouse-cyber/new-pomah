@@ -59,6 +59,7 @@ import { Route as BookIndexRouteImport } from './routes/book.index'
 import { Route as ExploreIndexRouteImport } from './routes/explore.index'
 import { Route as ExploreSlugRouteImport } from './routes/explore.$slug'
 import { Route as LpSlugRouteImport } from './routes/lp.$slug'
+import { Route as RoomsIndexRouteImport } from './routes/rooms.index'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as TourSlugRouteImport } from './routes/tour.$slug'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
@@ -336,6 +337,11 @@ const LpSlugRoute = LpSlugRouteImport.update({
   path: '/lp/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RoomsIndexRoute = RoomsIndexRouteImport.update({
+  id: '/rooms/',
+  path: '/rooms/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RoomsSlugRoute = RoomsSlugRouteImport.update({
   id: '/rooms/$slug',
   path: '/rooms/$slug',
@@ -514,6 +520,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/explore/': typeof ExploreIndexRoute
+  '/rooms/': typeof RoomsIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
@@ -587,6 +594,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
   '/explore': typeof ExploreIndexRoute
+  '/rooms': typeof RoomsIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
@@ -663,6 +671,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/explore/': typeof ExploreIndexRoute
+  '/rooms/': typeof RoomsIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
@@ -740,6 +749,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/book/'
     | '/explore/'
+    | '/rooms/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
@@ -813,6 +823,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/book'
     | '/explore'
+    | '/rooms'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
@@ -888,6 +899,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/book/'
     | '/explore/'
+    | '/rooms/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
@@ -934,6 +946,7 @@ export interface RootRouteChildren {
   RoomsSlugRoute: typeof RoomsSlugRoute
   TourSlugRoute: typeof TourSlugRoute
   BookIndexRoute: typeof BookIndexRoute
+  RoomsIndexRoute: typeof RoomsIndexRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRouteWithChildren
@@ -1307,6 +1320,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LpSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rooms/': {
+      id: '/rooms/'
+      path: '/rooms'
+      fullPath: '/rooms/'
+      preLoaderRoute: typeof RoomsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/rooms/$slug': {
       id: '/rooms/$slug'
       path: '/rooms/$slug'
@@ -1594,10 +1614,12 @@ const rootRouteChildren: RootRouteChildren = {
   RoomsSlugRoute: RoomsSlugRoute,
   TourSlugRoute: TourSlugRoute,
   BookIndexRoute: BookIndexRoute,
+  RoomsIndexRoute: RoomsIndexRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRouteWithChildren,
-  ApiCronBackfillTrainingEmbeddingsRoute: ApiCronBackfillTrainingEmbeddingsRoute,
+  ApiCronBackfillTrainingEmbeddingsRoute:
+    ApiCronBackfillTrainingEmbeddingsRoute,
   ApiCronBookingFormFollowupRoute: ApiCronBookingFormFollowupRoute,
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
   ApiCronExpireBookingsRoute: ApiCronExpireBookingsRoute,

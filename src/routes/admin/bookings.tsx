@@ -336,7 +336,7 @@ function BookingsPage() {
     setPage(1);
     void navigate({
       to: "/admin/bookings",
-      search: (prev) => {
+      search: (prev: BookingsSearch): BookingsSearch => {
         const booking = prev.booking;
         if (next === "all") return booking ? { booking } : {};
         return booking ? { booking, when: next } : { when: next };

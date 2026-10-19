@@ -69,11 +69,56 @@ export type CityGuideArticle = {
   links: ApprovedLink[];
 };
 
+
+/**
+ * Public "mulai" rates per room slug. Must equal `room_types.base_rate`
+ * (single source of truth; checked by scripts/test-seo-room-prices.ts).
+ * Room pages also re-sync "mulai RpX" in title/meta to the live DB rate.
+ */
+export const ROOM_FROM_RATES = {
+  "kamar-single": 150000,
+  deluxe: 230000,
+  "grand-deluxe": 300000,
+  "family-room-222": 500000,
+  "family-suite-100": 500000,
+} as const satisfies Record<string, number>;
+
+export function formatRupiah(amount: number): string {
+  return `Rp${Math.round(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
+}
+
+function rp(slug: keyof typeof ROOM_FROM_RATES): string {
+  return formatRupiah(ROOM_FROM_RATES[slug]);
+}
+
+const RP_FROM_MIN = formatRupiah(Math.min(...Object.values(ROOM_FROM_RATES)));
+
+/**
+ * Hand-trimmed meta descriptions (150–160 chars) for explore places whose
+ * stored description is too long for a SERP snippet. Slug = /explore/<slug>.
+ */
+export const CITY_GUIDE_META_OVERRIDES: Record<string, string> = {
+  "gedongsongo-festival":
+    "Festival Gedongsongo: seni lokal, kuliner tradisional, festival lampion, dan ritual syukur Resik-Resik di Candi Gedongsongo, Kabupaten Semarang. Info & tips.",
+  "lawang-sewu-short-film-festival-loff-2026":
+    "LOFF 2026, festival film pendek Lawang Sewu untuk ekosistem film Semarang: kolaborasi lintas sektor, pariwisata, industri kreatif, dan malam puncak penghargaan.",
+  "lcm-lunpia-cik-me-me":
+    "LCM (Lunpia Cik Me Me): lunpia khas Semarang yang renyah, enak untuk oleh-oleh. Datang di luar jam makan siang agar antre pendek; ada varian basah dan goreng.",
+  "pantai-marina":
+    "Pantai Marina, pantai kota di utara Semarang untuk sore santai, angin laut, dan sunset. Tips tamu: jaga barang, cek cuaca, dan lanjut makan seafood di sekitar.",
+  "soto-pak-wito-trangkil":
+    "Soto Pak Wito Trangkil: soto Semarang berkuah bening gurih beraroma rempah, dengan suwiran ayam, bihun, tauge, dan bawang goreng. Favorit wisatawan di Semarang.",
+  "tahu-pong-perempatan-depok":
+    "Tahu Pong Perempatan Depok, kuliner legendaris Semarang: tahu kopong renyah, gimbal udang, lontong, sambal petis, dan kuah segar. Pilihan makanan khas autentik.",
+  "wisata-kuliner-malam-pasar-semawis":
+    "Wisata kuliner malam di Pasar Semawis, pusat jajanan legendaris di Pecinan Semarang. Cicipi aneka hidangan lokal dan Tionghoa yang lezat bersama keluarga.",
+};
+
 export type ApprovedRoomSeo = { title: string; meta: string; h1: string };
 
 export const APPROVED_HOME = {
   title: "Pomah Guesthouse – Guesthouse Keluarga & Penginapan Semarang",
-  meta: "Guesthouse keluarga di Sampangan, Semarang. Kamar bersih mulai Rp175.000, family room 2 kamar tidur, WiFi & parkir gratis. Dekat kampus UNNES.",
+  meta: `Guesthouse keluarga di Sampangan, Semarang. Kamar bersih mulai ${RP_FROM_MIN}, family room 2 kamar tidur, WiFi & parkir gratis. Dekat kampus UNNES.`,
   h1: "Guesthouse Keluarga di Semarang yang Terasa Seperti Rumah",
 } as const;
 
@@ -84,28 +129,28 @@ const PREVIOUS_HOME_META =
 
 export const APPROVED_ROOMS: Record<string, ApprovedRoomSeo> = {
   "kamar-single": {
-    title: "Kamar Single Semarang Mulai Rp175.000 | Pomah Guesthouse",
-    meta: "Kamar Single 15 m² di Pomah Guesthouse Sampangan, Semarang. Praktis untuk solo traveler dan peserta tes: AC, WiFi, dapur bersama. Mulai Rp175.000.",
+    title: `Kamar Single Semarang Mulai ${rp("kamar-single")} | Pomah Guesthouse`,
+    meta: `Kamar Single 15 m² di Pomah Guesthouse Sampangan, Semarang. Praktis untuk solo traveler dan peserta tes: AC, WiFi, dapur bersama. Mulai ${rp("kamar-single")}.`,
     h1: "Kamar Single untuk Solo Traveler di Semarang",
   },
   deluxe: {
     title: "Kamar Deluxe untuk Berdua di Semarang | Pomah Guesthouse",
-    meta: "Kamar Deluxe 18 m² dengan kasur queen, shower, dan view taman di Pomah Guesthouse Sampangan, Semarang. Nyaman untuk dua orang, mulai Rp230.000.",
+    meta: `Kamar Deluxe 18 m² dengan kasur queen, shower, dan view taman di Pomah Guesthouse Sampangan, Semarang. Nyaman untuk dua orang, mulai ${rp("deluxe")}.`,
     h1: "Kamar Deluxe dengan View Taman untuk Dua Orang",
   },
   "grand-deluxe": {
     title: "Grand Deluxe Lantai 1 Lebih Lega | Pomah Semarang",
-    meta: "Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double, AC, dan WiFi. Kamar lebih lega untuk berdua, mulai Rp300.000/malam.",
+    meta: `Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double, AC, dan WiFi. Kamar lebih lega untuk berdua, mulai ${rp("grand-deluxe")}/malam.`,
     h1: "Grand Deluxe: Kamar Lebih Lega di Lantai Satu",
   },
   "family-suite-100": {
     title: "Family Suite 100 – Guesthouse Keluarga Semarang | Pomah",
-    meta: "Suite 60 m² di guesthouse keluarga Semarang: 2 kamar tidur dengan kamar mandi dalam, ruang tamu, dapur, dan teras pribadi. Untuk 4 tamu, mulai Rp500.000.",
+    meta: `Suite 60 m² di guesthouse keluarga Semarang: 2 kamar tidur dengan kamar mandi dalam, ruang tamu, dapur, dan teras pribadi. Untuk 4 tamu, mulai ${rp("family-suite-100")}.`,
     h1: "Family Suite 100: Suite Dua Kamar di Guesthouse Keluarga Semarang",
   },
   "family-room-222": {
     title: "Family Room Semarang 2 Kamar Tidur – Family Room 222 | Pomah",
-    meta: "Family room di Semarang seluas 50 m²: 2 kamar tidur, 2 kamar mandi, dan ruang keluarga untuk 4 tamu. Pomah Guesthouse Sampangan, mulai Rp500.000.",
+    meta: `Family room di Semarang seluas 50 m²: 2 kamar tidur, 2 kamar mandi, dan ruang keluarga untuk 4 tamu. Pomah Guesthouse Sampangan, mulai ${rp("family-room-222")}.`,
     h1: "Family Room 222: Family Room Semarang dengan Dua Kamar Tidur",
   },
 };
@@ -145,7 +190,7 @@ export type ApprovedLpRoom = {
 export const APPROVED_LP = {
   slug: "penginapan-dekat-unnes",
   title: "Penginapan Dekat UNNES Semarang – Pomah Guesthouse",
-  meta: "Penginapan & homestay dekat UNNES di Sampangan, Semarang. Cocok untuk wisuda, tes masuk, dan keluarga. Kamar mulai Rp175.000/malam. Pesan langsung.",
+  meta: `Penginapan & homestay dekat UNNES di Sampangan, Semarang. Cocok untuk wisuda, tes masuk, dan keluarga. Kamar mulai ${RP_FROM_MIN}/malam. Pesan langsung.`,
   h1: "Penginapan Dekat UNNES untuk Orang Tua, Wisudawan & Peserta Tes",
   cardIntro:
     "Penginapan keluarga di Sampangan, sekitar 4,7 km dari kampus UNNES Sekaran. Pilihan tepat untuk orang tua wisudawan, peserta tes, dan keluarga yang ingin menginap tenang dekat kampus.",
@@ -180,7 +225,7 @@ export const APPROVED_LP = {
       name: "Single",
       capacity: "1 tamu",
       size: "15 m²",
-      price: "Rp175.000/malam",
+      price: `${rp("kamar-single")}/malam`,
       href: "/rooms/kamar-single",
       note: "Praktis untuk peserta tes atau tamu yang datang sendiri. Ada AC, WiFi, dan akses dapur bersama.",
     },
@@ -188,7 +233,7 @@ export const APPROVED_LP = {
       name: "Deluxe",
       capacity: "2 tamu",
       size: "18 m²",
-      price: "Rp230.000/malam",
+      price: `${rp("deluxe")}/malam`,
       href: "/rooms/deluxe",
       note: "Kamar di lantai dua dengan kasur queen, shower, dan pemandangan taman. Cocok untuk orang tua yang datang berdua.",
     },
@@ -196,7 +241,7 @@ export const APPROVED_LP = {
       name: "Grand Deluxe",
       capacity: "2 tamu",
       size: "20 m²",
-      price: "Rp300.000/malam",
+      price: `${rp("grand-deluxe")}/malam`,
       href: "/rooms/grand-deluxe",
       note: "kamar di lantai satu dengan kasur double dan ruang yang sedikit lebih lega.",
     },
@@ -204,7 +249,7 @@ export const APPROVED_LP = {
       name: "Family Room 222",
       capacity: "hingga 4 tamu",
       size: "50 m²",
-      price: "Rp500.000/malam",
+      price: `${rp("family-room-222")}/malam`,
       href: "/rooms/family-room-222",
       note: "Dua kamar tidur, dua kamar mandi, dan ruang keluarga di lantai dua. Favorit keluarga wisudawan.",
     },
@@ -212,7 +257,7 @@ export const APPROVED_LP = {
       name: "Family Suite 100",
       capacity: "hingga 4 tamu",
       size: "60 m²",
-      price: "Rp500.000/malam",
+      price: `${rp("family-suite-100")}/malam`,
       href: "/rooms/family-suite-100",
       note: "Dua kamar tidur dengan kamar mandi dalam, toilet tamu, ruang tamu dengan smart TV, area makan mini, dapur, dan teras pribadi di lantai satu.",
     },
@@ -267,7 +312,7 @@ export const APPROVED_LP = {
     },
     {
       question: "Berapa harga kamar termurah?",
-      answer: "Kamar Single mulai Rp175.000 per malam.",
+      answer: `Kamar Single mulai ${rp("kamar-single")} per malam.`,
     },
   ] satisfies ApprovedFaq[],
 };
@@ -353,7 +398,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
       {
         heading: "Menginap di Pomah setelah ke Lawang Sewu",
         paragraphs: [
-          "Setelah seharian keliling kota, kembali ke tempat yang tenang itu terasa melegakan. Pomah Guesthouse ada di Sampangan, di sisi kota yang lebih teduh, dan Lawang Sewu hanya sekitar 6 km atau 15–25 menit berkendara. Untuk rombongan keluarga, **Family Room 222** punya dua kamar tidur dan dua kamar mandi untuk hingga empat tamu, mulai Rp500.000/malam. Kalau datang sendiri, ada **Kamar Single** mulai Rp175.000/malam. Check-in mulai pukul 14.00, jadi setelah menaruh barang masih sempat ke Lawang Sewu sore harinya. Cek ketersediaan dan pesan langsung lewat halaman kamar atau WhatsApp kami.",
+          `Setelah seharian keliling kota, kembali ke tempat yang tenang itu terasa melegakan. Pomah Guesthouse ada di Sampangan, di sisi kota yang lebih teduh, dan Lawang Sewu hanya sekitar 6 km atau 15–25 menit berkendara. Untuk rombongan keluarga, **Family Room 222** punya dua kamar tidur dan dua kamar mandi untuk hingga empat tamu, mulai ${rp("family-room-222")}/malam. Kalau datang sendiri, ada **Kamar Single** mulai ${rp("kamar-single")}/malam. Check-in mulai pukul 14.00, jadi setelah menaruh barang masih sempat ke Lawang Sewu sore harinya. Cek ketersediaan dan pesan langsung lewat halaman kamar atau WhatsApp kami.`,
         ],
       },
     ],
@@ -455,7 +500,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
       {
         heading: "Menginap di Pomah setelah kulineran malam",
         paragraphs: [
-          "Nasi Ayam Bu Wido baru buka sore, jadi jadwalnya pas dengan check-in di Pomah Guesthouse yang mulai pukul 14.00. Taruh barang, istirahat sebentar, lalu berangkat makan malam. Pomah ada di Sampangan, di sisi kota yang lebih tenang, sekitar 8 km atau 20–30 menit dari Jl. Melati Selatan. Untuk berdua ada **Kamar Deluxe** mulai Rp230.000/malam. Untuk keluarga, **Family Room 222** adalah unit 50 m² di lantai 2 dengan dua kamar tidur, dua kamar mandi, dan ruang keluarga untuk hingga empat tamu, mulai Rp500.000/malam. Kalau datang sendiri, ada **Kamar Single** mulai Rp175.000/malam. Check-out sampai pukul 12.00, jadi besok paginya tidak perlu terburu-buru. Cek ketersediaan dan pesan langsung lewat halaman kamar atau WhatsApp kami.",
+          `Nasi Ayam Bu Wido baru buka sore, jadi jadwalnya pas dengan check-in di Pomah Guesthouse yang mulai pukul 14.00. Taruh barang, istirahat sebentar, lalu berangkat makan malam. Pomah ada di Sampangan, di sisi kota yang lebih tenang, sekitar 8 km atau 20–30 menit dari Jl. Melati Selatan. Untuk berdua ada **Kamar Deluxe** mulai ${rp("deluxe")}/malam. Untuk keluarga, **Family Room 222** adalah unit 50 m² di lantai 2 dengan dua kamar tidur, dua kamar mandi, dan ruang keluarga untuk hingga empat tamu, mulai ${rp("family-room-222")}/malam. Kalau datang sendiri, ada **Kamar Single** mulai ${rp("kamar-single")}/malam. Check-out sampai pukul 12.00, jadi besok paginya tidak perlu terburu-buru. Cek ketersediaan dan pesan langsung lewat halaman kamar atau WhatsApp kami.`,
         ],
       },
     ],

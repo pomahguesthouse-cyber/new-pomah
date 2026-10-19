@@ -11,7 +11,7 @@ import {
   Wifi,
   Wind,
 } from "lucide-react";
-import { APPROVED_LP } from "@/public/content/approved-seo";
+import { APPROVED_LP, formatRupiah } from "@/public/content/approved-seo";
 import { HeroSlider } from "@/public/components/public-shell";
 import type { HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { buildStorageImageUrl } from "@/lib/storage-image";
@@ -49,6 +49,13 @@ const WHY_ICONS = [Users, GraduationCap, Home] as const;
 const FACILITY_ICONS = [Wifi, Wind, Car, Utensils, Building2, Clock] as const;
 
 type LandingRoom = SchemaRoom & { hero_image_url?: string | null };
+
+/** Live "mulai" price from room_types.base_rate; approved copy is the fallback. */
+function roomPrice(href: string, fallback: string, rooms?: LandingRoom[] | null): string {
+  const slug = href.replace(/^\/rooms\//, "").replace(/\/$/, "");
+  const rate = Number((rooms?.find((room) => room.slug === slug) as { base_rate?: unknown } | undefined)?.base_rate);
+  return Number.isFinite(rate) && rate > 0 ? `${formatRupiah(rate)}/malam` : fallback;
+}
 
 function roomImage(href: string, rooms?: LandingRoom[] | null) {
   const slug = href.replace(/^\/rooms\//, "").replace(/\/$/, "");
@@ -214,7 +221,7 @@ export function UnnesLanding({
                         </div>
                         <div className="shrink-0 text-right">
                           <p className="text-[11px] font-medium text-stone-400">Harga mulai dari</p>
-                          <p className="text-lg font-bold text-amber-700">{room.price}</p>
+                          <p className="text-lg font-bold text-amber-700">{roomPrice(room.href, room.price, rooms)}</p>
                         </div>
                       </div>
                       <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-stone-100 pt-3 text-sm">
