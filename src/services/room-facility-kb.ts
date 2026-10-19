@@ -69,7 +69,8 @@ export function detectFacilityTopic(text: string): FacilityTopic | null {
   if (
     /\b(check.?in|cekin|chekin|ceckin|cek in)\b.{0,30}\b(dimana|di mana|dmn|sebelah mana|lewat mana|ke mana|kemana|lokasinya|tempatnya|pintu)\b/.test(t) ||
     /\b(dimana|di mana|dmn|sebelah mana|kemana|ke mana)\b.{0,25}\b(check.?in|cekin|chekin|resepsionis|receptionist|lobby|lobi|ambil kunci|kuncinya)\b/.test(t) ||
-    /\b(ambil kunci|kuncinya|resepsionis|receptionist|lobby|lobi)\b.{0,20}\b(dimana|di mana|dmn|sebelah mana|kemana|ke mana)\b/.test(t)
+    /\b(ambil kunci|kuncinya|resepsionis|receptionist|lobby|lobi)\b.{0,20}\b(dimana|di mana|dmn|sebelah mana|kemana|ke mana)\b/.test(t) ||
+    /\b(kamar|kamarnya)\s+(?:saya\s+|kami\s+)?(?:itu\s+)?(?:ada\s+)?(?:di\s+)?(sebelah mana|letaknya dimana|letaknya di mana|posisinya dimana|posisinya di mana)\b/.test(t)
   ) {
     return "checkin_point";
   }

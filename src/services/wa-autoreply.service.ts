@@ -1331,6 +1331,30 @@ export async function executeAutoreplyForPhone(
   // dibuka" + "Boleh" + "Wifi aman?" → hanya wifi terjawab). Serahkan ke AI
   // yang melihat seluruh burst.
   const multiPendingInbound = countConsecutiveInbound(rollingMessages) >= 2;
+  // Booking aktif (−1..+7 hari) dimuat SEBELUM fast path supaya tamu yang sudah
+  // pesan tidak ditawari cek ketersediaan (insiden SULO PG-MBGMB, 17 Okt).
+  let activeBookingContext: string | undefined;
+  let hasActiveBooking = false;
+  if (!isManager) {
+    try {
+      const { resolveActiveBookingContext } = await import("@/ai/active-booking-context");
+      const res = await resolveActiveBookingContext(supabaseAdmin as any, phone);
+      if (res) {
+        activeBookingContext = res.block;
+        hasActiveBooking = res.bookings.length > 0;
+      }
+    } catch (e) {
+      console.warn("[Autoreply] resolveActiveBookingContext failed (non-fatal):", e);
+    }
+  }
+  const { shouldSkipAvailabilityForExistingBooking } = await import(
+    "@/services/wa-autoreply/existing-booking-guard"
+  );
+  const availabilityBlocked =
+    bookingActive || shouldSkipAvailabilityForExistingBooking({ message: lastMessage ?? "", hasActiveBooking });
+  if (availabilityBlocked && !bookingActive) {
+    console.info(`[Autoreply] Existing booking — availability fast paths skipped for ${phone.slice(-6)}`);
+  }
   // If the guest also asks for photos/brochure/catalog/video, deterministic
   // availability/FAQ fast-paths must NOT swallow the turn — only the LLM agent
   // can both answer availability AND call `send_room_photos` in the same turn.
@@ -1606,7 +1630,7 @@ export async function executeAutoreplyForPhone(
     (storedAvailabilitySlots.checkIn ?? chatSummaryJson?.check_in) &&
     (storedAvailabilitySlots.checkOut ?? chatSummaryJson?.check_out)
   );
-  if (!reply && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && lastMessage && !hasStoredAvailabilityDates) {
+  if (!reply && !isManager && !availabilityBlocked && !multiPendingInbound && !wantsMedia && lastMessage && !hasStoredAvailabilityDates) {
     const needDatesReply = buildRecentAvailabilityNeedDatesReply(rollingMessages);
     if (needDatesReply) {
       adoptReply(needDatesReply.reply);
@@ -1625,7 +1649,7 @@ export async function executeAutoreplyForPhone(
   // Guard "malam ini": tamu yang bertanya JAM ("bisa check-in hari ini jam 8
   // malam?") sedang bertanya kebijakan waktu, bukan harga malam ini.
   const asksTimeNotPrice = /\b(jam|pukul|check\s*[- ]?in|checkin|check\s*[- ]?out|checkout)\b/i.test(lastMessage ?? "");
-  if (!reply && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && isTonightReply(lastMessage) && !asksTimeNotPrice && hasRecentPriceContext(rollingMessages)) {
+  if (!reply && !isManager && !availabilityBlocked && !multiPendingInbound && !wantsMedia && isTonightReply(lastMessage) && !asksTimeNotPrice && hasRecentPriceContext(rollingMessages)) {
     try {
       const tonightReply = await buildTonightPriceReply({
         rooms: rooms ?? [],
@@ -1649,7 +1673,7 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  if (!reply && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && lastMessage) {
+  if (!reply && !isManager && !availabilityBlocked && !multiPendingInbound && !wantsMedia && lastMessage) {
     try {
       const activeSlots = ((bookingState as any)?.slots ?? {}) as Record<string, unknown>;
       const availabilitySlots = {
@@ -1683,7 +1707,7 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  if (!reply && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && lastMessage) {
+  if (!reply && !isManager && !availabilityBlocked && !multiPendingInbound && !wantsMedia && lastMessage) {
     try {
       const availabilityReply = await buildDeterministicAvailabilityReply({
         message: lastMessage,
@@ -1735,7 +1759,7 @@ export async function executeAutoreplyForPhone(
   // Jalur ini WAJIB dijalankan sebelum LLM supaya beban tinggi tidak
   // memaksa orkestrator agent (p95 ~15 s) untuk pekerjaan yang bisa
   // dihitung deterministik dari `checkRoomAvailability`.
-  if (!reply && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && lastMessage) {
+  if (!reply && !isManager && !availabilityBlocked && !multiPendingInbound && !wantsMedia && lastMessage) {
     try {
       const contextualReply = await buildContextualBookingInquiryReply({
         message: lastMessage,
@@ -2032,16 +2056,7 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  // Booking-aware context: kalau tamu punya booking aktif (±7 hari dari
-  // check-in), inject sebagai fakta wajib supaya bot tidak tanya ulang.
-  let activeBookingContext: string | undefined;
-  try {
-    const { resolveActiveBookingContext } = await import("@/ai/active-booking-context");
-    const res = await resolveActiveBookingContext(supabaseAdmin as any, phone);
-    if (res) activeBookingContext = res.block;
-  } catch (e) {
-    console.warn("[Autoreply] resolveActiveBookingContext failed (non-fatal):", e);
-  }
+  // Booking-aware context (activeBookingContext) sudah dimuat sebelum fast path.
 
 
   for (let attempt = 1; attempt <= AI_MAX_ATTEMPTS && !reply; attempt++) {
