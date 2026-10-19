@@ -814,6 +814,53 @@ export async function executeAutoreplyForPhone(
     reply = text;
     quickAck.noteAnswerReady();
   };
+  // Handoff ke admin: tiket + jeda bot di thread (inline), notifikasi setelah balasan.
+  let adminHandoffDone = false;
+  const startAdminHandoff = async (
+    kind: import("@/services/wa-autoreply/admin-handoff").AdminHandoffKind,
+    triggerMessage: string,
+    opts: { notify?: boolean } = {},
+  ) => {
+    if (adminHandoffDone) return;
+    adminHandoffDone = true;
+    try {
+      const { triggerAdminHandoff } = await import("@/services/wa-autoreply/admin-handoff");
+      let ctxForTicket: unknown = {};
+      try {
+        const { data: bs } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
+        ctxForTicket = (bs as { context?: unknown } | null)?.context ?? {};
+      } catch {
+        /* konteks opsional */
+      }
+      const res = await triggerAdminHandoff(supabaseAdmin as any, {
+        phone,
+        threadId: c.thread_id ?? null,
+        kind,
+        triggerMessage,
+        guestName: c.display_name ?? c.guest_name ?? null,
+        context: ctxForTicket,
+        notify: false,
+      });
+      console.info(`[Autoreply] Admin handoff (${kind}) for ${phone.slice(-6)}; paused until ${res.pausedUntil ?? "-"}`);
+      if (opts.notify !== false) {
+        deferAfterReply("Autoreply.adminHandoffNotify", async () => {
+          const { notifyAdminHandoff } = await import("@/services/manager-notifier.service");
+          await notifyAdminHandoff(supabaseAdmin as any, {
+            kind,
+            phone,
+            guestName: c.display_name ?? c.guest_name ?? null,
+            bookingCode: ((ctxForTicket ?? {}) as { bookingCode?: string }).bookingCode ?? null,
+            trigger: triggerMessage,
+            threadId: c.thread_id ?? null,
+            pauseUntil: res.pausedUntil,
+            ticketId: res.ticketId,
+          });
+        });
+      }
+    } catch (e) {
+      console.warn("[Autoreply] admin handoff failed (non-fatal):", e);
+    }
+  };
   const earlyInbound =
     [...((c.messages ?? []) as Array<{ direction?: string; body?: string }>)]
       .reverse()
@@ -1271,6 +1318,9 @@ export async function executeAutoreplyForPhone(
         fastPath: true,
       };
       console.info(`[Autoreply] Payment-proof ack for ${phone.slice(-6)}`);
+      // Bukti TF: staf yang verifikasi. Alert sudah dikirim jalur media
+      // (notifyPaymentProof); di sini cukup tiket + jeda bot.
+      await startAdminHandoff("payment_proof", lastMessage, { notify: false });
     }
   }
 
@@ -1866,6 +1916,30 @@ export async function executeAutoreplyForPhone(
       }
     } catch (e) {
       console.warn("[Autoreply] Frustration detector failed (non-fatal):", e);
+    }
+  }
+
+  // ── Handoff admin dari pesan tamu: minta admin, cancel, komplain ──────
+  if (!reply && !manager && lastMessage) {
+    try {
+      const { detectGuestHandoffTrigger, buildAdminHandoffGuestReply } = await import(
+        "@/services/wa-autoreply/admin-handoff"
+      );
+      const kind = detectGuestHandoffTrigger(lastMessage);
+      if (kind) {
+        adoptReply(buildAdminHandoffGuestReply(kind));
+        orchResult = {
+          agentKey: "front-office",
+          intent: "handoff",
+          routingConfidence: 1,
+          escalated: true,
+          toolsUsed: ["admin-handoff"],
+          fastPath: true,
+        };
+        await startAdminHandoff(kind, lastMessage);
+      }
+    } catch (e) {
+      console.warn("[Autoreply] admin handoff detector failed (non-fatal):", e);
     }
   }
 
@@ -2584,6 +2658,19 @@ export async function executeAutoreplyForPhone(
   void updateBookingFormSendLog({ body: finalReply, status: "sent" });
 
   await markReplyCommitted();
+
+  // Bot bilang "konfirmasi ke tim" = bot tidak tahu. Jangan biarkan tamu
+  // menunggu tanpa ada yang diberi tahu (kasus Ika PG-GDWES, 17 Okt).
+  if (!isManager && sent && !adminHandoffDone) {
+    try {
+      const { replyDefersToStaff } = await import("@/services/wa-autoreply/admin-handoff");
+      if (replyDefersToStaff(finalReply)) {
+        await startAdminHandoff("unknown_answer", `${lastMessage}\n\n[Balasan bot] ${finalReply.slice(0, 200)}`);
+      }
+    } catch (e) {
+      console.warn("[Autoreply] unknown-answer handoff failed (non-fatal):", e);
+    }
+  }
 
   void updateThreadAutoReplyMeta(supabaseAdmin, {
     threadId: c.thread_id,

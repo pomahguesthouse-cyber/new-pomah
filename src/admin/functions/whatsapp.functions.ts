@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { laterPause } from "@/services/wa-autoreply/admin-handoff";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
@@ -33,7 +34,7 @@ import { resolveHumanTakeoverMs } from "@/admin/modules/ai-lab/ai-lab.functions"
  * membawa kolom summary/analisis yang besar untuk setiap baris.
  */
 const THREAD_LIST_COLUMNS =
-  "id, guest_id, phone, display_name, last_message_at, last_message_preview, unread_count, status, pinned, intent, ai_auto, provider";
+  "id, guest_id, phone, display_name, last_message_at, last_message_preview, unread_count, status, pinned, intent, ai_auto, ai_paused_until, provider";
 
 /** Kolom pesan yang dirender UI. `raw_payload` (payload mentah webhook) sengaja tidak ikut. */
 const MESSAGE_COLUMNS = "id, thread_id, direction, body, sent_at, metadata";
@@ -321,13 +322,26 @@ export const sendMessage = createServerFn({ method: "POST" })
     }
 
     const pauseMs = await resolveHumanTakeoverMs(context.supabase);
+    // Balasan staf tidak boleh memperpendek jeda handoff admin (6 jam).
+    let existingPause: string | null = null;
+    try {
+      const { data: th } = await (context.supabase as any)
+        .from("whatsapp_threads")
+        .select("ai_paused_until")
+        .eq("id", data.threadId)
+        .maybeSingle();
+      existingPause = (th as { ai_paused_until?: string | null } | null)?.ai_paused_until ?? null;
+    } catch {
+      existingPause = null;
+    }
+    const staffPause = pauseMs > 0 ? new Date(Date.now() + pauseMs).toISOString() : null;
     await context.supabase
       .from("whatsapp_threads")
       .update({
         last_message_preview: threadPreview(caption, fileName),
         last_message_at: new Date().toISOString(),
         unread_count: 0,
-        ai_paused_until: pauseMs > 0 ? new Date(Date.now() + pauseMs).toISOString() : null,
+        ai_paused_until: laterPause(existingPause, staffPause),
       } as any)
       .eq("id", data.threadId);
     return { ok: true as const };
@@ -374,11 +388,23 @@ export const setAiMode = createServerFn({ method: "POST" })
     z.object({ threadId: z.string().uuid(), aiAuto: z.boolean() }).parse(d),
   )
   .handler(async ({ data, context }) => {
+    // "Kembalikan ke AI" juga mengakhiri jeda handoff admin dan menutup tiketnya.
     const { error } = await context.supabase
       .from("whatsapp_threads")
-      .update({ ai_auto: data.aiAuto })
+      .update(data.aiAuto ? ({ ai_auto: true, ai_paused_until: null } as any) : { ai_auto: false })
       .eq("id", data.threadId);
     if (error) throw error;
+    if (data.aiAuto) {
+      try {
+        await (context.supabase as any)
+          .from("handoff_tickets")
+          .update({ status: "resolved", resolution_note: "AI dikembalikan dari inbox WhatsApp", assigned_to: context.userId })
+          .eq("thread_id", data.threadId)
+          .eq("status", "open");
+      } catch (e) {
+        console.warn("[Admin WhatsApp] gagal menutup tiket handoff:", e);
+      }
+    }
     return { ok: true };
   });
 
