@@ -92,5 +92,18 @@ export const updateHandoffTicket = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error) throw error;
-    return { ticket: row as HandoffTicket };
+    // Tiket ditutup → bot boleh membalas lagi di thread itu.
+    const ticket = row as HandoffTicket;
+    if (ticket.status !== "open" && ticket.thread_id) {
+      try {
+        await (context.supabase as any)
+          .from("whatsapp_threads")
+          .update({ ai_paused_until: null })
+          .eq("id", ticket.thread_id)
+          .gt("ai_paused_until", new Date().toISOString());
+      } catch (e) {
+        console.warn("[Handoff] gagal mengakhiri jeda bot:", e);
+      }
+    }
+    return { ticket };
   });

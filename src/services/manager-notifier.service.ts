@@ -114,7 +114,8 @@ interface SendOptions {
     | "rpc_failure"
     | "ai_credit_low"
     | "booking_write_failed"
-    | "booking_change_request";
+    | "booking_change_request"
+    | "admin_handoff";
   recipient: ManagerContact;
   message: string;
   fileUrl?: string;
@@ -1515,5 +1516,68 @@ export async function notifyBookingChangeRequest(db: Db, input: BookingChangeReq
     }
   } catch (e) {
     console.warn("[ManagerNotifier] notifyBookingChangeRequest error (non-fatal):", e);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Handoff ke admin (tamu minta admin, bukti TF, cancel, komplain)     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Template Utility opsional untuk alert handoff. Teks bebas ke admin gagal
+ * di luar jendela 24 jam (Meta 131047), jadi set
+ * `WHATSAPP_STAFF_HANDOFF_TEMPLATE_NAME` setelah template disetujui Meta.
+ * Body template: {{1}} alasan, {{2}} nama tamu, {{3}} nomor, {{4}} pesan.
+ */
+export function resolveStaffHandoffTemplate(
+  env: Record<string, string | undefined> = process.env,
+): { name: string; lang: string } | null {
+  const name = (env.WHATSAPP_STAFF_HANDOFF_TEMPLATE_NAME ?? "").trim();
+  if (!name) return null;
+  const lang = (env.WHATSAPP_STAFF_HANDOFF_TEMPLATE_LANG ?? "").trim() || "id";
+  return { name, lang };
+}
+
+export async function notifyAdminHandoff(
+  db: Db,
+  input: import("./wa-autoreply/admin-handoff").AdminHandoffNoticeInput & { ticketId: string | null },
+): Promise<void> {
+  try {
+    const { buildAdminHandoffNotice } = await import("./wa-autoreply/admin-handoff");
+    let threadId = input.threadId?.trim() || null;
+    if (!threadId) threadId = await findNotificationThreadId(db as any, input.phone);
+    const notice = buildAdminHandoffNotice({ ...input, threadId });
+    // Satu alert per tiket per 30 menit supaya tidak banjir.
+    const window = Math.floor(Date.now() / (30 * 60 * 1000));
+    const dedupeKey = `admin_handoff:${input.ticketId ?? threadId ?? input.phone}:${input.kind}:${window}`;
+
+    const { error: pushError } = await db.rpc("enqueue_staff_push", {
+      p_payload: {
+        kind: "admin_handoff",
+        title: notice.pushTitle,
+        body: notice.pushBody,
+        url: notice.url,
+        thread_id: threadId,
+      },
+    });
+    if (pushError) {
+      console.warn("[ManagerNotifier] enqueue_staff_push handoff:", pushError.message ?? pushError);
+    }
+
+    const template = resolveStaffHandoffTemplate();
+    const waToken = await getWaToken(db);
+    const managers = (await getActiveManagers(db)).filter((m) => !!m.phone);
+    if (managers.length === 0) return;
+    await fanOut(db, waToken, managers, {
+      eventType: "admin_handoff",
+      message: notice.message,
+      relatedId: threadId && THREAD_UUID_RE.test(threadId) ? threadId : null,
+      staffTemplate: template
+        ? { name: template.name, languageCode: template.lang, bodyParams: notice.templateParams }
+        : undefined,
+      dedupeKeyFor: (m) => `${dedupeKey}:mgr:${m.id}`,
+    });
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyAdminHandoff error (non-fatal):", e);
   }
 }

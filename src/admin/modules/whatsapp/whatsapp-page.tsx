@@ -337,6 +337,14 @@ const ThreadRow = memo(function ThreadRow({
                 >
                   Human
                 </Badge>
+              ) : isBotPaused(t) ? (
+                <Badge
+                  variant="outline"
+                  className="h-4 px-1.5 text-[9px] border-rose-300 bg-rose-50 text-rose-700 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/35"
+                  title="Bot dijeda — menunggu balasan admin"
+                >
+                  Perlu admin
+                </Badge>
               ) : (
                 <Badge
                   variant="outline"
@@ -362,6 +370,15 @@ const ThreadRow = memo(function ThreadRow({
     </li>
   );
 });
+
+
+/** Bot dijeda sementara (handoff admin atau jeda setelah balasan staf). */
+function isBotPaused(t: unknown): boolean {
+  const until = (t as { ai_paused_until?: string | null } | null)?.ai_paused_until;
+  if (!until) return false;
+  const ts = Date.parse(until);
+  return Number.isFinite(ts) && ts > Date.now();
+}
 
 export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: string | null }) {
   const sendFn = useServerFn(sendMessage);
@@ -1332,7 +1349,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                   onClick={() => {
                     const t = thread.thread;
                     if (!t) return;
-                    const currentlyAi = (t as any).ai_auto !== false;
+                    const currentlyAi = (t as any).ai_auto !== false && !isBotPaused(t);
                     takeoverMut.mutate(currentlyAi);
                   }}
                   className={cn(
@@ -1341,13 +1358,13 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                     "dark:border-cyan-500 dark:text-cyan-400 dark:hover:bg-cyan-950/20"
                   )}
                   title={
-                    (thread.thread as any).ai_auto === false
-                      ? "Human mengambil alih. Klik untuk menyerahkan kembali ke AI."
+                    (thread.thread as any).ai_auto === false || isBotPaused(thread.thread)
+                      ? "Bot dijeda / Human mengambil alih. Klik untuk menyerahkan kembali ke AI."
                       : "AI aktif membalas. Klik untuk mengambil alih ke Human (Matikan AI)."
                   }
                   disabled={takeoverMut.isPending}
                 >
-                  {(thread.thread as any).ai_auto === false ? (
+                  {(thread.thread as any).ai_auto === false || isBotPaused(thread.thread) ? (
                     <>
                       <ArrowUpRight className="h-3.5 w-3.5 stroke-[2.2] sm:h-4 sm:w-4" />
                       <span className="sm:hidden">Ke AI</span>

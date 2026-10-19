@@ -159,7 +159,12 @@ export async function markHumanHandoff(
 export interface CreateHandoffTicketInput {
   phone: string;
   threadId?: string | null;
-  kind: NonNullable<FrustrationKind> | "booking_write_failed" | "capacity_dead_end" | "room_change_request";
+  kind:
+    | NonNullable<FrustrationKind>
+    | "booking_write_failed"
+    | "capacity_dead_end"
+    | "room_change_request"
+    | import("./wa-autoreply/admin-handoff").AdminHandoffKind;
   triggerMessage: string;
   context: any;
 }

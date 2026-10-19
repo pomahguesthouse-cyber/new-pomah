@@ -3563,6 +3563,7 @@ export type Database = {
         Row: {
           ai_analysis: Json | null
           ai_auto: boolean
+          ai_paused_until: string | null
           assigned_to: string | null
           canonical_phone: string | null
           chat_summary: string | null
@@ -3593,6 +3594,7 @@ export type Database = {
         Insert: {
           ai_analysis?: Json | null
           ai_auto?: boolean
+          ai_paused_until?: string | null
           assigned_to?: string | null
           canonical_phone?: string | null
           chat_summary?: string | null
@@ -3623,6 +3625,7 @@ export type Database = {
         Update: {
           ai_analysis?: Json | null
           ai_auto?: boolean
+          ai_paused_until?: string | null
           assigned_to?: string | null
           canonical_phone?: string | null
           chat_summary?: string | null
