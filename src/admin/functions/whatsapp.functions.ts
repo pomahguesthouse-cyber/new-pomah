@@ -34,7 +34,7 @@ import { resolveHumanTakeoverMs } from "@/admin/modules/ai-lab/ai-lab.functions"
  * membawa kolom summary/analisis yang besar untuk setiap baris.
  */
 const THREAD_LIST_COLUMNS =
-  "id, guest_id, phone, display_name, last_message_at, last_message_preview, unread_count, status, pinned, intent, ai_auto, ai_paused_until, provider";
+  "id, guest_id, phone, display_name, last_message_at, last_message_preview, unread_count, status, pinned, intent, ai_auto, provider";
 
 /** Kolom pesan yang dirender UI. `raw_payload` (payload mentah webhook) sengaja tidak ikut. */
 const MESSAGE_COLUMNS = "id, thread_id, direction, body, sent_at, metadata";
@@ -392,10 +392,16 @@ export const setAiMode = createServerFn({ method: "POST" })
     // "Kembalikan ke AI" juga mengakhiri jeda handoff admin dan menutup tiketnya.
     const { error } = await context.supabase
       .from("whatsapp_threads")
-      .update(data.aiAuto ? ({ ai_auto: true, ai_paused_until: null } as any) : { ai_auto: false })
+      .update({ ai_auto: data.aiAuto })
       .eq("id", data.threadId);
     if (error) throw error;
     if (data.aiAuto) {
+      // Jeda handoff (ai_paused_until) hanya bila kolomnya ada di DB; abaikan error.
+      try {
+        await (context.supabase as any).from("whatsapp_threads").update({ ai_paused_until: null }).eq("id", data.threadId);
+      } catch {
+        /* kolom belum ada */
+      }
       try {
         await (context.supabase as any)
           .from("handoff_tickets")
