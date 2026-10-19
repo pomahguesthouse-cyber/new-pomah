@@ -112,7 +112,17 @@ export function cityGuideMetaContent(
 ): string {
   const meta = text(place.metaDescription);
   if (meta) return meta.slice(0, CITY_GUIDE_META_MAX);
-  return text(place.description) || `${place.name} di Semarang. Panduan tamu Pomah Guesthouse.`;
+  const description = text(place.description).replace(/\s+/g, " ");
+  if (!description) return `${place.name} di Semarang. Panduan tamu Pomah Guesthouse.`;
+  return clipMeta(description, CITY_GUIDE_META_MAX);
+}
+
+/** Clip to `max` chars at a word boundary (adds "…" only when cut). */
+export function clipMeta(value: string, max: number): string {
+  if (value.length <= max) return value;
+  const cut = value.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,;:.–—-]+$/, "")}…`;
 }
 
 function categoryOfItem(raw: string | null | undefined): CityGuideCategory {

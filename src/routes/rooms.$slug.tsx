@@ -87,10 +87,8 @@ export const Route = createFileRoute("/rooms/$slug")({
     // Jika room tidak ditemukan, tambahkan noindex agar tidak terindeks oleh mesin pencari
     if (!room) {
       return {
-        meta: [
-          { title: "Kamar Tidak Ditemukan — Pomah Guesthouse" },
-          { name: "robots", content: "noindex, follow" },
-        ],
+        // Title comes from the root 404 head; avoid a second <title>.
+        meta: [{ name: "robots", content: "noindex, follow" }],
       };
     }
     const seo = resolveRoomPublicSeo(room);

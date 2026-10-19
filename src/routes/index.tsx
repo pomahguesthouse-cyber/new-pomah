@@ -66,7 +66,7 @@ import {
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import type { RoomRow } from "@/routes/rooms.$slug";
 import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
-import { canonicalHeadTags, HOME_SEO, isUnoptimizedSharePng, preferredOgImage, publicSeoMeta, resolveHomepageH1, resolveHomepageMeta, resolveHomepageTitle, shareOgImageTags } from "@/public/lib/public-seo";
+import { canonicalHeadTags, HOME_SEO, isUnoptimizedSharePng, preferredOgImage, publicSeoMeta, resolveHomepageH1, minRoomBaseRate, resolveHomepageMeta, resolveHomepageTitle, shareOgImageTags } from "@/public/lib/public-seo";
 import { pomahMapEmbedUrl } from "@/public/lib/site-identity";
 import { publicCopy } from "@/public/lib/public-copy";
 import { HOMEPAGE_FAQS, homepageLodgingGraph } from "@/public/lib/structured-data";
@@ -108,9 +108,10 @@ export const Route = createFileRoute("/")({
     );
     const seo = cfg.seo;
     const title = resolveHomepageTitle(seo.metaTitle);
-    const desc = resolveHomepageMeta(seo.metaDescription);
+    const minRate = minRoomBaseRate(loaderData?.roomTypes as Array<{ base_rate?: number | string | null }> | undefined);
+    const desc = resolveHomepageMeta(seo.metaDescription, minRate);
     const twitterTitle = resolveHomepageTitle(seo.twitterTitle || seo.metaTitle);
-    const twitterDescription = resolveHomepageMeta(seo.twitterDescription || seo.metaDescription);
+    const twitterDescription = resolveHomepageMeta(seo.twitterDescription || seo.metaDescription, minRate);
     const heroImageRaw = cfg.hero.slides?.[0]?.imageUrl;
     const roomCover = (loaderData?.roomTypes as Array<{ hero_image_url?: string | null }> | undefined)?.find(
       (room) => preferredOgImage(room.hero_image_url),

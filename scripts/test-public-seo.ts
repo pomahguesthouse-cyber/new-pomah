@@ -323,7 +323,7 @@ assert.ok(paths.includes("/"));
 assert.ok(paths.includes("/book"));
 assert.ok(paths.includes("/explore"), "sitemap must list /explore");
 assert.ok(paths.includes("/lp/penginapan-dekat-unnes"));
-assert.ok(!paths.includes("/rooms"), "bare /rooms 404s and must not be listed");
+assert.ok(paths.includes("/rooms"), "/rooms is a real SSR listing page (19 Okt 2026) and must be listed");
 assert.ok(!paths.includes("/rooms/"), "trailing-slash /rooms must not be listed");
 assert.ok(!paths.includes("/explore-semarang"));
 assert.ok(!paths.includes("/explore-semarang/sam-poo-kong"));

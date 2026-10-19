@@ -7,7 +7,7 @@ import { MapPin, Star } from "lucide-react";
 import { PublicFooter, PublicNav } from "@/public/components/public-shell";
 import { StayNearby } from "@/public/components/guide-links";
 import { CityGuideArticleBody } from "@/public/components/city-guide-article";
-import { cityGuideArticleForSlug, type CityGuideArticle } from "@/public/content/approved-seo";
+import { CITY_GUIDE_META_OVERRIDES, cityGuideArticleForSlug, type CityGuideArticle } from "@/public/content/approved-seo";
 import { cityGuidePageGraph } from "@/public/lib/structured-data";
 import {
   approvedCityGuidePlace,
@@ -101,13 +101,14 @@ export const Route = createFileRoute("/explore/$slug")({
     if (!place) {
       return {
         meta: [
-          { title: "Tidak ditemukan | Pomah Guesthouse" },
-          { name: "robots", content: "noindex" },
+          // Title comes from the root 404 head; avoid a second <title>.
+          { name: "robots", content: "noindex, follow" },
         ],
       };
     }
     const title = article?.title || `${place.name} | Jelajahi Semarang`;
-    const description = article?.meta || cityGuideMetaContent(place);
+    const description =
+      article?.meta || CITY_GUIDE_META_OVERRIDES[place.slug] || cityGuideMetaContent(place);
     const canonical = canonicalHeadTags(`/explore/${article?.canonicalSlug || place.slug}`);
     const ogImage = preferredOgImage(place.imageUrl);
     return {

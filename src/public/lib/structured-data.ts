@@ -232,7 +232,7 @@ export function roomPageGraph(room: SchemaRoom) {
         "@type": "BreadcrumbList",
         itemListElement: [
           { "@type": "ListItem", position: 1, name: "Beranda", item: `${CANONICAL_ORIGIN}/` },
-          { "@type": "ListItem", position: 2, name: "Kamar", item: `${CANONICAL_ORIGIN}/#rooms` },
+          { "@type": "ListItem", position: 2, name: "Kamar", item: `${CANONICAL_ORIGIN}/rooms` },
           { "@type": "ListItem", position: 3, name, item: pageUrl },
         ],
       },

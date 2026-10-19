@@ -25,13 +25,12 @@ import { siteIdentityGraph } from "@/public/lib/structured-data";
 import { NativeAdminRuntime } from "@/lib/native-admin-runtime";
 import { StaffOAuthReturn } from "@/public/components/staff-oauth-return";
 import appCss from "../styles.css?url";
+import { isNotFoundRender, NOT_FOUND_TITLE } from "@/public/lib/not-found-head";
 
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-stone-50 px-4 text-center">
-      {/* noindex — halaman ini tidak boleh terindeks mesin pencari */}
-      <meta name="robots" content="noindex, follow" />
-      <title>404 – Halaman Tidak Ditemukan | Pomah Guesthouse</title>
+      {/* Title + noindex come from the root head (one <title> only). */}
 
       {/* Angka 404 berlapis */}
       <div className="relative mb-4 select-none">
@@ -131,13 +130,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       return { faviconUrl: null, logoUrl: null };
     }
   },
-  head: ({ loaderData }) => ({
+  head: ({ loaderData, matches }) => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       // Fallback title only. Page routes set title, description, and Twitter
       // cards from saved SEO fields so this root copy cannot leak onto them.
-      { title: HOME_SEO.title },
+      // A 404 gets exactly one <title> (the 404 one) plus noindex.
+      ...(isNotFoundRender(matches)
+        ? [{ title: NOT_FOUND_TITLE }, { name: "robots", content: "noindex, follow" }]
+        : [{ title: HOME_SEO.title }]),
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

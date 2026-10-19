@@ -9,6 +9,7 @@
  */
 import {
   APPROVED_HOME,
+  formatRupiah,
   approvedRoomSeo,
   containsPublicHotWaterClaim,
   isLegacyHomepageH1,
@@ -31,10 +32,20 @@ export function resolveHomepageTitle(stored?: string | null): string {
   return value;
 }
 
-export function resolveHomepageMeta(stored?: string | null): string {
+/**
+ * Stored homepage meta, with any "mulai RpX" re-synced to the cheapest live
+ * room rate (`room_types.base_rate`), so saved copy cannot drift from prices.
+ */
+export function resolveHomepageMeta(stored?: string | null, minBaseRate?: number | null): string {
   const value = stored?.trim() ?? "";
-  if (!value || isLegacyHomepageMeta(value)) return HOME_SEO.description;
-  return value;
+  if (!value || isLegacyHomepageMeta(value)) return syncFromPrice(HOME_SEO.description, minBaseRate);
+  return syncFromPrice(value, minBaseRate);
+}
+
+/** Cheapest positive base_rate among listed rooms, or null. */
+export function minRoomBaseRate(rooms: ReadonlyArray<{ base_rate?: number | string | null }> | null | undefined): number | null {
+  const rates = (rooms ?? []).map((r) => Number(r.base_rate)).filter((n) => Number.isFinite(n) && n > 0);
+  return rates.length ? Math.min(...rates) : null;
 }
 
 export const HOME_SEO = {
@@ -144,6 +155,7 @@ export type RoomSeoSource = {
   seo_title?: string | null;
   meta_description?: string | null;
   hero_image_url?: string | null;
+  base_rate?: number | string | null;
 };
 
 const LEGACY_ROOM_TITLE = /penginapan dekat unnes/i;
@@ -167,6 +179,18 @@ export function defaultRoomSeoTitle(name: string): string {
   return `${name} – Pomah Guesthouse Semarang`;
 }
 
+const FROM_PRICE_RE = /\b(mulai)\s+Rp\s?\d{1,3}(?:[.,]\d{3})+/gi;
+
+/**
+ * Keep "mulai RpX" in room copy equal to the live `room_types.base_rate`
+ * (the price shown in the Offer JSON-LD). Text without a "mulai" price is unchanged.
+ */
+export function syncFromPrice(text: string, baseRate: number | string | null | undefined): string {
+  const rate = Number(baseRate);
+  if (!text || !Number.isFinite(rate) || rate <= 0) return text;
+  return text.replace(FROM_PRICE_RE, (_m, word: string) => `${word} ${formatRupiah(rate)}`);
+}
+
 /** Resolve a room page's H1 / title / meta from saved room_types SEO columns. */
 export function resolveRoomPublicSeo(room: RoomSeoSource): {
   h1: string;
@@ -178,13 +202,16 @@ export function resolveRoomPublicSeo(room: RoomSeoSource): {
 } {
   const name = firstNonEmpty(room.name, "Kamar");
   const approved = approvedRoomSeo(room.slug);
-  const title = firstNonEmpty(withoutHotWaterClaim(roomSeoField(room.seo_title)), approved?.title, defaultRoomSeoTitle(name));
-  const description = firstNonEmpty(
+  const title = syncFromPrice(
+    firstNonEmpty(withoutHotWaterClaim(roomSeoField(room.seo_title)), approved?.title, defaultRoomSeoTitle(name)),
+    room.base_rate,
+  );
+  const description = syncFromPrice(firstNonEmpty(
     withoutHotWaterClaim(room.meta_description),
     approved?.meta,
     withoutHotWaterClaim(room.description),
     `${name} di Pomah Guesthouse Semarang.`,
-  );
+  ), room.base_rate);
   return {
     h1: firstNonEmpty(roomSeoField(room.seo_h1), approved?.h1, name),
     title,
@@ -194,6 +221,9 @@ export function resolveRoomPublicSeo(room: RoomSeoSource): {
     ogImageUrl: preferredOgImage(room.hero_image_url),
   };
 }
+
+/** Room listing page (also the "Kamar" breadcrumb item). */
+export const ROOMS_INDEX_PATH = "/rooms";
 
 /** Apex host. Canonicals, Open Graph, sitemap, and robots must use this origin. */
 export const CANONICAL_ORIGIN = "https://pomahguesthouse.com";
@@ -308,7 +338,7 @@ export function isIndexableSitemapPath(pathname: string): boolean {
   ) {
     return false;
   }
-  if (path === "/" || path === "/book" || path === "/explore") return true;
+  if (path === "/" || path === "/book" || path === "/explore" || path === "/rooms") return true;
   if (BARE_ROOMS_LISTING.test(path)) return false;
   if (ROOM_PATH.test(path)) return true;
   if (LANDING_PATH.test(path)) return true;
@@ -327,7 +357,7 @@ export function collectSitemapPaths(input: {
   landingSlugs?: Array<string | null | undefined>;
   exploreSlugs?: Array<string | null | undefined>;
 }): string[] {
-  const urls = new Set<string>(["/", "/book", "/explore"]);
+  const urls = new Set<string>(["/", "/book", "/explore", ROOMS_INDEX_PATH]);
   const consider = (path: string | null) => {
     if (!path || !isIndexableSitemapPath(path)) return;
     const normalized = path.length > 1 ? path.replace(/\/+$/, "") : path;
@@ -386,7 +416,7 @@ export function sitemapLastmodForPath(
     pages?: SitemapStamp[];
   },
 ): string | undefined {
-  if (path === "/" || path === "/book" || path === "/explore") {
+  if (path === "/" || path === "/book" || path === "/explore" || path === ROOMS_INDEX_PATH) {
     return input.propertyUpdatedAt?.trim() || undefined;
   }
   const room = path.match(/^\/rooms\/([^/]+)$/);
