@@ -2,6 +2,7 @@
  * Reliable WhatsApp autoreply: debounce wait → AI → WhatsApp gateway send.
  * Runs inside waitUntil from the webhook (not HTTP self-fetch).
  */
+import { stripEchoedGuestQuestions, stripUnrequestedPriceList, trimHistoryAtGap } from "@/services/wa-autoreply/reply-relevance";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { saveOutboundMessage, updateThreadAutoReplyMeta } from "@/repositories/message.repository";
 import { sendWhatsAppMessage, markWaSeen, setWaTyping } from "@/services/whatsapp.service";
@@ -2101,7 +2102,8 @@ export async function executeAutoreplyForPhone(
       orchResult = await runMultiAgentOrchestration({
         phone,
         isManager,
-        messages: rollingMessages,
+        // Riwayat dipotong di jeda >12 jam supaya topik hari lalu tidak dijawab ulang.
+        messages: isManager ? rollingMessages : trimHistoryAtGap(rollingMessages),
         agentCtx: {
           property: p,
           rooms: rooms || [],
@@ -2379,6 +2381,14 @@ export async function executeAutoreplyForPhone(
   const pdfToStrip = attachUrl && /\.pdf(\?|$)/i.test(attachUrl) ? attachUrl : undefined;
   const normalizedReply = normalizeBrochureReply(lastMessage, rawReply, attachName);
   let finalReply = cleanReplyBody(normalizedReply, pdfToStrip, lastMessage);
+  if (!isManager && !orchResult?.fastPath) {
+    // Jangan menyalin pertanyaan lama tamu & jangan kirim daftar harga yang tidak diminta.
+    const burstCount = Math.max(1, countConsecutiveInbound(rollingMessages));
+    const burst = getLastNInboundMessages(rollingMessages, burstCount).join("\n");
+    const inbound = rollingMessages.filter((m) => m.direction === "in").map((m) => m.body);
+    const priorInbound = inbound.slice(0, Math.max(0, inbound.length - burstCount));
+    finalReply = stripUnrequestedPriceList(stripEchoedGuestQuestions(finalReply, priorInbound), burst);
+  }
   if (!orchResult?.fastPath) {
     const delivery = {
       ...(orchResult?.mediaDelivery ?? emptyMediaDelivery()),

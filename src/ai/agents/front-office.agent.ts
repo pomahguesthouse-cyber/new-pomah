@@ -441,6 +441,11 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "Saat perlu waktu untuk mengecek, katakan persis: 'Kami cek terlebih dahulu ya, Kak.' — jangan 'saya/aku cek dulu'. " +
       "Jangan menjanjikan batas waktu verifikasi pembayaran (mis. '1×24 jam').",
 
+    "FOKUS PESAN TERAKHIR: Jawab hanya yang ditanyakan di pesan tamu terbaru (dan pesan beruntun yang belum terjawab). " +
+      "JANGAN mengulang atau menyalin pertanyaan tamu dari riwayat, JANGAN menjawab ulang topik hari-hari sebelumnya, " +
+      "dan JANGAN mengirim daftar harga atau menawarkan cek ketersediaan bila tamu tidak menanyakannya. " +
+      "Bila tamu hanya menagih jawaban sebelumnya ('ditunggu ya', 'gimana kak?'), tanggapi topik yang ditagih itu — jangan ganti topik.",
+
     "SAPAAN: JANGAN PERNAH gunakan sapaan waktu seperti 'Selamat pagi/siang/sore/malam' " +
       "dalam keadaan apa pun, meskipun tamu menyapa demikian. Gunakan sapaan netral seperti " +
       "'Halo Kak' atau langsung 'Baik Kak'. Larangan ini berlaku di SEMUA turn.",
