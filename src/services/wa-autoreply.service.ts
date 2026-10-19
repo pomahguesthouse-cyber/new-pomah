@@ -820,7 +820,7 @@ export async function executeAutoreplyForPhone(
   const startAdminHandoff = async (
     kind: import("@/services/wa-autoreply/admin-handoff").AdminHandoffKind,
     triggerMessage: string,
-    opts: { notify?: boolean } = {},
+    opts: { notify?: boolean; onlyIfNoPaymentProofAlert?: boolean } = {},
   ) => {
     if (adminHandoffDone) return;
     adminHandoffDone = true;
@@ -845,6 +845,18 @@ export async function executeAutoreplyForPhone(
       console.info(`[Autoreply] Admin handoff (${kind}) for ${phone.slice(-6)}; paused until ${res.pausedUntil ?? "-"}`);
       if (opts.notify !== false) {
         deferAfterReply("Autoreply.adminHandoffNotify", async () => {
+          if (opts.onlyIfNoPaymentProofAlert) {
+            const tail = String(phone).replace(/\D/g, "").slice(-9);
+            const since = new Date(Date.now() - 15 * 60_000).toISOString();
+            const { data: logged } = await (supabaseAdmin as any)
+              .from("notification_logs")
+              .select("id")
+              .eq("event_type", "payment_proof")
+              .gte("created_at", since)
+              .ilike("message", `%${tail}%`)
+              .limit(1);
+            if (Array.isArray(logged) && logged.length > 0) return;
+          }
           const { notifyAdminHandoff } = await import("@/services/manager-notifier.service");
           await notifyAdminHandoff(supabaseAdmin as any, {
             kind,
@@ -1321,7 +1333,8 @@ export async function executeAutoreplyForPhone(
       console.info(`[Autoreply] Payment-proof ack for ${phone.slice(-6)}`);
       // Bukti TF: staf yang verifikasi. Alert sudah dikirim jalur media
       // (notifyPaymentProof); di sini cukup tiket + jeda bot.
-      await startAdminHandoff("payment_proof", lastMessage, { notify: false });
+      // Alert admin hanya bila jalur media belum mencatat alert bukti TF.
+      await startAdminHandoff("payment_proof", lastMessage, { onlyIfNoPaymentProofAlert: true });
     }
   }
 
@@ -1995,12 +2008,13 @@ export async function executeAutoreplyForPhone(
   // ── Handoff admin dari pesan tamu: minta admin, cancel, komplain ──────
   if (!reply && !manager && lastMessage) {
     try {
-      const { detectGuestHandoffTrigger, buildAdminHandoffGuestReply } = await import(
-        "@/services/wa-autoreply/admin-handoff"
-      );
-      const kind = detectGuestHandoffTrigger(lastMessage);
+      const { detectGuestHandoffTrigger, buildAdminHandoffGuestReply, detectTransferClaim, TRANSFER_CLAIM_REPLY } =
+        await import("@/services/wa-autoreply/admin-handoff");
+      const transferClaim = detectTransferClaim(lastMessage);
+      const kind = detectGuestHandoffTrigger(lastMessage) ?? (transferClaim ? "payment_proof" : null);
       if (kind) {
-        adoptReply(buildAdminHandoffGuestReply(kind));
+        // Klaim sudah transfer: status tetap belum lunas sampai staf verifikasi.
+        adoptReply(kind === "payment_proof" ? TRANSFER_CLAIM_REPLY : buildAdminHandoffGuestReply(kind));
         orchResult = {
           agentKey: "front-office",
           intent: "handoff",

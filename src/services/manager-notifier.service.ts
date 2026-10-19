@@ -777,10 +777,25 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
       return;
     }
 
+    // Teks bebas gagal di luar jendela 24 jam (Meta 131047) → pakai template
+    // Utility handoff bila sudah diset.
+    const handoffTemplate = resolveStaffHandoffTemplate();
     await fanOut(db, waToken, superAdmins, {
       eventType: "payment_proof",
       message,
-      fileUrl: publicImageUrl,
+      fileUrl: handoffTemplate ? undefined : publicImageUrl,
+      staffTemplate: handoffTemplate
+        ? {
+            name: handoffTemplate.name,
+            languageCode: handoffTemplate.lang,
+            bodyParams: [
+              "Bukti transfer diterima — perlu verifikasi staf",
+              input.guestName ?? "Tamu",
+              String(input.phone ?? "-"),
+              (input.ocrResult?.match?.summary || `Kode booking ${bookingCode ?? "-"}`).slice(0, 200),
+            ],
+          }
+        : undefined,
       relatedId: bookingId,
       dedupeKeyFor: (m) => `payment_proof:${input.messageId}:${m.id}`,
     });
