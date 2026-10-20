@@ -34,6 +34,7 @@ import { Route as AdminComplaintsRouteImport } from './routes/admin/complaints'
 import { Route as AdminContactsRouteImport } from './routes/admin/contacts'
 import { Route as AdminContentManagerRouteImport } from './routes/admin/content-manager'
 import { Route as AdminExploreRouteImport } from './routes/admin/explore'
+import { Route as AdminFacilityKbRouteImport } from './routes/admin/facility-kb'
 import { Route as AdminFinanceRouteImport } from './routes/admin/finance'
 import { Route as AdminHandoffRouteImport } from './routes/admin/handoff'
 import { Route as AdminHealthRouteImport } from './routes/admin/health'
@@ -209,6 +210,11 @@ const AdminContentManagerRoute = AdminContentManagerRouteImport.update({
 const AdminExploreRoute = AdminExploreRouteImport.update({
   id: '/explore',
   path: '/explore',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminFacilityKbRoute = AdminFacilityKbRouteImport.update({
+  id: '/facility-kb',
+  path: '/facility-kb',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminFinanceRoute = AdminFinanceRouteImport.update({
@@ -492,6 +498,7 @@ export interface FileRoutesByFullPath {
   '/admin/contacts': typeof AdminContactsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
+  '/admin/facility-kb': typeof AdminFacilityKbRoute
   '/admin/finance': typeof AdminFinanceRoute
   '/admin/handoff': typeof AdminHandoffRoute
   '/admin/health': typeof AdminHealthRoute
@@ -566,6 +573,7 @@ export interface FileRoutesByTo {
   '/admin/contacts': typeof AdminContactsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
+  '/admin/facility-kb': typeof AdminFacilityKbRoute
   '/admin/finance': typeof AdminFinanceRoute
   '/admin/handoff': typeof AdminHandoffRoute
   '/admin/health': typeof AdminHealthRoute
@@ -643,6 +651,7 @@ export interface FileRoutesById {
   '/admin/contacts': typeof AdminContactsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
+  '/admin/facility-kb': typeof AdminFacilityKbRoute
   '/admin/finance': typeof AdminFinanceRoute
   '/admin/handoff': typeof AdminHandoffRoute
   '/admin/health': typeof AdminHealthRoute
@@ -721,6 +730,7 @@ export interface FileRouteTypes {
     | '/admin/contacts'
     | '/admin/content-manager'
     | '/admin/explore'
+    | '/admin/facility-kb'
     | '/admin/finance'
     | '/admin/handoff'
     | '/admin/health'
@@ -795,6 +805,7 @@ export interface FileRouteTypes {
     | '/admin/contacts'
     | '/admin/content-manager'
     | '/admin/explore'
+    | '/admin/facility-kb'
     | '/admin/finance'
     | '/admin/handoff'
     | '/admin/health'
@@ -871,6 +882,7 @@ export interface FileRouteTypes {
     | '/admin/contacts'
     | '/admin/content-manager'
     | '/admin/explore'
+    | '/admin/facility-kb'
     | '/admin/finance'
     | '/admin/handoff'
     | '/admin/health'
@@ -1143,6 +1155,13 @@ declare module '@tanstack/react-router' {
       path: '/explore'
       fullPath: '/admin/explore'
       preLoaderRoute: typeof AdminExploreRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/facility-kb': {
+      id: '/admin/facility-kb'
+      path: '/facility-kb'
+      fullPath: '/admin/facility-kb'
+      preLoaderRoute: typeof AdminFacilityKbRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/finance': {
@@ -1503,6 +1522,7 @@ interface AdminRouteChildren {
   AdminContactsRoute: typeof AdminContactsRoute
   AdminContentManagerRoute: typeof AdminContentManagerRoute
   AdminExploreRoute: typeof AdminExploreRoute
+  AdminFacilityKbRoute: typeof AdminFacilityKbRoute
   AdminFinanceRoute: typeof AdminFinanceRoute
   AdminHandoffRoute: typeof AdminHandoffRoute
   AdminHealthRoute: typeof AdminHealthRoute
@@ -1534,6 +1554,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminContactsRoute: AdminContactsRoute,
   AdminContentManagerRoute: AdminContentManagerRoute,
   AdminExploreRoute: AdminExploreRoute,
+  AdminFacilityKbRoute: AdminFacilityKbRoute,
   AdminFinanceRoute: AdminFinanceRoute,
   AdminHandoffRoute: AdminHandoffRoute,
   AdminHealthRoute: AdminHealthRoute,
@@ -1639,13 +1660,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
