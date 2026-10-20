@@ -207,6 +207,8 @@ export interface TriggerAdminHandoffInput {
   context?: unknown;
   /** false bila alert sudah dikirim jalur lain (mis. bukti transfer). */
   notify?: boolean;
+  /** Lama jeda bot. Default ADMIN_HANDOFF_PAUSE_MS; 0 = tiket + alert tanpa jeda. */
+  pauseMs?: number;
   now?: Date;
 }
 
@@ -264,14 +266,15 @@ export async function triggerAdminHandoff(
   } catch (e) {
     console.warn("[AdminHandoff] tiket gagal:", e);
   }
-  if (input.threadId) {
+  const pauseMs = input.pauseMs ?? ADMIN_HANDOFF_PAUSE_MS;
+  if (input.threadId && pauseMs > 0) {
     try {
       const { data: thread } = await db
         .from("whatsapp_threads")
         .select("ai_paused_until")
         .eq("id", input.threadId)
         .maybeSingle();
-      const candidate = new Date(now.getTime() + ADMIN_HANDOFF_PAUSE_MS).toISOString();
+      const candidate = new Date(now.getTime() + pauseMs).toISOString();
       pausedUntil = laterPause((thread as { ai_paused_until?: string | null } | null)?.ai_paused_until, candidate);
       await db.from("whatsapp_threads").update({ ai_paused_until: pausedUntil }).eq("id", input.threadId);
     } catch (e) {

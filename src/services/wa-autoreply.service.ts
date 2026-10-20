@@ -820,7 +820,7 @@ export async function executeAutoreplyForPhone(
   const startAdminHandoff = async (
     kind: import("@/services/wa-autoreply/admin-handoff").AdminHandoffKind,
     triggerMessage: string,
-    opts: { notify?: boolean; onlyIfNoPaymentProofAlert?: boolean } = {},
+    opts: { notify?: boolean; onlyIfNoPaymentProofAlert?: boolean; pauseMs?: number } = {},
   ) => {
     if (adminHandoffDone) return;
     adminHandoffDone = true;
@@ -841,6 +841,7 @@ export async function executeAutoreplyForPhone(
         guestName: c.display_name ?? c.guest_name ?? null,
         context: ctxForTicket,
         notify: false,
+        pauseMs: opts.pauseMs,
       });
       console.info(`[Autoreply] Admin handoff (${kind}) for ${phone.slice(-6)}; paused until ${res.pausedUntil ?? "-"}`);
       if (opts.notify !== false) {
@@ -1547,6 +1548,7 @@ export async function executeAutoreplyForPhone(
     }
   }
 
+  let facilityUnanswered: { topic: string; partialReply: string | null; missing: string[]; hasBooking: boolean } | null = null;
   // Knowledge base fasilitas per kamar (wifi, dapur, handuk, hairdryer,
   // titik check-in) — sumber tunggal. Kolom kosong → handoff admin, bukan tebakan.
   if (!reply && !isManager && !multiPendingInbound && !wantsMedia && !deferMediaToAi && lastMessage && lastMessage.length <= 220) {
@@ -1570,25 +1572,42 @@ export async function executeAutoreplyForPhone(
           roomTypeIds,
           fallbackMapsUrl: placeId ? `https://www.google.com/maps/place/?q=place_id:${placeId}` : null,
         });
+        let viaSource: string | null = null;
         if (answer.kind === "answer") {
           adoptReply(answer.reply);
         } else {
-          const { buildAdminHandoffGuestReply } = await import("@/services/wa-autoreply/admin-handoff");
-          adoptReply([answer.partialReply, buildAdminHandoffGuestReply("facility_unknown")].filter(Boolean).join("\n\n"));
-          await startAdminHandoff(
-            "facility_unknown",
-            `${lastMessage}\n\n[KB kosong: ${answer.missing.map((f) => kb.FACILITY_FIELD_LABEL[f]).join(", ")}]`,
-          );
+          // KB kosong/tidak cocok → sumber lama (SOP / Q&A / contoh pelatihan).
+          const fb = await import("@/services/wa-autoreply/facility-fallback");
+          let found: { reply: string; source: string } | null = null;
+          try {
+            found = fb.findFacilityAnswerInSources(topic, await fb.loadFacilitySources(supabaseAdmin as any, topic));
+          } catch (e) {
+            console.warn("[Autoreply] facility source fallback failed:", e);
+          }
+          if (found) {
+            viaSource = found.source;
+            const wifiPartial = topic === "wifi_location" ? null : answer.partialReply;
+            adoptReply([wifiPartial, found.reply].filter(Boolean).join("\n"));
+          } else {
+            facilityUnanswered = {
+              topic,
+              partialReply: answer.partialReply,
+              missing: answer.missing.map((f) => kb.FACILITY_FIELD_LABEL[f]),
+              hasBooking: roomTypeIds.length > 0 || bookingActive || !!hasActiveBooking,
+            };
+          }
         }
+        if (reply) {
         orchResult = {
           agentKey: "front-office",
           intent: `facility_kb_${topic}`,
           routingConfidence: 1,
-          escalated: answer.kind === "handoff",
-          toolsUsed: ["room-facility-kb"],
+          escalated: false,
+          toolsUsed: viaSource ? ["room-facility-kb", viaSource] : ["room-facility-kb"],
           fastPath: true,
         };
-        console.info(`[Autoreply] Facility KB (${topic}, ${answer.kind}) for ${phone.slice(-6)}`);
+        console.info(`[Autoreply] Facility KB (${topic}, ${viaSource ?? answer.kind}) for ${phone.slice(-6)}`);
+        }
       }
     } catch (e) {
       console.warn("[Autoreply] facility KB fast-path failed (falling back):", e);
@@ -1617,6 +1636,27 @@ export async function executeAutoreplyForPhone(
       };
       console.info(`[Autoreply] Fast-path FAQ (${fastFaq.intent}) for ${phone.slice(-6)}`);
     }
+  }
+
+  // Tidak ada sumber yang tahu → handoff (tetap tidak menebak). Calon tamu
+  // tidak dijeda; tamu ber-booking dijeda singkat (30 menit).
+  if (!reply && facilityUnanswered) {
+    const fu = facilityUnanswered;
+    const { buildAdminHandoffGuestReply } = await import("@/services/wa-autoreply/admin-handoff");
+    const { facilityHandoffPauseMs } = await import("@/services/wa-autoreply/facility-fallback");
+    adoptReply([fu.partialReply, buildAdminHandoffGuestReply("facility_unknown")].filter(Boolean).join("\n\n"));
+    await startAdminHandoff("facility_unknown", `${lastMessage}\n\n[Tidak ada di KB/SOP/pelatihan: ${fu.missing.join(", ")}]`, {
+      pauseMs: facilityHandoffPauseMs(fu.hasBooking),
+    });
+    orchResult = {
+      agentKey: "front-office",
+      intent: `facility_kb_${fu.topic}`,
+      routingConfidence: 1,
+      escalated: true,
+      toolsUsed: ["room-facility-kb"],
+      fastPath: true,
+    };
+    console.info(`[Autoreply] Facility handoff (${fu.topic}) for ${phone.slice(-6)}`);
   }
 
   if (!reply && !isManager && !bookingActive && !multiPendingInbound && isPerRoomRentalClarification(lastMessage)) {
@@ -2801,7 +2841,14 @@ export async function executeAutoreplyForPhone(
     try {
       const { replyDefersToStaff } = await import("@/services/wa-autoreply/admin-handoff");
       if (replyDefersToStaff(finalReply)) {
-        await startAdminHandoff("unknown_answer", `${lastMessage}\n\n[Balasan bot] ${finalReply.slice(0, 200)}`);
+        const { detectFacilityTopic } = await import("@/services/room-facility-kb");
+        const isFacility = !!detectFacilityTopic(lastMessage ?? "");
+        let pauseMs: number | undefined;
+        if (isFacility) {
+          const { facilityHandoffPauseMs } = await import("@/services/wa-autoreply/facility-fallback");
+          pauseMs = facilityHandoffPauseMs(bookingActive || !!hasActiveBooking);
+        }
+        await startAdminHandoff(isFacility ? "facility_unknown" : "unknown_answer", `${lastMessage}\n\n[Balasan bot] ${finalReply.slice(0, 200)}`, { pauseMs });
       }
     } catch (e) {
       console.warn("[Autoreply] unknown-answer handoff failed (non-fatal):", e);

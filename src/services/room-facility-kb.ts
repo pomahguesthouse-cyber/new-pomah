@@ -5,7 +5,8 @@
  *
  * Latar (laporan Sania 13–18 Okt 2026): letak password WiFi dijawab dua versi
  * (di balik kunci vs stiker dekat TV) dan alat masak dapur tidak diketahui.
- * Aturan: bot TIDAK menebak. Kolom kosong → handoff ke admin.
+ * Aturan: bot TIDAK menebak. Kolom kosong → fallback SOP/pelatihan
+ * (wa-autoreply/facility-fallback.ts); tidak ada di sumber mana pun → handoff.
  *
  * Tabel `room_facility_knowledge`: satu baris `room_type_id IS NULL` berlaku
  * untuk semua kamar; baris per tipe kamar menimpa kolom yang terisi.
@@ -205,8 +206,9 @@ export function buildFacilityKbPromptBlock(
     lines.push(`- ${FACILITY_FIELD_LABEL[f]}: ${[g ? `semua kamar: ${g}` : null, ...specific].filter(Boolean).join("; ")}`);
   }
   return (
-    "KNOWLEDGE BASE FASILITAS (sumber tunggal, menang atas SOP/contoh lain):\n" +
+    "KNOWLEDGE BASE FASILITAS (prioritas utama; bila bertentangan, KB yang menang):\n" +
     lines.join("\n") +
-    "\nUntuk kolom BELUM DIKETAHUI: JANGAN menebak atau memakai info lain; katakan bahwa hal itu kami teruskan ke admin."
+    "\nUntuk kolom BELUM DIKETAHUI: boleh menjawab HANYA dari SOP/FAQ/contoh pelatihan yang ada di konteks. " +
+    "Bila tidak ada di sumber mana pun, JANGAN menebak; katakan bahwa hal itu kami teruskan ke admin."
   );
 }
