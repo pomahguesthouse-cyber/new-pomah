@@ -305,3 +305,30 @@ assert.match(sitemap, /filterIndexableLandingRows/);
 assert.match(sitemap, /isMissingSchemaError/);
 
 console.log("test-landing-page-seo: ok");
+
+// /lp/penginapan-dekat-akpelni (code-defined, UNNES template)
+{
+  const seo = await import("../src/public/content/approved-seo");
+  const sd = await import("../src/public/lib/structured-data");
+  const ps = await import("../src/public/lib/public-seo");
+  const gl = await import("../src/public/components/guide-links");
+  const ak = seo.approvedLandingForSlug("penginapan-dekat-akpelni");
+  assert.ok(ak);
+  assert.equal(ak!.title, "Penginapan Dekat Akpelni Semarang – Pomah Guesthouse");
+  assert.equal(ak!.h1, "Penginapan Dekat Akpelni untuk Orang Tua Taruna & Peserta Diklat");
+  assert.ok(ak!.meta.length <= 160);
+  const text = JSON.stringify(ak);
+  assert.doesNotMatch(text, /175\.000/);
+  assert.doesNotMatch(text, /BELUM TERVERIFIKASI/i);
+  assert.match(text, new RegExp(seo.formatRupiah(seo.ROOM_FROM_RATES["kamar-single"])));
+  const graph = JSON.stringify(sd.approvedLandingGraph({ path: "/lp/penginapan-dekat-akpelni", breadcrumbName: ak!.breadcrumbName, faqs: ak!.faq }));
+  assert.match(graph, /FAQPage/);
+  assert.match(graph, /LodgingBusiness/);
+  assert.match(graph, /50221/);
+  assert.match(graph, /-7\.0209/);
+  assert.match(graph, /110\.3881/);
+  assert.ok(ps.collectSitemapPaths({ landingSlugs: [...seo.CODE_ONLY_LANDING_SLUGS] }).includes("/lp/penginapan-dekat-akpelni"));
+  assert.ok(seo.APPROVED_LP.links.some((l) => l.href === "/lp/penginapan-dekat-akpelni"));
+  assert.ok(gl.ORPHAN_GUIDE_LINKS.some((l) => l.href === "/lp/penginapan-dekat-akpelni"));
+}
+console.log("akpelni landing ok");

@@ -319,7 +319,19 @@ export function unnesLandingGraph(input: {
   property?: SocialProperty | null;
   faqs: FaqItem[];
 }) {
-  const pageUrl = canonicalUrlForPath("/lp/penginapan-dekat-unnes");
+  return approvedLandingGraph({ ...input, path: "/lp/penginapan-dekat-unnes", breadcrumbName: "Penginapan dekat UNNES" });
+}
+
+/** Code-defined landing article: LodgingBusiness (50221, Pomah geo) + BreadcrumbList + FAQPage. */
+export function approvedLandingGraph(input: {
+  path: string;
+  breadcrumbName: string;
+  rooms?: SchemaRoom[] | null;
+  reviews?: SchemaReviews | null;
+  property?: SocialProperty | null;
+  faqs: FaqItem[];
+}) {
+  const pageUrl = canonicalUrlForPath(input.path);
   const lodging = homepageLodgingGraph({
     rooms: input.rooms ?? [],
     reviews: input.reviews,
@@ -334,7 +346,7 @@ export function unnesLandingGraph(input: {
         "@id": `${pageUrl}#breadcrumb`,
         itemListElement: [
           { "@type": "ListItem", position: 1, name: "Beranda", item: `${CANONICAL_ORIGIN}/` },
-          { "@type": "ListItem", position: 2, name: "Penginapan dekat UNNES", item: pageUrl },
+          { "@type": "ListItem", position: 2, name: input.breadcrumbName, item: pageUrl },
         ],
       },
       faqPageNode(pageUrl, input.faqs),
