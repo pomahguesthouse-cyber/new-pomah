@@ -150,7 +150,7 @@ export const ReplyComposer = memo(function ReplyComposer({
         {metaWindowClosed && (
           <p
             role="status"
-            className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs leading-snug text-amber-950"
+            className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs leading-snug text-amber-950 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-100"
           >
             {metaWindowMessage}
           </p>
