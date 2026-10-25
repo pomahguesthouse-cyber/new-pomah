@@ -650,7 +650,7 @@ function CalendarGrid({
                   style={{ width: cellWidth }}
                   className={cn(
                     "relative shrink-0 border-l border-border px-0.5 py-1.5 text-center",
-                    today ? "bg-primary/15" : weekend ? "bg-rose-100" : "bg-card",
+                    today ? "bg-primary/15" : weekend ? "bg-rose-100 dark:bg-card" : "bg-card",
                   )}
                 >
                   <div
@@ -700,7 +700,7 @@ function CalendarGrid({
                     style={{ width: cellWidth }}
                     className={cn(
                       "shrink-0 border-l border-border/40",
-                      isToday(d) ? "bg-primary/10" : isWeekend(d) ? "bg-rose-50/80" : "",
+                      isToday(d) ? "bg-primary/10" : isWeekend(d) ? "bg-rose-50/80 dark:bg-transparent" : "",
                     )}
                   />
                 ))}
@@ -734,7 +734,7 @@ function CalendarGrid({
                         style={{ width: cellWidth }}
                         className={cn(
                           "h-full shrink-0 border-l border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                          isToday(d) ? "bg-primary/10" : isWeekend(d) ? "bg-rose-50" : "bg-card",
+                          isToday(d) ? "bg-primary/10" : isWeekend(d) ? "bg-rose-50 dark:bg-card" : "bg-card",
                         )}
                       />
                     ))}
