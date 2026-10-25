@@ -11,12 +11,12 @@ import {
   Wifi,
   Wind,
 } from "lucide-react";
-import { APPROVED_LP, formatRupiah } from "@/public/content/approved-seo";
+import { APPROVED_LANDINGS, APPROVED_LP, formatRupiah, type ApprovedLandingContent } from "@/public/content/approved-seo";
 import { HeroSlider } from "@/public/components/public-shell";
 import type { HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { buildStorageImageUrl } from "@/lib/storage-image";
 import {
-  unnesLandingGraph,
+  approvedLandingGraph,
   type FaqItem,
   type SchemaReviews,
   type SchemaRoom,
@@ -64,6 +64,7 @@ function roomImage(href: string, rooms?: LandingRoom[] | null) {
 
 /** Approved /lp/penginapan-dekat-unnes article. Replaces the section builder for this slug. */
 export function UnnesLanding({
+  content,
   rooms,
   property,
   reviews,
@@ -71,6 +72,8 @@ export function UnnesLanding({
   ctaHref = "/book",
   ctaText = "Pesan kamar",
 }: {
+  /** Article to render. Defaults to the UNNES landing. */
+  content?: ApprovedLandingContent;
   rooms?: LandingRoom[] | null;
   property?: {
     whatsapp_number?: string | null;
@@ -86,8 +89,13 @@ export function UnnesLanding({
   ctaHref?: string;
   ctaText?: string;
 }) {
-  const page = APPROVED_LP;
-  const graph = unnesLandingGraph({
+  const page: ApprovedLandingContent = content ?? APPROVED_LANDINGS[APPROVED_LP.slug];
+  const isUnnes = page.slug === APPROVED_LP.slug;
+  const waDigits = String(property?.whatsapp_number || "6285190986169").replace(/\D/g, "") || "6285190986169";
+  const waHref = `https://wa.me/${waDigits}`;
+  const graph = approvedLandingGraph({
+    path: `/lp/${page.slug}`,
+    breadcrumbName: page.breadcrumbName,
     rooms,
     property,
     reviews,
@@ -117,6 +125,7 @@ export function UnnesLanding({
           fallbackTitle={page.h1}
           h1Text={page.h1}
           actions={
+            <>
             <a
               href={ctaHref}
               className="inline-flex items-center gap-2 rounded-full bg-amber-700 px-7 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-amber-800"
@@ -124,6 +133,17 @@ export function UnnesLanding({
               <CalendarDays className="h-4 w-4" aria-hidden />
               {ctaText}
             </a>
+            {!isUnnes ? (
+              <a
+                href={waHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-3 inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/10 px-7 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-white/20"
+              >
+                Chat WhatsApp
+              </a>
+            ) : null}
+            </>
           }
         />
       ) : (
@@ -281,6 +301,23 @@ export function UnnesLanding({
           </div>
         </section>
 
+        {page.events ? (
+          <section className="bg-[#f3ece0] py-16 md:py-20">
+            <div className="mx-auto max-w-3xl space-y-4 px-4 sm:px-6">
+              <SectionHeading>{page.events.heading}</SectionHeading>
+              {page.events.paragraphs.map((paragraph) => (
+                <p
+                  key={paragraph.slice(0, 24)}
+                  className="rounded-2xl border border-stone-200 bg-white p-5 text-sm leading-relaxed text-stone-600 shadow-sm md:text-base"
+                >
+                  <RichText text={paragraph} />
+                </p>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {page.booking ? (
         <section className="bg-[#f3ece0] py-16 md:py-20">
           <div className="mx-auto max-w-3xl px-4 sm:px-6">
             <SectionHeading>{page.booking.heading}</SectionHeading>
@@ -300,6 +337,7 @@ export function UnnesLanding({
             <p className="mt-6 text-center text-sm leading-relaxed text-stone-500 md:text-base">{page.booking.note}</p>
           </div>
         </section>
+        ) : null}
 
         <section className="mx-auto max-w-3xl px-4 py-16 sm:px-6 md:py-20">
           <SectionHeading>{page.faqTitle}</SectionHeading>
@@ -313,6 +351,32 @@ export function UnnesLanding({
             ))}
           </dl>
         </section>
+
+        {page.cta ? (
+          <section className="bg-[#f3ece0] py-16 text-center md:py-20">
+            <div className="mx-auto max-w-3xl px-4 sm:px-6">
+              <SectionHeading>{page.cta.heading}</SectionHeading>
+              <p className="mt-6 text-base leading-relaxed text-stone-600">{page.cta.text}</p>
+              <div className="mt-8 flex flex-wrap justify-center gap-3">
+                <a
+                  href={ctaHref}
+                  className="inline-flex items-center gap-2 rounded-full bg-amber-700 px-7 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-amber-800"
+                >
+                  <CalendarDays className="h-4 w-4" aria-hidden />
+                  {ctaText}
+                </a>
+                <a
+                  href={waHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-amber-700 bg-white px-7 py-3 text-sm font-semibold text-amber-800 shadow-sm transition hover:bg-amber-50"
+                >
+                  Chat WhatsApp
+                </a>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section className="mx-auto max-w-3xl px-4 pb-16 sm:px-6 md:pb-20">
           <SectionHeading>Lihat juga</SectionHeading>

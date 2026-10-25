@@ -6,6 +6,7 @@ import { cityGuideArticleForSlug } from "@/public/content/approved-seo";
 import { isRetiredExploreSlug, slugifyPlaceName } from "@/public/lib/seo-redirects";
 
 export const LP_PENGINAPAN_DEKAT_UNNES = "/lp/penginapan-dekat-unnes";
+export const LP_PENGINAPAN_DEKAT_AKPELNI = "/lp/penginapan-dekat-akpelni";
 
 /** Pages that had zero inlinks in the 27 Sep 2026 audit. Always linked. */
 export const ORPHAN_GUIDE_LINKS: Array<{ href: string; label: string }> = [
@@ -19,6 +20,7 @@ export const ORPHAN_GUIDE_LINKS: Array<{ href: string; label: string }> = [
     label: "Rute Bus Trans Semarang",
   },
   { href: LP_PENGINAPAN_DEKAT_UNNES, label: "Penginapan dekat UNNES" },
+  { href: LP_PENGINAPAN_DEKAT_AKPELNI, label: "Penginapan dekat Akpelni" },
 ];
 
 export type GuideLinkPlace = { slug: string; name: string; category?: string | null };

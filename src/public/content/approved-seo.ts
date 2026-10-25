@@ -161,8 +161,8 @@ export const FAMILY_SUITE_DESCRIPTION_OLD =
 export const FAMILY_SUITE_DESCRIPTION_NEW =
   "Kamar luas dengan 2 kamar tidur dan 2 kamar mandi ini sangat cocok untuk keluarga atau rombongan kecil hingga empat tamu yang mencari tempat menginap nyaman dan tenang di kawasan Sampangan, Semarang.";
 
-export const UNNES_SEKARAN_DISTANCE = "4,7 km";
-export const UNNES_SEKARAN_TIME = "~10–12 menit";
+export const UNNES_SEKARAN_DISTANCE = "4,5 km";
+export const UNNES_SEKARAN_TIME = "~10–15 menit";
 
 export type NearbyPlace = {
   name: string;
@@ -193,7 +193,7 @@ export const APPROVED_LP = {
   meta: `Penginapan & homestay dekat UNNES di Sampangan, Semarang. Cocok untuk wisuda, tes masuk, dan keluarga. Kamar mulai ${RP_FROM_MIN}/malam. Pesan langsung.`,
   h1: "Penginapan Dekat UNNES untuk Orang Tua, Wisudawan & Peserta Tes",
   cardIntro:
-    "Penginapan keluarga di Sampangan, sekitar 4,7 km dari kampus UNNES Sekaran. Pilihan tepat untuk orang tua wisudawan, peserta tes, dan keluarga yang ingin menginap tenang dekat kampus.",
+    "Penginapan keluarga di Sampangan, sekitar 4,5 km dari kampus UNNES Sekaran. Pilihan tepat untuk orang tua wisudawan, peserta tes, dan keluarga yang ingin menginap tenang dekat kampus.",
   tagline: "Penginapan keluarga yang nyaman & terjangkau di Sampangan, Semarang.",
   intro:
     'Datang ke Semarang untuk wisuda anak, mengantar tes masuk, atau urusan kampus lainnya? Pomah Guesthouse adalah penginapan keluarga di Jl. Dewi Sartika IV No. 71, Sampangan, Semarang, yang bisa dijangkau dengan mudah dari kampus UNNES di Sekaran maupun Sampangan. "Pomah" dalam bahasa Jawa berarti rumah, dan suasana itulah yang ingin kami hadirkan: tenang, bersih, dan hangat, seperti menginap di rumah keluarga sendiri.',
@@ -210,7 +210,7 @@ export const APPROVED_LP = {
     intro:
       "Pomah berada di kawasan Sampangan, jalur yang biasa dilewati menuju Gunungpati dan Sekaran. Perkiraan jarak dari Pomah:",
     bullets: [
-      "**Kampus UNNES Sekaran (Gunungpati):** sekitar 4,7 km, kurang lebih 10–12 menit berkendara.",
+      "**Kampus UNNES Sekaran (Gunungpati):** sekitar 4,5 km, kurang lebih 10–15 menit berkendara.",
       "**Kampus UNNES Sampangan (Jl. Kelud Utara III):** sekitar 3,5 km, kurang lebih 8–10 menit.",
       "**Universitas Wahid Hasyim (Kampus Menoreh):** sekitar 1,5 km, kurang lebih 5 menit.",
       "**GOR Jatidiri:** sekitar 4 km, kurang lebih 10 menit.",
@@ -291,6 +291,7 @@ export const APPROVED_LP = {
     { anchor: "Grand Deluxe", href: "/rooms/grand-deluxe" },
     { anchor: "halaman pemesanan", href: "/book" },
     { anchor: "tempat wisata di Semarang", href: "/explore" },
+    { anchor: "Penginapan dekat Akpelni", href: "/lp/penginapan-dekat-akpelni" },
   ] satisfies ApprovedLink[],
   faq: [
     {
@@ -299,7 +300,7 @@ export const APPROVED_LP = {
     },
     {
       question: "Berapa jauh Pomah dari UNNES Sekaran?",
-      answer: "Sekitar 4,7 km, kurang lebih 10–12 menit berkendara, tergantung lalu lintas.",
+      answer: "Sekitar 4,5 km, kurang lebih 10–15 menit berkendara, tergantung lalu lintas.",
     },
     {
       question: "Apakah Pomah cocok untuk keluarga yang datang saat wisuda UNNES?",
@@ -316,6 +317,120 @@ export const APPROVED_LP = {
     },
   ] satisfies ApprovedFaq[],
 };
+
+/**
+ * Code-defined landing article rendered by the UNNES template
+ * (src/public/components/unnes-landing.tsx). Same shape as APPROVED_LP,
+ * with an optional events section and a closing CTA.
+ */
+export type ApprovedLandingContent = Omit<typeof APPROVED_LP, "slug" | "booking" | "rooms" | "faq" | "links"> & {
+  slug: string;
+  rooms: ApprovedLpRoom[];
+  faq: ApprovedFaq[];
+  links: ApprovedLink[];
+  booking?: (typeof APPROVED_LP)["booking"];
+  events?: { heading: string; paragraphs: string[] };
+  cta?: { heading: string; text: string };
+  breadcrumbName: string;
+};
+
+/**
+ * /lp/penginapan-dekat-akpelni. Approved 25 Oct 2026 from
+ * drafts/lp-akpelni-2026-10-23.md (Hero through CTA only; the
+ * unverified and keyword sections are not included). Room prices come
+ * from ROOM_FROM_RATES / live room_types.base_rate, never hardcoded.
+ */
+export const APPROVED_AKPELNI_LP: ApprovedLandingContent = {
+  slug: "penginapan-dekat-akpelni",
+  breadcrumbName: "Penginapan dekat Akpelni",
+  title: "Penginapan Dekat Akpelni Semarang – Pomah Guesthouse",
+  meta: "Penginapan keluarga di Sampangan, sekitar 1,2 km berkendara dari kampus Akpelni Bendan Duwur. Cocok untuk orang tua taruna dan peserta diklat. Check-in 14.00.",
+  h1: "Penginapan Dekat Akpelni untuk Orang Tua Taruna & Peserta Diklat",
+  cardIntro:
+    "Penginapan keluarga di Sampangan, sekitar 1,2 km berkendara dari kampus Politeknik Bumi Akpelni di Bendan Duwur. Tenang untuk istirahat setelah seharian di kampus, dekat untuk berangkat pagi.",
+  tagline: "Penginapan keluarga yang nyaman & terjangkau di Sampangan, Semarang.",
+  intro:
+    'Datang ke Semarang untuk pelantikan atau wisuda anak di Akpelni, atau sedang ikut diklat di kampus Bendan Duwur? Pomah Guesthouse ada di Jl. Dewi Sartika IV No. 71, Sampangan, tidak jauh dari kampus. "Pomah" dalam bahasa Jawa berarti rumah, dan itulah suasana yang ingin kami hadirkan: tenang, bersih, dan hangat.',
+  why: {
+    heading: "Kenapa menginap di Pomah",
+    paragraphs: [
+      "**Untuk orang tua taruna.** Acara kampus biasanya dimulai pagi. Menginap dekat kampus berarti tidak perlu berangkat subuh dari luar kota, dan masih sempat sarapan dengan tenang.",
+      "**Untuk peserta diklat.** Ikut kursus beberapa hari butuh tempat istirahat yang tenang, AC, dan WiFi untuk mengulang materi di malam hari. Kamar Single cocok untuk yang datang sendiri.",
+      "**Untuk keluarga dan rombongan kecil.** Dua tipe kamar keluarga dengan dua kamar tidur dan dua kamar mandi, muat hingga 4 tamu dalam satu unit.",
+    ],
+  },
+  distance: {
+    heading: "Jarak & rute ke Akpelni",
+    intro: "Pomah dan Akpelni sama-sama berada di sisi selatan Semarang, di kawasan Sampangan–Bendan Duwur.",
+    bullets: [
+      "**Kampus Politeknik Bumi Akpelni (Jl. Pawiyatan Luhur II No. 17, Bendan Duwur):** sekitar 1,2 km berkendara, sekitar 2–3 menit.",
+      "**Kampus UNNES Sekaran:** sekitar 4,5 km, kurang lebih 10–15 menit berkendara.",
+    ],
+    note: "Pada hari pelantikan atau wisuda, jalan sekitar kampus biasanya lebih ramai. Sebaiknya berangkat lebih awal; taksi atau ojek online membantu supaya tidak perlu mencari parkir.",
+  },
+  roomsHeading: "Kamar & harga",
+  roomsNote: "Harga bisa berbeda di tanggal tertentu. Untuk harga pasti, pilih tanggal di halaman pemesanan.",
+  rooms: [
+    { name: "Single", capacity: "1 tamu", size: "15 m²", price: `${rp("kamar-single")}/malam`, href: "/rooms/kamar-single", note: "Praktis untuk peserta diklat yang datang sendiri." },
+    { name: "Deluxe", capacity: "2 tamu", size: "18 m²", price: `${rp("deluxe")}/malam`, href: "/rooms/deluxe", note: "Cocok untuk orang tua yang datang berdua." },
+    { name: "Grand Deluxe", capacity: "2 tamu", size: "20 m²", price: `${rp("grand-deluxe")}/malam`, href: "/rooms/grand-deluxe", note: "Cocok untuk orang tua yang datang berdua." },
+    { name: "Family Room 222", capacity: "hingga 4 tamu", size: "50 m²", price: `${rp("family-room-222")}/malam`, href: "/rooms/family-room-222", note: "Unit 50 m² di lantai 2, dua kamar tidur, dua kamar mandi, ruang keluarga." },
+    { name: "Family Suite 100", capacity: "hingga 4 tamu", size: "60 m²", price: `${rp("family-suite-100")}/malam`, href: "/rooms/family-suite-100", note: "Dua kamar tidur dengan kamar mandi dalam, toilet tamu, ruang tamu dengan smart TV 32 inci, area makan mini, dapur, dan teras pribadi." },
+  ],
+  facilities: {
+    heading: "Fasilitas",
+    bullets: [
+      "WiFi gratis",
+      "AC di kamar",
+      "Parkir gratis",
+      "Extra bed Rp80.000/malam (Rp100.000 untuk kamar Family)",
+      "Check-in mulai pukul 14.00 WIB, check-out paling lambat pukul 12.00 WIB",
+    ],
+  },
+  events: {
+    heading: "Untuk wisuda, pelantikan & diklat",
+    paragraphs: [
+      "**Wisuda dan pelantikan taruna.** Keluarga yang datang dari luar kota sering membawa beberapa orang. Kamar Family memungkinkan satu keluarga tetap bersama dalam satu unit. Pesan lebih awal begitu tanggal acara diumumkan kampus, karena kamar keluarga biasanya cepat terisi.",
+      "**Peserta diklat dan pelaut.** Untuk kursus keterampilan pelaut atau persiapan ujian yang berlangsung beberapa hari, jarak sekitar 1,2 km berkendara dari kampus membuat perjalanan pagi singkat. Jadwal dan pendaftaran diklat silakan cek langsung di situs diklat Akpelni.",
+    ],
+  },
+  cta: {
+    heading: "Siap menginap dekat Akpelni?",
+    text: "Mau menginap dekat Akpelni untuk wisuda, pelantikan, atau diklat? Pilih tanggal dan kamar di halaman pemesanan, atau tanyakan dulu lewat WhatsApp.",
+  },
+  faqTitle: "Pertanyaan yang sering ditanyakan",
+  links: [
+    { anchor: "Family Room 222", href: "/rooms/family-room-222" },
+    { anchor: "Family Suite 100", href: "/rooms/family-suite-100" },
+    { anchor: "kamar Single", href: "/rooms/kamar-single" },
+    { anchor: "Deluxe", href: "/rooms/deluxe" },
+    { anchor: "Grand Deluxe", href: "/rooms/grand-deluxe" },
+    { anchor: "halaman pemesanan", href: "/book" },
+    { anchor: "Penginapan dekat UNNES", href: "/lp/penginapan-dekat-unnes" },
+    { anchor: "tempat wisata di Semarang", href: "/explore" },
+  ],
+  faq: [
+    { question: "Berapa jarak Pomah Guesthouse ke kampus Akpelni Semarang?", answer: "Sekitar 1,2 km berkendara, sekitar 2–3 menit ke Jl. Pawiyatan Luhur II No. 17, Bendan Duwur." },
+    { question: "Jam berapa check-in dan check-out?", answer: "Check-in mulai 14.00, check-out paling lambat 12.00." },
+    { question: "Ada kamar untuk keluarga 4 orang?", answer: `Ada. Family Room 222 dan Family Suite 100 punya dua kamar tidur dan muat hingga 4 tamu, mulai ${rp("family-room-222")} per malam.` },
+    { question: "Kamar mana yang cocok untuk peserta diklat yang datang sendiri?", answer: `Kamar Single, mulai ${rp("kamar-single")} per malam, dengan AC dan WiFi.` },
+    { question: "Apakah bisa tambah extra bed?", answer: "Bisa, Rp80.000 per malam, atau Rp100.000 per malam untuk kamar Family." },
+    { question: "Apakah ada parkir?", answer: "Ada parkir gratis." },
+  ],
+};
+
+/** Landing articles rendered from code, keyed by slug. */
+export const APPROVED_LANDINGS: Record<string, ApprovedLandingContent> = {
+  [APPROVED_LP.slug]: { ...APPROVED_LP, breadcrumbName: "Penginapan dekat UNNES" },
+  [APPROVED_AKPELNI_LP.slug]: APPROVED_AKPELNI_LP,
+};
+
+export function approvedLandingForSlug(slug: string | null | undefined): ApprovedLandingContent | null {
+  return (slug && APPROVED_LANDINGS[slug]) || null;
+}
+
+/** Code-only landing pages that have no seo_landing_pages row; always served and listed. */
+export const CODE_ONLY_LANDING_SLUGS = [APPROVED_AKPELNI_LP.slug] as const;
 
 export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
   {

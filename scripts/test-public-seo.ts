@@ -536,8 +536,8 @@ const nearby = mergeHomepageConfig({
     ],
   },
 }).lokasi.nearby;
-assert.equal(nearby[0]?.distance, "4,7 km");
-assert.equal(nearby[0]?.time, "~10–12 menit");
+assert.equal(nearby[0]?.distance, "4,5 km");
+assert.equal(nearby[0]?.time, "~10–15 menit");
 assert.equal(nearby[1]?.name, "Unnes Sampangan (Kelud Utara III)");
 assert.equal(nearby[2]?.distance, "8 km");
 assert.equal(nearby[2]?.time, "~20 menit");
@@ -548,8 +548,8 @@ const lpNearby = patchUnnesDistance({
   distance: "8 km",
   time: "~10 menit",
 });
-assert.equal(lpNearby.distance, "4,7 km");
-assert.equal(lpNearby.time, "~10–12 menit");
+assert.equal(lpNearby.distance, "4,5 km");
+assert.equal(lpNearby.time, "~10–15 menit");
 assert.equal(
   DEFAULT_HOMEPAGE_CONFIG.lokasi.nearby.find((item) => item.name === "Undip Tembalang")?.distance,
   "8 km",

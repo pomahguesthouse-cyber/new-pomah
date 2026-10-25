@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic } from "@/integrations/supabase/client.server";
 import { cityGuideSitemapUrls, renderSitemapXml, type SitemapUrl } from "@/public/lib/city-guide";
-import { CITY_GUIDE_ARTICLES } from "@/public/content/approved-seo";
+import { CITY_GUIDE_ARTICLES, CODE_ONLY_LANDING_SLUGS } from "@/public/content/approved-seo";
 import { loadCityGuidePlaces } from "@/public/lib/city-guide.server";
 import { filterIndexableLandingRows } from "@/public/lib/landing-page-seo";
 import { isMissingSchemaError } from "@/public/lib/lp-slug-redirects";
@@ -42,7 +42,7 @@ export const Route = createFileRoute("/sitemap.xml")({
         const paths = collectSitemapPaths({
           pageSlugs: (pages ?? []).map((p) => p.slug),
           roomSlugs: (roomTypes ?? []).map((r) => r.slug),
-          landingSlugs: landings.map((p) => p.slug),
+          landingSlugs: [...landings.map((p) => p.slug), ...CODE_ONLY_LANDING_SLUGS],
         });
         const propertyUpdatedAt = (propertyResult.data as { updated_at?: string | null } | null)
           ?.updated_at;

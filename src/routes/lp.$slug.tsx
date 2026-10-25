@@ -43,7 +43,8 @@ import {
 } from "@/admin/modules/seo/landing-page.functions";
 import { canonicalHeadTags, canonicalUrlForPath, isUnoptimizedSharePng, shareOgImageTags } from "@/public/lib/public-seo";
 import {
-  APPROVED_LP,
+  approvedLandingForSlug,
+  CODE_ONLY_LANDING_SLUGS,
   applyApprovedHomepageSeo,
   patchUnnesDistance,
   stripHotWaterFromPublicJson,
@@ -164,6 +165,38 @@ function LpSizedImage({
   );
 }
 
+/** Published stand-in row for a code-only approved landing that has no DB row yet. */
+function codeOnlyLandingRow(slug: string): SeoLandingPage | null {
+  if (!(CODE_ONLY_LANDING_SLUGS as readonly string[]).includes(slug)) return null;
+  const content = approvedLandingForSlug(slug);
+  if (!content) return null;
+  return {
+    id: `code:${slug}`,
+    property_id: null,
+    title: content.title,
+    slug,
+    target_keyword: null,
+    hero_headline: content.h1,
+    hero_subheadline: content.cardIntro,
+    hero_cta_text: "Pesan kamar",
+    hero_cta_url: "/book",
+    body_content: null,
+    meta_title: content.title,
+    meta_description: content.meta,
+    og_image_url: null,
+    published: true,
+    sections: null,
+    homepage_config: null,
+    custom_head: null,
+    custom_robots: null,
+    json_ld_enabled: false,
+    custom_json_ld: null,
+    noindex: false,
+    created_at: "2026-10-25T00:00:00.000Z",
+    updated_at: "2026-10-25T00:00:00.000Z",
+  };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute("/lp/$slug")({
   head: ({ loaderData }: any) => {
@@ -179,9 +212,10 @@ export const Route = createFileRoute("/lp/$slug")({
       }
       return {};
     }
-    const approved = p.slug === APPROVED_LP.slug;
-    const title = approved ? APPROVED_LP.title : stripPublicHotWaterClaim(p.meta_title || p.title);
-    const description = approved ? APPROVED_LP.meta : stripPublicHotWaterClaim(p.meta_description || "");
+    const approvedPage = approvedLandingForSlug(p.slug);
+    const approved = approvedPage !== null;
+    const title = approvedPage ? approvedPage.title : stripPublicHotWaterClaim(p.meta_title || p.title);
+    const description = approvedPage ? approvedPage.meta : stripPublicHotWaterClaim(p.meta_description || "");
     const canonical = canonicalHeadTags(`/lp/${p.slug || ""}`);
     const property = loaderData?.property as { homepage_config?: unknown; whatsapp_number?: string | null; email?: string | null } | undefined;
     const heroImage = approved
@@ -242,24 +276,25 @@ export const Route = createFileRoute("/lp/$slug")({
       }>,
       getPublicSiteData(),
     ]);
-    if (!result.page) throw notFound();
-    const patched = patchUnnesDistance(result.page) as SeoLandingPage;
+    const sourcePage = result.page ?? codeOnlyLandingRow(params.slug);
+    if (!sourcePage) throw notFound();
+    const patched = patchUnnesDistance(sourcePage) as SeoLandingPage;
     if (patched.homepage_config) {
       patched.homepage_config = applyApprovedHomepageSeo(patched.homepage_config);
     }
     const cleaned = stripHotWaterFromPublicJson(patched);
-    const page =
-      cleaned.slug === APPROVED_LP.slug
-        ? {
-            ...cleaned,
-            title: APPROVED_LP.title,
-            meta_title: APPROVED_LP.title,
-            meta_description: APPROVED_LP.meta,
-            hero_headline: APPROVED_LP.h1,
-            hero_subheadline: APPROVED_LP.cardIntro,
-            target_keyword: null,
-          }
-        : cleaned;
+    const approvedPage = approvedLandingForSlug(cleaned.slug);
+    const page = approvedPage
+      ? {
+          ...cleaned,
+          title: approvedPage.title,
+          meta_title: approvedPage.title,
+          meta_description: approvedPage.meta,
+          hero_headline: approvedPage.h1,
+          hero_subheadline: approvedPage.cardIntro,
+          target_keyword: null,
+        }
+      : cleaned;
     const site = siteData as { property?: unknown; roomTypes?: unknown[] } | null;
     const sectionList = allLandingSections(page.sections);
     const reviews = landingNeedsGoogleReviews(sectionList)
@@ -557,7 +592,8 @@ function LandingPage() {
   }, []);
 
   const homeCfg = mergeHomepageConfig(property?.homepage_config);
-  const approved = page.slug === APPROVED_LP.slug;
+  const approvedPage = approvedLandingForSlug(page.slug);
+  const approved = approvedPage !== null;
 
   return (
     <BookingCtx.Provider value={{ checkIn, checkOut, today, setCheckIn, setCheckOut, checkInOpen, setCheckInOpen, checkOutOpen, setCheckOutOpen, handleCheckInChange }}>
@@ -575,6 +611,7 @@ function LandingPage() {
             links={homeCfg.header.links.map((link) => ({ label: link.label, url: link.href }))}
           />
           <UnnesLanding
+            content={approvedPage ?? undefined}
             rooms={roomTypes}
             property={property}
             hero={homeCfg.hero}

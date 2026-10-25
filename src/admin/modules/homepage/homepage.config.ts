@@ -403,7 +403,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     subheading: "Temukan kami di lokasi strategis yang mudah diakses",
     nearbyTitle: "Lokasi Terdekat (Radius 5km)",
     nearby: [
-      { name: "Unnes Sekaran", type: "Universitas", distance: "4,7 km", time: "~10–12 menit" },
+      { name: "Unnes Sekaran", type: "Universitas", distance: "4,5 km", time: "~10–15 menit" },
       { name: "Unnes Sampangan (Kelud Utara III)", type: "Universitas", distance: "3,5 km", time: "~8–10 menit" },
       { name: "Unwahas Menoreh", type: "Universitas", distance: "1.3 km", time: "~5 menit" },
       { name: "Jatidiri GOR", type: "Olahraga", distance: "3.7 km", time: "~10 menit" },
