@@ -161,8 +161,8 @@ export const FAMILY_SUITE_DESCRIPTION_OLD =
 export const FAMILY_SUITE_DESCRIPTION_NEW =
   "Kamar luas dengan 2 kamar tidur dan 2 kamar mandi ini sangat cocok untuk keluarga atau rombongan kecil hingga empat tamu yang mencari tempat menginap nyaman dan tenang di kawasan Sampangan, Semarang.";
 
-export const UNNES_SEKARAN_DISTANCE = "4,7 km";
-export const UNNES_SEKARAN_TIME = "~10–12 menit";
+export const UNNES_SEKARAN_DISTANCE = "4,5 km";
+export const UNNES_SEKARAN_TIME = "~10–15 menit";
 
 export type NearbyPlace = {
   name: string;
@@ -193,7 +193,7 @@ export const APPROVED_LP = {
   meta: `Penginapan & homestay dekat UNNES di Sampangan, Semarang. Cocok untuk wisuda, tes masuk, dan keluarga. Kamar mulai ${RP_FROM_MIN}/malam. Pesan langsung.`,
   h1: "Penginapan Dekat UNNES untuk Orang Tua, Wisudawan & Peserta Tes",
   cardIntro:
-    "Penginapan keluarga di Sampangan, sekitar 4,7 km dari kampus UNNES Sekaran. Pilihan tepat untuk orang tua wisudawan, peserta tes, dan keluarga yang ingin menginap tenang dekat kampus.",
+    "Penginapan keluarga di Sampangan, sekitar 4,5 km dari kampus UNNES Sekaran. Pilihan tepat untuk orang tua wisudawan, peserta tes, dan keluarga yang ingin menginap tenang dekat kampus.",
   tagline: "Penginapan keluarga yang nyaman & terjangkau di Sampangan, Semarang.",
   intro:
     'Datang ke Semarang untuk wisuda anak, mengantar tes masuk, atau urusan kampus lainnya? Pomah Guesthouse adalah penginapan keluarga di Jl. Dewi Sartika IV No. 71, Sampangan, Semarang, yang bisa dijangkau dengan mudah dari kampus UNNES di Sekaran maupun Sampangan. "Pomah" dalam bahasa Jawa berarti rumah, dan suasana itulah yang ingin kami hadirkan: tenang, bersih, dan hangat, seperti menginap di rumah keluarga sendiri.',
@@ -210,7 +210,7 @@ export const APPROVED_LP = {
     intro:
       "Pomah berada di kawasan Sampangan, jalur yang biasa dilewati menuju Gunungpati dan Sekaran. Perkiraan jarak dari Pomah:",
     bullets: [
-      "**Kampus UNNES Sekaran (Gunungpati):** sekitar 4,7 km, kurang lebih 10–12 menit berkendara.",
+      "**Kampus UNNES Sekaran (Gunungpati):** sekitar 4,5 km, kurang lebih 10–15 menit berkendara.",
       "**Kampus UNNES Sampangan (Jl. Kelud Utara III):** sekitar 3,5 km, kurang lebih 8–10 menit.",
       "**Universitas Wahid Hasyim (Kampus Menoreh):** sekitar 1,5 km, kurang lebih 5 menit.",
       "**GOR Jatidiri:** sekitar 4 km, kurang lebih 10 menit.",
@@ -300,7 +300,7 @@ export const APPROVED_LP = {
     },
     {
       question: "Berapa jauh Pomah dari UNNES Sekaran?",
-      answer: "Sekitar 4,7 km, kurang lebih 10–12 menit berkendara, tergantung lalu lintas.",
+      answer: "Sekitar 4,5 km, kurang lebih 10–15 menit berkendara, tergantung lalu lintas.",
     },
     {
       question: "Apakah Pomah cocok untuk keluarga yang datang saat wisuda UNNES?",
@@ -344,10 +344,10 @@ export const APPROVED_AKPELNI_LP: ApprovedLandingContent = {
   slug: "penginapan-dekat-akpelni",
   breadcrumbName: "Penginapan dekat Akpelni",
   title: "Penginapan Dekat Akpelni Semarang – Pomah Guesthouse",
-  meta: "Penginapan keluarga di Sampangan, sekitar 1,2 km dari kampus Akpelni Bendan Duwur. Cocok untuk orang tua taruna dan peserta diklat. Check-in 14.00.",
+  meta: "Penginapan keluarga di Sampangan, sekitar 1,2 km berkendara dari kampus Akpelni Bendan Duwur. Cocok untuk orang tua taruna dan peserta diklat. Check-in 14.00.",
   h1: "Penginapan Dekat Akpelni untuk Orang Tua Taruna & Peserta Diklat",
   cardIntro:
-    "Penginapan keluarga di Sampangan, sekitar 1,2 km dari kampus Politeknik Bumi Akpelni di Bendan Duwur. Tenang untuk istirahat setelah seharian di kampus, dekat untuk berangkat pagi.",
+    "Penginapan keluarga di Sampangan, sekitar 1,2 km berkendara dari kampus Politeknik Bumi Akpelni di Bendan Duwur. Tenang untuk istirahat setelah seharian di kampus, dekat untuk berangkat pagi.",
   tagline: "Penginapan keluarga yang nyaman & terjangkau di Sampangan, Semarang.",
   intro:
     'Datang ke Semarang untuk pelantikan atau wisuda anak di Akpelni, atau sedang ikut diklat di kampus Bendan Duwur? Pomah Guesthouse ada di Jl. Dewi Sartika IV No. 71, Sampangan, tidak jauh dari kampus. "Pomah" dalam bahasa Jawa berarti rumah, dan itulah suasana yang ingin kami hadirkan: tenang, bersih, dan hangat.',
@@ -363,8 +363,8 @@ export const APPROVED_AKPELNI_LP: ApprovedLandingContent = {
     heading: "Jarak & rute ke Akpelni",
     intro: "Pomah dan Akpelni sama-sama berada di sisi selatan Semarang, di kawasan Sampangan–Bendan Duwur.",
     bullets: [
-      "**Kampus Politeknik Bumi Akpelni (Jl. Pawiyatan Luhur II No. 17, Bendan Duwur):** sekitar 1,2 km, kurang lebih 5 menit berkendara.",
-      "**Kampus UNNES Sekaran:** sekitar 4,5 km, kurang lebih 10–15 menit.",
+      "**Kampus Politeknik Bumi Akpelni (Jl. Pawiyatan Luhur II No. 17, Bendan Duwur):** sekitar 1,2 km berkendara, sekitar 2–3 menit.",
+      "**Kampus UNNES Sekaran:** sekitar 4,5 km, kurang lebih 10–15 menit berkendara.",
     ],
     note: "Pada hari pelantikan atau wisuda, jalan sekitar kampus biasanya lebih ramai. Sebaiknya berangkat lebih awal; taksi atau ojek online membantu supaya tidak perlu mencari parkir.",
   },
@@ -391,7 +391,7 @@ export const APPROVED_AKPELNI_LP: ApprovedLandingContent = {
     heading: "Untuk wisuda, pelantikan & diklat",
     paragraphs: [
       "**Wisuda dan pelantikan taruna.** Keluarga yang datang dari luar kota sering membawa beberapa orang. Kamar Family memungkinkan satu keluarga tetap bersama dalam satu unit. Pesan lebih awal begitu tanggal acara diumumkan kampus, karena kamar keluarga biasanya cepat terisi.",
-      "**Peserta diklat dan pelaut.** Untuk kursus keterampilan pelaut atau persiapan ujian yang berlangsung beberapa hari, jarak sekitar 1,2 km dari kampus membuat perjalanan pagi singkat. Jadwal dan pendaftaran diklat silakan cek langsung di situs diklat Akpelni.",
+      "**Peserta diklat dan pelaut.** Untuk kursus keterampilan pelaut atau persiapan ujian yang berlangsung beberapa hari, jarak sekitar 1,2 km berkendara dari kampus membuat perjalanan pagi singkat. Jadwal dan pendaftaran diklat silakan cek langsung di situs diklat Akpelni.",
     ],
   },
   cta: {
@@ -410,7 +410,7 @@ export const APPROVED_AKPELNI_LP: ApprovedLandingContent = {
     { anchor: "tempat wisata di Semarang", href: "/explore" },
   ],
   faq: [
-    { question: "Berapa jarak Pomah Guesthouse ke kampus Akpelni Semarang?", answer: "Sekitar 1,2 km, kurang lebih 5 menit berkendara ke Jl. Pawiyatan Luhur II No. 17, Bendan Duwur." },
+    { question: "Berapa jarak Pomah Guesthouse ke kampus Akpelni Semarang?", answer: "Sekitar 1,2 km berkendara, sekitar 2–3 menit ke Jl. Pawiyatan Luhur II No. 17, Bendan Duwur." },
     { question: "Jam berapa check-in dan check-out?", answer: "Check-in mulai 14.00, check-out paling lambat 12.00." },
     { question: "Ada kamar untuk keluarga 4 orang?", answer: `Ada. Family Room 222 dan Family Suite 100 punya dua kamar tidur dan muat hingga 4 tamu, mulai ${rp("family-room-222")} per malam.` },
     { question: "Kamar mana yang cocok untuk peserta diklat yang datang sendiri?", answer: `Kamar Single, mulai ${rp("kamar-single")} per malam, dengan AC dan WiFi.` },
