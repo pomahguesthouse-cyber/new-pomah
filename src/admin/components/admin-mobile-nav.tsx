@@ -1,13 +1,13 @@
 import { useEffect } from "react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
-import { CalendarDays, LayoutDashboard, Menu, MessageCircle } from "lucide-react";
+import { CalendarDays, ClipboardList, LayoutDashboard, Menu, MessageCircle } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/calendar", label: "Kalender", icon: CalendarDays, exact: false },
-  { to: "/admin/bookings", label: "Booking", icon: CalendarDays, exact: false },
+  { to: "/admin/bookings", label: "Booking", icon: ClipboardList, exact: false },
   { to: "/admin/whatsapp", label: "Chat WA", icon: MessageCircle, exact: false },
 ] as const;
 
