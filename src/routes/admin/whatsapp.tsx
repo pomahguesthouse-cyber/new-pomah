@@ -10,12 +10,15 @@ import { isWaChatFixtureRequest } from "@/admin/modules/whatsapp/wa-chat-fixture
 const THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const Route = createFileRoute("/admin/whatsapp")({
-  validateSearch: (search: Record<string, unknown>): { thread?: string } => {
+  validateSearch: (search: Record<string, unknown>): { thread?: string; q?: string } => {
     const thread =
       typeof search.thread === "string" && THREAD_ID.test(search.thread)
         ? search.thread
         : undefined;
-    return thread ? { thread } : {};
+    // ?q= prefills the inbox search (e.g. a guest phone with no thread yet).
+    const q =
+      typeof search.q === "string" && search.q.trim() ? search.q.trim().slice(0, 40) : undefined;
+    return { ...(thread ? { thread } : {}), ...(q ? { q } : {}) };
   },
   loaderDeps: ({ search }) => ({ thread: search.thread }),
   // Mulai ambil data begitu rute dipilih/di-preload (tap bottom nav, notifikasi
@@ -34,6 +37,6 @@ export const Route = createFileRoute("/admin/whatsapp")({
 });
 
 function WhatsAppRoute() {
-  const { thread } = Route.useSearch();
-  return <WhatsAppPage initialThreadId={thread ?? null} />;
+  const { thread, q } = Route.useSearch();
+  return <WhatsAppPage initialThreadId={thread ?? null} initialSearch={q ?? ""} />;
 }

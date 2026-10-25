@@ -376,7 +376,13 @@ function isBotPaused(t: unknown): boolean {
   return Number.isFinite(ts) && ts > Date.now();
 }
 
-export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: string | null }) {
+export function WhatsAppPage({
+  initialThreadId = null,
+  initialSearch = "",
+}: {
+  initialThreadId?: string | null;
+  initialSearch?: string;
+}) {
   const sendFn = useServerFn(sendMessage);
   const markReadFn = useServerFn(markRead);
   const pinFn = useServerFn(togglePinned);
@@ -396,7 +402,10 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   const isDesktop = useIsDesktop();
   useKeyboardOpen(!isDesktop);
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
+  useEffect(() => {
+    if (initialSearch) setSearch(initialSearch);
+  }, [initialSearch]);
   const [filter, setFilter] = useState<"all" | "read" | "unread">("all");
   const [threadLimit, setThreadLimit] = useState<number | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
