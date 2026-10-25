@@ -1,3 +1,4 @@
+import { formatRoomQuoteText } from "@/services/pricing/price-quote";
 import {
   messageOpensWithGreeting,
   type ParsedGuestCount,
@@ -86,7 +87,13 @@ function buildCombinationOptions(
           ),
         ),
       );
-      const price = Math.max(0, Number(room.harga_per_malam ?? room.nightly_rate ?? 0));
+      // Kalender harga bisa beda per malam → bandingkan rata-rata menginap.
+      const nights = Number(room.malam ?? 0);
+      const total = Number(room.total_rate ?? 0);
+      const price = Math.max(
+        0,
+        nights > 0 && total > 0 ? total / nights : Number(room.harga_per_malam ?? room.nightly_rate ?? 0),
+      );
       return { name, available, capacity, price };
     })
     .filter((room) => room.available > 0 && room.capacity > 0);
@@ -283,8 +290,8 @@ export function formatAvailabilityReply(
     const focus = rooms.find((room) => String(room.nama ?? "").toLowerCase() === focusLower);
     if (focus) {
       const count = Number(focus.kamar_tersedia ?? 0);
-      const price = Number(focus.harga_per_malam ?? focus.nightly_rate ?? 0);
-      const priceText = price > 0 ? ` Harganya Rp${price.toLocaleString("id-ID")}/malam.` : "";
+      const quote = formatRoomQuoteText(focus).replace(/^, /, "");
+      const priceText = quote ? ` Harganya ${quote}.` : "";
       if (count > 0 && focus.tidak_tersedia !== true) {
         return {
           intent: "deterministic_availability_focus",
@@ -298,8 +305,7 @@ export function formatAvailabilityReply(
         .slice(0, 4)
         .map((room) => {
           const c = Number(room.kamar_tersedia ?? 0);
-          const p = Number(room.harga_per_malam ?? room.nightly_rate ?? 0);
-          return `- ${String(room.nama ?? "Kamar")}: ${c} unit${p > 0 ? `, Rp${p.toLocaleString("id-ID")}/malam` : ""}`;
+          return `- ${String(room.nama ?? "Kamar")}: ${c} unit${formatRoomQuoteText(room)}`;
         });
       return {
         intent: "deterministic_availability_focus_full",
@@ -315,7 +321,7 @@ export function formatAvailabilityReply(
   const lines = available.slice(0, 5).map((room) => {
     const count = Number(room.kamar_tersedia ?? 0);
     const price = Number(room.harga_per_malam ?? room.nightly_rate ?? 0);
-    const priceText = price > 0 ? `, Rp${price.toLocaleString("id-ID")}/malam` : "";
+    const priceText = price > 0 ? formatRoomQuoteText(room) : "";
     return `- ${String(room.nama ?? "Kamar")}: ${count} kamar tersedia${priceText}`;
   });
 
@@ -410,7 +416,7 @@ export function formatAvailabilityForGuestCount(
       );
       const extraBeds = Number(room.extra_bed_dibutuhkan ?? 0);
       const extraBedRate = Number(room.tarif_extra_bed_per_malam ?? 0);
-      const priceText = price > 0 ? `, Rp${price.toLocaleString("id-ID")}/malam` : "";
+      const priceText = price > 0 ? formatRoomQuoteText(room) : "";
       const capacityText = maxGuests > 0 ? `, maks ${maxGuests} tamu/kamar` : "";
       const catatanExtraBed = typeof room.catatan_extra_bed === "string" ? room.catatan_extra_bed.trim() : "";
       const extraBedText = catatanExtraBed
@@ -435,7 +441,7 @@ export function formatAvailabilityForGuestCount(
       const maxGuests = Number(
         room.kapasitas_maksimal_dengan_extra_bed ?? room.kapasitas_tamu ?? 0,
       );
-      const priceText = price > 0 ? `, Rp${price.toLocaleString("id-ID")}/malam` : "";
+      const priceText = price > 0 ? formatRoomQuoteText(room) : "";
       const capacityText = maxGuests > 0 ? `, maks ${maxGuests} tamu/kamar` : "";
       return `- ${String(room.nama ?? "Kamar")}: ${count} kamar tersedia${priceText}${capacityText}`;
     });

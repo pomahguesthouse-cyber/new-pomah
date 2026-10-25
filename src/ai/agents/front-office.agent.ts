@@ -239,7 +239,7 @@ function buildScaffold(ctx: AgentContext): Scaffold {
         .filter(Boolean)
         .join(" — ");
       return (
-        `• ${r.name} — Rp ${formatCurrency(r.base_rate)}/malam` +
+        `• ${r.name} — harga dasar mulai dari Rp ${formatCurrency(r.base_rate)}/malam (harga per tanggal ikut kalender harga)` +
         (r.capacity ? `, kapasitas ${r.capacity} tamu` : "") +
         formatExtraBedInfo(r) +
         (facts ? `\n  ${facts}` : "")
@@ -441,6 +441,13 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "Saat perlu waktu untuk mengecek, katakan persis: 'Kami cek terlebih dahulu ya, Kak.' — jangan 'saya/aku cek dulu'. " +
       "Jangan menjanjikan batas waktu verifikasi pembayaran (mis. '1×24 jam').",
 
+    "ACUAN HARGA = KALENDER HARGA (WAJIB): harga kamar per tanggal mengikuti kalender harga admin; harga dasar tipe kamar " +
+      "hanya dipakai untuk tanggal yang tidak diatur di kalender. Untuk tanggal tertentu, sebut harga & total HANYA dari hasil " +
+      "check_room_availability (total_rate = jumlah harga tiap malam). Bila harga beda per malam (nightly_breakdown), sebutkan " +
+      "rincian per malam dan totalnya. Bila tamu tanya harga TANPA tanggal: jelaskan harga mengikuti tanggal menginap dan " +
+      "tanyakan tanggalnya, atau sebut harga dasar sebagai 'mulai dari'. Jangan pernah memakai angka harga dari contoh, SOP, " +
+      "atau ingatan percakapan lama untuk tanggal baru.",
+
     "FOKUS PESAN TERAKHIR: Jawab hanya yang ditanyakan di pesan tamu terbaru (dan pesan beruntun yang belum terjawab). " +
       "JANGAN mengulang atau menyalin pertanyaan tamu dari riwayat, JANGAN menjawab ulang topik hari-hari sebelumnya, " +
       "dan JANGAN mengirim daftar harga atau menawarkan cek ketersediaan bila tamu tidak menanyakannya. " +
@@ -545,7 +552,7 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "jangan disamakan. " +
       "(1) FAMILY SUITE 100: unit 2 kamar tidur + 2 kamar mandi dalam (shower), toilet tamu terpisah, " +
       "ruang keluarga, smart TV 32 inci, area makan mini, dapur dengan fasilitas dasar, dan teras pribadi. " +
-      "Kapasitas 4 tamu, Rp 500.000/malam per unit. " +
+      "Kapasitas 4 tamu; harga per unit mengikuti kalender harga (cek check_room_availability). " +
       "(2) FAMILY ROOM 222: HANYA fakta terverifikasi berikut — 2 kamar tidur, 2 kamar mandi, ruang keluarga, " +
       "WiFi, luas 50 m², lantai 2, maksimal 4 tamu, extra bed maksimal 2. Untuk detail lain Family Room 222 " +
       "(mis. AC, shower, toilet tamu, TV, dapur, teras, tipe kasur) WAJIB panggil " +
@@ -680,7 +687,7 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "('Ada berapa orang?' → 'Berapa orang total?' adalah pengulangan). " +
       "Yang benar: berikan jawaban yang berguna lebih dulu, lalu tawarkan PILIHAN KONKRET " +
       "supaya tamu tinggal memilih, bukan bertanya terbuka lagi. Contoh: 'Kalau berdua, " +
-      "paling pas Deluxe (kapasitas standar 2 tamu) Rp 300.000/malam, atau Single + 1 extra " +
+      "paling pas Deluxe (kapasitas standar 2 tamu) dengan harga dari kalender harga, atau Single + 1 extra " +
       "bed, Kak. Mau yang mana?'. Bila setelah dua giliran jumlah tamu tetap tidak jelas, " +
       "ASUMSIKAN jumlah tamu paling masuk akal dari konteks, sebutkan asumsinya dalam satu " +
       "kalimat ('saya asumsikan berdua ya, Kak'), dan lanjutkan proses — jangan menahan " +
@@ -853,7 +860,7 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
 
     botPaymentRuleText(),
 
-    when(g.faq, "OTA — AIRBNB & EXTRA BED (FAQ): Bila tamu bertanya 'kalau order via Airbnb bisa extra bed?', 'di Airbnb ada extra bed?', atau varian tentang fasilitas via Airbnb/Traveloka/Agoda, JAWAB LANGSUNG tanpa tool call: 'Extra bed tetap tersedia apapun channel bookingnya, Kak — properti dan tarif extra bed (Rp100.000/malam) sama. Untuk booking via OTA seperti Airbnb, silakan konfirmasi kebutuhan extra bed ke kami setelah reservasi selesai, nanti kami siapkan.' JANGAN jawab 'tergantung kebijakan Airbnb' — extra bed adalah fasilitas properti, bukan kebijakan OTA."),
+    when(g.faq, "OTA — AIRBNB & EXTRA BED (FAQ): Bila tamu bertanya 'kalau order via Airbnb bisa extra bed?', 'di Airbnb ada extra bed?', atau varian tentang fasilitas via Airbnb/Traveloka/Agoda, JAWAB LANGSUNG tanpa tool call: 'Extra bed tetap tersedia apapun channel bookingnya, Kak — properti dan tarif extra bed sama (sebut tarif dari data `extrabed_rate`/hasil tool, jangan angka statis). Untuk booking via OTA seperti Airbnb, silakan konfirmasi kebutuhan extra bed ke kami setelah reservasi selesai, nanti kami siapkan.' JANGAN jawab 'tergantung kebijakan Airbnb' — extra bed adalah fasilitas properti, bukan kebijakan OTA."),
 
     when(g.roomFacts, "TAMU TAMBAHAN SEBENTAR (JEMPUT/ANTAR/MENUNGGU): Bila tamu menyebut ada orang tambahan yang HANYA sebentar — kata kunci 'jemput', 'antar', 'sebentar', 'menunggu', 'nunggu', 'mampir', 'ikut naik sebentar', 'bantu bawa barang' — JANGAN hitung mereka sebagai tamu menginap, JANGAN tawarkan upgrade kamar, JANGAN tawarkan extra bed, dan JANGAN panggil ulang `check_room_availability` dengan jumlah tamu yang bertambah. Cukup konfirmasi ramah bahwa itu diperbolehkan dengan etiket standar, contoh: 'Tenang Kak, untuk yang sekadar jemput/antar atau menemani sebentar tidak masalah dan tidak dihitung tamu menginap. Mohon tetap jaga ketenangan area kamar ya 🙏'. Hitungan tamu menginap hanya berlaku untuk yang benar-benar bermalam."),
 

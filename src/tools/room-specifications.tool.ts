@@ -52,6 +52,14 @@ function resolveRoomType(roomType: unknown, rooms: ToolContext["rooms"]) {
   return aliasMatches.length === 1 ? aliasMatches[0] : null;
 }
 
+/**
+ * Harga di tool ini = harga dasar (room_types.base_rate). Harga aktual per
+ * tanggal ikut kalender harga (room_daily_rates) → check_room_availability.
+ */
+const CATATAN_HARGA =
+  "harga_dasar_per_malam hanya patokan 'mulai dari'. Harga per tanggal mengikuti kalender harga — " +
+  "untuk tanggal tertentu WAJIB pakai harga dari check_room_availability.";
+
 export const getRoomSpecifications: ToolHandler = async (
   args: Record<string, unknown>,
   ctx: ToolContext,
@@ -74,6 +82,7 @@ export const getRoomSpecifications: ToolHandler = async (
         fasilitas: omitUnavailableHotWaterAmenities(matched.amenities),
         kapasitas_extra_bed: extrabedCap,
         tarif_extra_bed_per_malam: extrabedRate,
+        catatan_harga: CATATAN_HARGA,
       });
     }
     return JSON.stringify({ error: `Tipe kamar '${args.room_type}' tidak ditemukan secara unik.` });
@@ -97,5 +106,5 @@ export const getRoomSpecifications: ToolHandler = async (
     };
   });
 
-  return JSON.stringify({ room_specifications: specs });
+  return JSON.stringify({ room_specifications: specs, catatan_harga: CATATAN_HARGA });
 };

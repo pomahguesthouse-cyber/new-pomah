@@ -372,7 +372,11 @@ export const checkRoomAvailability: ToolHandler = async (
     const extraBedDibutuhkan = melewatiKapasitas
       ? kebutuhanExtraBed
       : Math.min(kebutuhanExtraBed, kapasitasExtraBed);
-    const extraBedRate = Number(r.extrabed_rate ?? 0) || 0;
+    // Tarif extra bed juga ikut kalender harga (extrabed_rate per tanggal),
+    // fallback room_types.extrabed_rate. Pakai rata-rata per malam menginap.
+    const extraBedRate = resolved.nightly.length > 0
+      ? Math.round(resolved.nightly.reduce((sum, n) => sum + n.extrabed_rate, 0) / resolved.nightly.length)
+      : Number(r.extrabed_rate ?? 0) || 0;
     const catatanExtraBed =
       guestCount > 0 && extraBedDibutuhkan > 0 && !melewatiKapasitas
         ? formatOptionalExtraBedOffer(extraBedDibutuhkan, extraBedRate)
@@ -532,7 +536,14 @@ export const checkRoomAvailability: ToolHandler = async (
         kapasitas_tamu: Math.max(1, Math.floor(Number(r.kapasitas_tamu ?? 1))),
         kapasitas_extra_bed: Math.max(0, Math.floor(Number(r.kapasitas_extra_bed ?? 0))),
         tarif_extra_bed_per_malam: Math.max(0, Number(r.tarif_extra_bed_per_malam ?? 0)),
-        harga_per_malam: Math.max(0, Number(r.harga_per_malam ?? 0)),
+        // Rata-rata per malam dari kalender harga (beda per malam → adil
+        // dibandingkan antartipe); fallback ke harga malam pertama.
+        harga_per_malam: Math.max(
+          0,
+          Number(r.malam ?? 0) > 0 && Number(r.total_rate ?? 0) > 0
+            ? Math.round(Number(r.total_rate) / Number(r.malam))
+            : Number(r.harga_per_malam ?? 0),
+        ),
       })),
     guestCount,
   );
@@ -625,6 +636,10 @@ export const checkRoomAvailability: ToolHandler = async (
     aturan_rekomendasi_tipe_kamar: guestCount > 0
       ? "cocok_untuk_jumlah_tamu=true berarti tipe kamar paling pas untuk jumlah tamu. Gunakan availability_status dan total_kapasitas_tersedia untuk keputusan final lintas beberapa kamar."
       : undefined,
+    aturan_harga:
+      "Harga di sini sudah mengikuti KALENDER HARGA per tanggal (fallback harga dasar bila tanggal tidak diatur). " +
+      "Untuk total menginap pakai total_rate (jumlah harga tiap malam), bukan harga_per_malam × malam. " +
+      "Bila nightly_breakdown ada (harga beda per malam), sebutkan rincian per malamnya. Jangan pakai angka harga lain.",
     kamar,
   });
 };

@@ -16,7 +16,6 @@ import {
   buildPropertyFaqReply,
   parseRequestedHour,
   EARLY_LATE_HOURLY_FEE_IDR,
-  EXTRA_BED_RATE_IDR,
   KNOWN_LANDMARKS,
 } from "../src/services/property-faq";
 import { frontOfficeAgent } from "../src/ai/agents/front-office.agent";
@@ -86,7 +85,7 @@ assert.ok(hits("jauh ga dari undip tembalang?", "faq_distance").includes("9,5 km
 // OTA
 assert.ok(hits("di agoda lebih murah ya?", "faq_ota").toLowerCase().includes("ota"));
 const otaBed = hits("kalau order via airbnb bisa extra bed?", "faq_ota_extra_bed");
-assert.ok(otaBed.includes("100.000"), "tarif extra bed wajib disebut apa adanya");
+assert.ok(!/Rp\s?\d/.test(otaBed), "fast-path OTA tidak boleh menyebut tarif extra bed statis");
 
 // Cara booking
 assert.ok(hits("booking online gapapa kak?", "faq_booking_method").toLowerCase().includes("whatsapp"));
@@ -160,7 +159,8 @@ const inPrompt = (needle: string, what: string) =>
   );
 
 inPrompt(digits(EARLY_LATE_HOURLY_FEE_IDR), "tarif early/late check-in per jam");
-inPrompt(digits(EXTRA_BED_RATE_IDR), "tarif extra bed");
+// Tarif extra bed tidak lagi di-hardcode: ikut room_types / kalender harga.
+assert.ok(!/extra bed[^.]*Rp\s?100\.000/i.test(prompt), "tarif extra bed statis masih ada di prompt");
 for (const l of KNOWN_LANDMARKS) {
   assert.ok(
     l.re.test(prompt),
