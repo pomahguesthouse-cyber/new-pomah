@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/admin/calendar", label: "Kalender", icon: CalendarDays, exact: false },
   { to: "/admin/bookings", label: "Booking", icon: CalendarDays, exact: false },
   { to: "/admin/whatsapp", label: "Chat WA", icon: MessageCircle, exact: false },
 ] as const;
@@ -22,7 +23,7 @@ export function AdminMobileNav() {
   const router = useRouter();
 
   // Warm the bottom-nav route chunks once the first screen is idle so the
-  // first tap on Booking / Chat WA does not wait on a chunk download.
+  // first tap on Kalender / Booking / Chat WA does not wait on a chunk download.
   useEffect(() => {
     const warm = () => {
       for (const tab of TABS) {
@@ -49,7 +50,7 @@ export function AdminMobileNav() {
       className="admin-mobile-nav fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur-md md:hidden"
       aria-label="Admin"
     >
-      <ul className="grid h-16 grid-cols-4">
+      <ul className="grid h-16 grid-cols-5">
         {TABS.map((tab) => {
           const active = isActive(path, tab.to, tab.exact);
           const Icon = tab.icon;
@@ -59,7 +60,7 @@ export function AdminMobileNav() {
                 to={tab.to}
                 preload="intent"
                 className={cn(
-                  "flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium",
+                  "flex h-full min-w-0 flex-col items-center justify-center gap-1 truncate px-0.5 text-[11px] font-medium",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >
