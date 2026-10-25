@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { Headset } from "lucide-react";
 
 /** 08xx / 8xx / +62xx / 620xx → 62xx (same rule as the WhatsApp inbox). */
 export function canonicalGuestPhone(raw?: string | null): string {
@@ -79,6 +80,56 @@ export function GuestWhatsAppButton({ phone, className }: { phone?: string | nul
       )}
     >
       <WhatsAppGlyph className="h-5 w-5" />
+    </button>
+  );
+}
+
+/** wa.me link for the guest's number (opens WhatsApp / WhatsApp Business). */
+export function guestWaMeUrl(raw?: string | null): string {
+  const canon = canonicalGuestPhone(raw);
+  return canon ? `https://wa.me/${canon}` : "";
+}
+
+/** Android app: hand off to Custom Tab → WhatsApp app (never inside the WebView). Web: new tab. */
+async function openExternal(url: string): Promise<void> {
+  try {
+    const { Capacitor } = await import("@capacitor/core");
+    if (Capacitor.isNativePlatform()) {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url });
+      return;
+    }
+  } catch {
+    // fall through to window.open
+  }
+  const w = window.open(url, "_blank", "noopener,noreferrer");
+  if (!w) window.location.href = url;
+}
+
+/** Customer-care icon: chat the guest from the WhatsApp Business app via wa.me. Hidden without a phone. */
+export function GuestCustomerCareButton({ phone, className }: { phone?: string | null; className?: string }) {
+  const url = guestWaMeUrl(phone);
+  if (!url) return null;
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  return (
+    <button
+      type="button"
+      aria-label="Chat via WhatsApp Business"
+      title="Chat via WhatsApp Business"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void openExternal(url).catch(() => toast.error("Gagal membuka WhatsApp Business"));
+      }}
+      onPointerDown={stop}
+      onTouchStart={stop}
+      onMouseDown={stop}
+      className={cn(
+        "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sky-700 transition-colors hover:bg-sky-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-sky-400 dark:hover:bg-sky-400/15",
+        className,
+      )}
+    >
+      <Headset className="h-5 w-5" aria-hidden="true" />
     </button>
   );
 }
