@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
 import { EditBookingDialog, type EditableBooking } from "@/admin/components/edit-booking-dialog";
+import { GuestWhatsAppButton } from "@/admin/components/guest-whatsapp-button";
 
 const InvoiceDialog = React.lazy(() =>
   import("@/admin/components/invoice-dialog").then((m) => ({ default: m.InvoiceDialog })),
@@ -164,11 +165,6 @@ function nightsBetween(checkIn?: string | null, checkOut?: string | null) {
 }
 function formatIDR(n: number) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n).replace("IDR", "Rp.");
-}
-function getWhatsAppLink(phone: string) {
-  let cleaned = phone.replace(/\D/g, "");
-  if (cleaned.startsWith("0")) cleaned = "62" + cleaned.slice(1);
-  return `https://wa.me/${cleaned}`;
 }
 function sanitizeSearch(v?: string) {
   return (v ?? "").replace(/[,()*:%]/g, " ").trim();
@@ -612,7 +608,7 @@ function MobileBookingCard({ booking: b, onEdit, onStatusChange, onDelete, onOpe
 
       <div className="mt-4">
         <h2 className="text-[17px] font-semibold tracking-tight">{b.guests?.full_name || "Tanpa nama"}</h2>
-        {b.guests?.phone ? <a href={getWhatsAppLink(b.guests.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="mt-0.5 inline-block font-mono text-[13px] text-primary hover:underline">{b.guests.phone}</a> : <p className="mt-0.5 font-mono text-[13px] text-muted-foreground">—</p>}
+        <p className="mt-0.5 font-mono text-[13px] text-muted-foreground">{b.guests?.phone || "—"}</p>
       </div>
 
       <div className="mt-4">
@@ -634,7 +630,7 @@ function MobileBookingCard({ booking: b, onEdit, onStatusChange, onDelete, onOpe
           <SelectTrigger className={`h-10 w-fit min-w-32 gap-2 rounded-full border-0 px-3.5 text-[13px] font-semibold capitalize focus:ring-2 focus:ring-ring/50 ${statusPillClass(b.status)}`}><SelectValue /></SelectTrigger>
           <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
         </Select>
-        <a href={b.guests?.phone ? getWhatsAppLink(b.guests.phone) : undefined} target="_blank" rel="noreferrer" aria-disabled={!b.guests?.phone} className="inline-flex h-10 items-center rounded-full border border-border px-3.5 text-[13px] text-muted-foreground transition hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-50">WhatsApp</a>
+        <GuestWhatsAppButton phone={b.guests?.phone} />
       </div>
 
       <div className="mt-4 flex items-center justify-between border-t border-border/70 pt-2.5">
@@ -649,7 +645,7 @@ function DesktopBookingRow({ booking: b, onEdit, onStatusChange, onDelete, onOpe
   return (
     <div onClick={onEdit} className="hidden cursor-pointer gap-4 rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-md lg:grid lg:items-center lg:px-5" style={{ gridTemplateColumns: BOOKING_GRID }}>
       <div><span className="inline-block rounded-md bg-secondary px-2 py-1 font-mono text-xs font-semibold text-secondary-foreground">{b.reference_code ?? "—"}</span></div>
-      <div><p className="font-medium">{b.guests?.full_name}</p>{b.guests?.phone ? <a href={getWhatsAppLink(b.guests.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono text-xs text-primary hover:underline tabular-nums">{b.guests.phone}</a> : <p className="font-mono text-xs text-muted-foreground tabular-nums">—</p>}</div>
+      <div><p className="font-medium">{b.guests?.full_name}</p><div className="flex items-center gap-1"><p className="font-mono text-xs text-muted-foreground tabular-nums">{b.guests?.phone || "—"}</p>{b.guests?.phone ? <GuestWhatsAppButton phone={b.guests.phone} className="-my-2" /> : null}</div></div>
       <div><RoomSummary rooms={b.booking_rooms} /></div>
       <div className="text-center font-mono tabular-nums">{b.booking_rooms?.length ?? 0}</div>
       <div className="text-xs"><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-In</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_in)}</p><p className="mt-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-Out</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_out)}</p><p className="mt-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{nightsBetween(b.check_in, b.check_out)} malam</p></div>
