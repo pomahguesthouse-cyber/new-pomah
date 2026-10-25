@@ -24,7 +24,6 @@ import {
   CalendarDays,
   Phone,
   MessagesSquare,
-  Inbox,
   Plus,
   Trash2,
   Bot,
@@ -37,7 +36,6 @@ import {
   Download,
   Bell,
   AlertOctagon,
-  CheckCircle2,
   XCircle,
   ShieldAlert,
   BellOff,
@@ -58,8 +56,6 @@ import {
   summarizeThread,
   regenerateStructuredSummary,
   clearChatSummary,
-  getConversationAlerts,
-  dismissConversationAlert,
   triggerManualAlert,
 } from "@/admin/functions/whatsapp.functions";
 import { getAiLabConfig, formatAgentBadge, type AiLabConfig } from "@/admin/modules/ai-lab/ai-lab.functions";
@@ -393,8 +389,6 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   const summarizeFn = useServerFn(summarizeThread);
   const regenerateStructuredFn = useServerFn(regenerateStructuredSummary);
   const clearSummaryFn = useServerFn(clearChatSummary);
-  const alertsFn = useServerFn(getConversationAlerts);
-  const dismissFn = useServerFn(dismissConversationAlert);
   const manualAlertFn = useServerFn(triggerManualAlert);
   
   const qc = useQueryClient();
@@ -403,7 +397,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   useKeyboardOpen(!isDesktop);
 
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "unread" | "open" | "closed">("all");
+  const [filter, setFilter] = useState<"all" | "read" | "unread">("all");
   const [threadLimit, setThreadLimit] = useState<number | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
@@ -438,22 +432,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     staleTime: 5 * 60_000,
     enabled: !waFixture,
   });
-  // Alert monitor hanya perlu untuk badge/tab Monitor: tunda sampai daftar thread
-  // dan percakapan aktif selesai dimuat supaya tidak berebut jaringan di HP.
-  const [alertsReady, setAlertsReady] = useState(false);
-  useEffect(() => {
-    const t = window.setTimeout(() => setAlertsReady(true), 1500);
-    return () => window.clearTimeout(t);
-  }, []);
-  const { data: alertsData } = useQuery({
-    queryKey: ["conv-alerts"],
-    queryFn: () => alertsFn(),
-    enabled: alertsReady && !waFixture,
-  });
-
   const threads = threadsData?.threads ?? [];
-  const allAlerts = alertsData?.alerts ?? [];
-  const openAlerts = allAlerts.filter((a: any) => a.status === "open");
 
   // Realtime: satu channel, invalidasi dipersempit & di-debounce. Pesan baru hanya
   // me-refetch percakapan terkait (bukan semua thread di cache) + daftar thread.
@@ -497,7 +476,6 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   );
 
   const navigate = useNavigate();
-  const [sidebarTab, setSidebarTab] = useState<"inbox" | "monitor">("inbox");
   const [activeId, setActiveId] = useState<string | null>(initialThreadId);
 
   useEffect(() => {
@@ -576,8 +554,8 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
         filter === "all"
           ? true
           : filter === "unread"
-            ? (t.unread_count ?? 0) > 0
-            : t.status === filter;
+            ? !!t.awaiting_reply
+            : !t.awaiting_reply;
       return matchSearch && matchFilter;
     });
   }, [dedupedThreads, search, filter]);
@@ -1067,18 +1045,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     onError: (e) => toast.error((e as Error).message),
   });
 
-  const totalUnread = threadsData?.unreadTotal ?? threads.reduce((s, t) => s + (t.unread_count ?? 0), 0);
-
-  // ─── Monitor mutations ─────────────────────────────────────────────────────
-  const dismissMut = useMutation({
-    mutationFn: (p: { alertId: string; status: "handled" | "dismissed"; notes?: string }) =>
-      dismissFn({ data: p }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["conv-alerts"] });
-      toast.success("Alert diselesaikan");
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
+  const threadCounts = threadsData?.counts ?? { all: 0, read: 0, unread: 0 };
 
   const manualAlertMut = useMutation({
     mutationFn: (p: { threadId: string; note: string }) =>
@@ -1099,79 +1066,53 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
       {/* THREADS LIST */}
       <aside className={cn("min-h-0 flex-col border-r border-border bg-white dark:bg-card w-full lg:w-auto lg:flex", activeId ? "hidden lg:flex" : "flex")}>
         <div className="border-b border-border p-4">
-          {/* Tab switcher: Inbox | Monitor */}
-          <div className="flex gap-1 mb-3">
-            <button
-              onClick={() => setSidebarTab("inbox")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors",
-                sidebarTab === "inbox"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent/10",
-              )}
-            >
-              <Inbox className="h-3.5 w-3.5" />
-              Inbox
-              {totalUnread > 0 && (
-                <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-foreground/20 px-1 text-[9px] font-bold">
-                  {totalUnread}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setSidebarTab("monitor")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors",
-                sidebarTab === "monitor"
-                  ? "bg-rose-600 text-white"
-                  : "text-muted-foreground hover:bg-accent/10",
-              )}
-            >
-              <Bell className="h-3.5 w-3.5" />
-              Monitor
-              {openAlerts.length > 0 && (
-                <span className={cn(
-                  "ml-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold",
-                  sidebarTab === "monitor" ? "bg-white/20" : "bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300"
-                )}>
-                  {openAlerts.length}
-                </span>
-              )}
-            </button>
+          <div className="relative">
+            <SearchIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, phone, message"
+              className="h-11 pl-8 text-base md:h-8 md:text-xs"
+            />
           </div>
-
-          {sidebarTab === "inbox" && (
-            <>
-              <div className="relative mt-1">
-                <SearchIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search name, phone, message"
-                  className="h-11 pl-8 text-base md:h-8 md:text-xs"
-                />
-              </div>
-              <div className="mt-2 flex gap-1">
-                {(["all", "unread", "open", "closed"] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={cn(
-                      "min-h-9 rounded-md border px-2.5 py-1 text-[11px] uppercase tracking-wider transition-colors md:min-h-0 md:px-2 md:py-0.5 md:text-[10px]",
-                      filter === f
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border text-muted-foreground hover:bg-accent/10",
-                    )}
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+          <div className="mt-2 grid grid-cols-3 gap-1">
+            {(
+              [
+                { f: "all", label: "Inbox", n: threadCounts.all },
+                { f: "read", label: "Read", n: threadCounts.read },
+                { f: "unread", label: "Unread", n: threadCounts.unread },
+              ] as const
+            ).map(({ f, label, n }) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                aria-pressed={filter === f}
+                className={cn(
+                  "flex min-h-9 min-w-0 items-center justify-center gap-1 rounded-md border px-1.5 py-1 text-[11px] uppercase tracking-wider transition-colors md:min-h-0 md:py-0.5 md:text-[10px]",
+                  filter === f
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border text-muted-foreground hover:bg-accent/10",
+                )}
+              >
+                <span className="truncate">{label}</span>
+                <span
+                  className={cn(
+                    "flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1 text-[9px] font-bold tracking-normal",
+                    filter === f
+                      ? "bg-primary-foreground/20"
+                      : f === "unread" && n > 0
+                        ? "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300"
+                        : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {n}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {sidebarTab === "inbox" ? (
           <ScrollArea className="flex-1">
           <ul>
             {filteredThreads.map((t) => (
@@ -1201,60 +1142,6 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
             )}
           </ul>
         </ScrollArea>
-        ) : (
-          /* ── MONITOR PANEL ───────────────────────────────────────────────── */
-          <ScrollArea className="flex-1">
-            <div className="p-3 space-y-2">
-              {openAlerts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <CheckCircle2 className="h-8 w-8 text-emerald-400 mb-2" />
-                  <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Semua percakapan aman</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">Tidak ada alert aktif saat ini</p>
-                </div>
-              ) : (
-                openAlerts.map((alert: any) => (
-                  <AlertCard
-                    key={alert.id}
-                    alert={alert}
-                    onOpenThread={(threadId: string) => {
-                      setSidebarTab("inbox");
-                      openThread(threadId);
-                    }}
-                    onHandled={(id: string) => dismissMut.mutate({ alertId: id, status: "handled" })}
-                    onDismissed={(id: string) => dismissMut.mutate({ alertId: id, status: "dismissed" })}
-                    isPending={dismissMut.isPending}
-                  />
-                ))
-              )}
-              {allAlerts.filter((a: any) => a.status !== "open").length > 0 && (
-                <details className="mt-4">
-                  <summary className="cursor-pointer text-[10px] uppercase tracking-widest text-muted-foreground py-1">
-                    Riwayat ({allAlerts.filter((a: any) => a.status !== "open").length})
-                  </summary>
-                  <div className="mt-2 space-y-2">
-                    {allAlerts
-                      .filter((a: any) => a.status !== "open")
-                      .slice(0, 20)
-                      .map((alert: any) => (
-                        <AlertCard
-                          key={alert.id}
-                          alert={alert}
-                          onOpenThread={(threadId: string) => {
-                            setSidebarTab("inbox");
-                            openThread(threadId);
-                          }}
-                          onHandled={() => {}}
-                          onDismissed={() => {}}
-                          isPending={false}
-                          readonly
-                        />
-                      ))}
-                  </div>
-                </details>
-              )}
-            </div>
-          </ScrollArea>
-        )}
       </aside>
 
       {/* CONVERSATION */}
@@ -2255,47 +2142,3 @@ const MessageStream = memo(function MessageStream({
   );
 });
 
-// ─── Conversation Monitor Alert Card ─────────────────────────────────────────
-// Stub minimal — full UI alert dapat diperluas kemudian.
-interface AlertCardProps {
-  alert: { id: string; thread_id?: string | null; title?: string | null; message?: string | null; severity?: string | null; status?: string | null; created_at?: string | null };
-  onOpenThread: (threadId: string) => void;
-  onHandled: (id: string) => void;
-  onDismissed: (id: string) => void;
-  isPending: boolean;
-  readonly?: boolean;
-}
-
-function AlertCard({ alert, onOpenThread, onHandled, onDismissed, isPending, readonly }: AlertCardProps) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-3 text-xs space-y-2">
-      <div className="flex items-start gap-2">
-        <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <div className="font-medium truncate">{alert.title ?? "Alert"}</div>
-          {alert.message && (
-            <p className="text-muted-foreground line-clamp-2 mt-0.5">{alert.message}</p>
-          )}
-          {alert.created_at && (
-            <div className="text-[10px] text-muted-foreground mt-1">{formatRelativeDateID(alert.created_at)}</div>
-          )}
-        </div>
-      </div>
-      {!readonly && (
-        <div className="flex gap-1.5">
-          {alert.thread_id && (
-            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => onOpenThread(alert.thread_id!)}>
-              Buka
-            </Button>
-          )}
-          <Button size="sm" variant="outline" className="h-7 text-[11px]" disabled={isPending} onClick={() => onHandled(alert.id)}>
-            <CheckCircle2 className="h-3 w-3 mr-1" /> Ditangani
-          </Button>
-          <Button size="sm" variant="ghost" className="h-7 text-[11px]" disabled={isPending} onClick={() => onDismissed(alert.id)}>
-            <XCircle className="h-3 w-3 mr-1" /> Tutup
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
