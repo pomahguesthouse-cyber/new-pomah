@@ -6,7 +6,7 @@
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { getOlderMessages, getThread, listThreads } from "@/admin/functions/whatsapp.functions";
 
-export type ThreadFilter = "all" | "unread" | "open" | "closed";
+export type ThreadFilter = "all" | "read" | "unread";
 
 /** Jumlah thread / pesan awal. Desktop tetap longgar, HP dibatasi. */
 export const WA_PAGE = {

@@ -62,7 +62,12 @@ const thread = {
 };
 
 export function waChatFixtureThreads() {
-  return { threads: [thread], hasMore: false, unreadTotal: 0 };
+  return {
+    threads: [{ ...thread, awaiting_reply: false }],
+    hasMore: false,
+    unreadTotal: 0,
+    counts: { all: 1, read: 1, unread: 0 },
+  };
 }
 
 export function waChatFixtureThread() {

@@ -40,13 +40,16 @@ const THREAD_LIST_COLUMNS =
 const MESSAGE_COLUMNS = "id, thread_id, direction, body, sent_at, metadata";
 
 const THREAD_LIST_DEFAULT_LIMIT = 200;
+/** Batas pindai untuk hitung Read/Unread. Thread di luar jendela pesan terbaru dianggap Read. */
+const THREAD_STATE_SCAN_LIMIT = 5000;
+const MESSAGE_STATE_SCAN_LIMIT = 5000;
 const THREAD_MESSAGES_DEFAULT_LIMIT = 200;
 
 const listThreadsInput = z
   .object({
     limit: z.number().int().min(1).max(500).optional(),
     q: z.string().max(80).optional(),
-    filter: z.enum(["all", "unread", "open", "closed"]).optional(),
+    filter: z.enum(["all", "read", "unread"]).optional(),
   })
   .optional();
 
@@ -74,19 +77,58 @@ export const listThreads = createServerFn({ method: "GET" })
         `display_name.ilike.%${term}%,phone.ilike.%${term}%,last_message_preview.ilike.%${term}%`,
       );
     }
-    if (filter === "unread") query = query.gt("unread_count", 0);
-    else if (filter === "open" || filter === "closed") query = query.eq("status", filter);
-
-    // Total belum dibaca dihitung terpisah (paralel) supaya badge Inbox tetap
-    // benar walau daftar hanya memuat sebagian thread.
-    const [listRes, unreadRes] = await Promise.all([
-      query,
+    // Read/Unread dihitung dari arah pesan terakhir tiap thread (tanpa kolom baru).
+    // Unread = pesan terakhir dari tamu (direction "in"), belum dibalas AI maupun staf.
+    // Read = pesan terakhir dari kita ("out"), atau thread tanpa pesan.
+    const [allRes, recentRes, unreadRes] = await Promise.all([
+      context.supabase.from("whatsapp_threads").select("id").limit(THREAD_STATE_SCAN_LIMIT),
+      context.supabase
+        .from("whatsapp_messages")
+        .select("thread_id, direction")
+        .order("sent_at", { ascending: false })
+        .limit(MESSAGE_STATE_SCAN_LIMIT),
       context.supabase.from("whatsapp_threads").select("unread_count").gt("unread_count", 0),
     ]);
-    if (listRes.error) throw listRes.error;
-    const rows = listRes.data ?? [];
+    if (allRes.error) throw allRes.error;
+    if (recentRes.error) throw recentRes.error;
+    const lastDir = new Map<string, string>();
+    for (const m of recentRes.data ?? []) {
+      if (!lastDir.has(m.thread_id)) lastDir.set(m.thread_id, m.direction);
+    }
+    const awaiting = new Set<string>();
+    for (const [id, dir] of lastDir) if (dir === "in") awaiting.add(id);
+    const allIds = (allRes.data ?? []).map((r) => r.id);
+    const unreadCount = allIds.filter((id) => awaiting.has(id)).length;
+    const counts = { all: allIds.length, read: allIds.length - unreadCount, unread: unreadCount };
+
+    type ListRow = NonNullable<Awaited<typeof query>["data"]>[number];
+    let raw: ListRow[];
+    if (filter === "unread") {
+      // Pecah daftar id per 150 supaya URL PostgREST tidak terlalu panjang.
+      const ids = [...awaiting];
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += 150) chunks.push(ids.slice(i, i + 150));
+      const results = await Promise.all(chunks.map((c) => query.in("id", c)));
+      raw = [];
+      for (const r of results) {
+        if (r.error) throw r.error;
+        raw.push(...(r.data ?? []));
+      }
+      raw.sort((x, y) =>
+        !!x.pinned !== !!y.pinned
+          ? x.pinned ? -1 : 1
+          : x.last_message_at > y.last_message_at ? -1 : x.last_message_at < y.last_message_at ? 1 : 0,
+      );
+    } else {
+      // Read: ambil lebih banyak lalu buang yang belum dibalas di memori.
+      const res = filter === "read" ? await query.limit(limit + 1 + awaiting.size) : await query;
+      if (res.error) throw res.error;
+      raw = res.data ?? [];
+      if (filter === "read") raw = raw.filter((r) => !awaiting.has(r.id));
+    }
+    const rows = raw.map((r) => ({ ...r, awaiting_reply: awaiting.has(r.id) }));
     const unreadTotal = (unreadRes.data ?? []).reduce((sum, r) => sum + (r.unread_count ?? 0), 0);
-    return { threads: rows.slice(0, limit), hasMore: rows.length > limit, unreadTotal };
+    return { threads: rows.slice(0, limit), hasMore: rows.length > limit, unreadTotal, counts };
   });
 
 /** Thread yang sedang diisi summary-nya di latar belakang (hindari seed ganda per isolate). */
