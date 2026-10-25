@@ -47,6 +47,7 @@ import { Route as AdminRoutingDebugRouteImport } from './routes/admin/routing-de
 import { Route as AdminSeoRouteImport } from './routes/admin/seo'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
+import { Route as AdminTrainingSuggestionsRouteImport } from './routes/admin/training-suggestions'
 import { Route as AdminWalkthroughRouteImport } from './routes/admin/walkthrough'
 import { Route as AdminWebchatRouteImport } from './routes/admin/webchat'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
@@ -277,6 +278,12 @@ const AdminTrainingRoute = AdminTrainingRouteImport.update({
   path: '/training',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminTrainingSuggestionsRoute =
+  AdminTrainingSuggestionsRouteImport.update({
+    id: '/training-suggestions',
+    path: '/training-suggestions',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminWalkthroughRoute = AdminWalkthroughRouteImport.update({
   id: '/walkthrough',
   path: '/walkthrough',
@@ -511,6 +518,7 @@ export interface FileRoutesByFullPath {
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/training-suggestions': typeof AdminTrainingSuggestionsRoute
   '/admin/walkthrough': typeof AdminWalkthroughRoute
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
@@ -586,6 +594,7 @@ export interface FileRoutesByTo {
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/training-suggestions': typeof AdminTrainingSuggestionsRoute
   '/admin/walkthrough': typeof AdminWalkthroughRoute
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
@@ -664,6 +673,7 @@ export interface FileRoutesById {
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/training-suggestions': typeof AdminTrainingSuggestionsRoute
   '/admin/walkthrough': typeof AdminWalkthroughRoute
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
@@ -743,6 +753,7 @@ export interface FileRouteTypes {
     | '/admin/seo'
     | '/admin/settings'
     | '/admin/training'
+    | '/admin/training-suggestions'
     | '/admin/walkthrough'
     | '/admin/webchat'
     | '/admin/whatsapp'
@@ -818,6 +829,7 @@ export interface FileRouteTypes {
     | '/admin/seo'
     | '/admin/settings'
     | '/admin/training'
+    | '/admin/training-suggestions'
     | '/admin/walkthrough'
     | '/admin/webchat'
     | '/admin/whatsapp'
@@ -895,6 +907,7 @@ export interface FileRouteTypes {
     | '/admin/seo'
     | '/admin/settings'
     | '/admin/training'
+    | '/admin/training-suggestions'
     | '/admin/walkthrough'
     | '/admin/webchat'
     | '/admin/whatsapp'
@@ -1248,6 +1261,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminTrainingRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/training-suggestions': {
+      id: '/admin/training-suggestions'
+      path: '/training-suggestions'
+      fullPath: '/admin/training-suggestions'
+      preLoaderRoute: typeof AdminTrainingSuggestionsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/walkthrough': {
       id: '/admin/walkthrough'
       path: '/walkthrough'
@@ -1535,6 +1555,7 @@ interface AdminRouteChildren {
   AdminSeoRoute: typeof AdminSeoRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminTrainingRoute: typeof AdminTrainingRoute
+  AdminTrainingSuggestionsRoute: typeof AdminTrainingSuggestionsRoute
   AdminWalkthroughRoute: typeof AdminWalkthroughRoute
   AdminWebchatRoute: typeof AdminWebchatRoute
   AdminWhatsappRoute: typeof AdminWhatsappRoute
@@ -1567,6 +1588,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSeoRoute: AdminSeoRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminTrainingRoute: AdminTrainingRoute,
+  AdminTrainingSuggestionsRoute: AdminTrainingSuggestionsRoute,
   AdminWalkthroughRoute: AdminWalkthroughRoute,
   AdminWebchatRoute: AdminWebchatRoute,
   AdminWhatsappRoute: AdminWhatsappRoute,

@@ -30,6 +30,7 @@ import {
   Users,
   Wallet,
  Wifi,
+  GraduationCap,
 } from "lucide-react";
 import {
   DndContext,
@@ -102,6 +103,7 @@ const DEFAULT_GROUPS: NavGroup[] = [
       { to: "/admin/complaints", label: "Komplain", icon: AlertTriangle },
       { to: "/admin/handoff", label: "Human Handoff", icon: LifeBuoy },
       { to: "/admin/facility-kb", label: "Info Fasilitas", icon: Wifi },
+      { to: "/admin/training-suggestions", label: "Belajar dari Staf", icon: GraduationCap },
       { to: "/admin/booking-form-logs", label: "Log Form Booking", icon: Link2 },
       { to: "/admin/notifications", label: "Log Notifikasi", icon: Bell },
       { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
