@@ -73,4 +73,14 @@ const fo = readFileSync("src/ai/agents/front-office.agent.ts", "utf8");
 assert.match(fo, /ACUAN HARGA = KALENDER HARGA/);
 assert.match(readFileSync("src/ai/context-builder.ts", "utf8"), /mulai dari Rp/);
 
+// 6) create_booking: harga dari AI tidak pernah dipakai; kamar & extra bed ikut kalender/base.
+const bk = readFileSync("src/tools/booking.tool.ts", "utf8");
+assert.doesNotMatch(bk, /args\.price_per_night/, "create_booking tidak boleh memakai price_per_night dari AI");
+assert.match(bk, /if \(info\) a\.rate = info\.avgRate;/);
+assert.match(bk, /avgExtraBedRate/);
+assert.doesNotMatch(bk, /Keep a\.rate/);
+// Extra bed kalender: override 120rb di 1 dari 3 malam → rata-rata (100+120+100)/3.
+const ebAvg = mixed.nightly.reduce((s, n) => s + n.extrabed_rate, 0) / mixed.nights;
+assert.equal(Math.round(ebAvg * mixed.nights), 320000);
+
 console.log("chatbot calendar pricing: OK");

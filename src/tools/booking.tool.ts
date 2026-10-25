@@ -552,10 +552,9 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
       });
     }
 
-    const singleRate =
-      typeof args.price_per_night === "number" && args.price_per_night > 0
-        ? args.price_per_night
-        : Number(rt.base_rate ?? 0);
+    // Harga per malam dari AI TIDAK dipakai: tarif final selalu
+    // di-resolve dari kalender harga (fallback base_rate) di bawah.
+    const singleRate = Number(rt.base_rate ?? 0);
 
     assignments.push({
       roomTypeId: rt.id,
@@ -600,14 +599,18 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   // = subtotal) tetap berlaku di RPC invoice & laporan.
   const uniqueRoomTypeIds = Array.from(new Set(assignments.map((a) => a.roomTypeId)));
   const overridesByRoom = await getDailyRatesForRange(ctx.supabasePublic, uniqueRoomTypeIds, checkIn, checkOut);
-  const resolvedByRoomType = new Map<string, { avgRate: number; stopSellDates: string[] }>();
+  const resolvedByRoomType = new Map<string, { avgRate: number; avgExtraBedRate: number; stopSellDates: string[] }>();
   for (const rtId of uniqueRoomTypeIds) {
     const rt = ctx.rooms.find((r) => r.id === rtId);
     if (!rt) continue;
     const resolved = resolveRoomNightlyRates(rt, checkIn, checkOut, overridesByRoom.get(rtId));
     const avg = resolved.nights > 0 ? resolved.total / resolved.nights : Number(rt.base_rate ?? 0);
+    const avgExtraBed = resolved.nights > 0
+      ? resolved.nightly.reduce((sum, n) => sum + n.extrabed_rate, 0) / resolved.nights
+      : Number(rt.extrabed_rate ?? 0);
     resolvedByRoomType.set(rtId, {
       avgRate: avg,
+      avgExtraBedRate: avgExtraBed,
       stopSellDates: resolved.stop_sell_dates,
     });
   }
@@ -625,28 +628,21 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   }
   // Re-stamp each assignment's nightly_rate with the resolved average so
   // booking_rooms.nightly_rate × nights = subtotal stays true.
+  // Aturan Faizal: tiap malam = harga kalender bila ada, kalau tidak base_rate.
+  // Tarif dari AI/pemanggil tidak pernah dipakai.
   for (const a of assignments) {
     const info = resolvedByRoomType.get(a.roomTypeId);
-    if (info) {
-      const rt = ctx.rooms.find((r) => r.id === a.roomTypeId);
-      const baseRate = rt ? Number(rt.base_rate ?? 0) : 0;
-      // If the assignment already has a custom/dynamic rate that is different from base_rate,
-      // and the DB resolved rate is just the fallback base_rate, do NOT overwrite the custom rate.
-      if (a.rate > 0 && a.rate !== baseRate && info.avgRate === baseRate) {
-        // Keep a.rate
-      } else {
-        a.rate = info.avgRate;
-      }
-    }
+    if (info) a.rate = info.avgRate;
   }
+
 
   // Total = SATU sumber angka (src/lib/booking-total.ts), integer rupiah, dibulatkan
   // sekali. Rata-rata tarif/malam bisa pecahan; tanpa pembulatan terpusat total
   // ringkasan konfirmasi dan total DB bisa selisih beberapa sen/rupiah.
   const roomSubtotalRaw = assignments.reduce((acc, curr) => acc + curr.rate * nights, 0);
+  // Extra bed: tarif per malam dari kalender harga (fallback room_types.extrabed_rate).
   const extraBedRate = assignments
-    .map((a) => ctx.rooms.find((r) => r.id === a.roomTypeId)?.extrabed_rate)
-    .map((rate) => Number(rate ?? 0))
+    .map((a) => resolvedByRoomType.get(a.roomTypeId)?.avgExtraBedRate ?? Number(ctx.rooms.find((r) => r.id === a.roomTypeId)?.extrabed_rate ?? 0))
     .find((rate) => rate > 0) ?? 0;
   const extraBedTotal = requestedExtraBeds > 0 && extraBedRate > 0 ? toRupiah(requestedExtraBeds * extraBedRate * nights) : 0;
   const total = computeGrandTotal({
