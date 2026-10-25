@@ -33,7 +33,6 @@ import {
 import {
   getCalendarData,
   createBookingFromAdmin,
-  updateBookingFromAdmin,
 } from "@/admin/functions/calendar.functions";
 import { resendInvoice } from "@/admin/functions/bookings.functions";
 import { toastBookingInvoice } from "@/admin/lib/invoice-toast";
@@ -45,6 +44,8 @@ import {
 import { downloadBookingListPdf } from "@/admin/lib/booking-list-pdf-client";
 import { bookingListPdfMessage, formatDateId } from "@/admin/lib/booking-list-pdf-model";
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
+import { EditBookingDialog, type EditableBooking } from "@/admin/components/edit-booking-dialog";
+import { loadEditableBooking } from "@/admin/lib/load-editable-booking";
 import { BlockRoomDialog } from "@/admin/components/block-room-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -220,7 +221,7 @@ function CalendarPage() {
   const loading = fixture ? false : isLoading;
 
   const [createCtx, setCreateCtx] = React.useState<any>(null);
-  const [editCtx, setEditCtx] = React.useState<any>(null);
+  const [editCtx, setEditCtx] = React.useState<EditableBooking | null>(null);
   const [newOpen, setNewOpen] = React.useState(false);
   const [blockOpen, setBlockOpen] = React.useState(false);
   const [exporting, setExporting] = React.useState<null | "csv" | "pdf">(null);
@@ -250,6 +251,19 @@ function CalendarPage() {
   }, [data]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-calendar"] });
+
+  // Bar click opens the same full edit dialog as the Bookings page. The calendar
+  // rows are flattened per room, so load the complete booking first.
+  const openSeq = React.useRef(0);
+  async function openFullEdit(id: string) {
+    const seq = ++openSeq.current;
+    try {
+      const booking = await loadEditableBooking(id);
+      if (seq === openSeq.current) setEditCtx(booking);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal memuat booking");
+    }
+  }
 
   async function runExport(kind: "csv" | "pdf") {
     setExporting(kind);
@@ -461,7 +475,7 @@ function CalendarPage() {
                 date,
               });
             }}
-            onBookingClick={(b: any) => setEditCtx(b)}
+            onBookingClick={(b: any) => void openFullEdit(b.id)}
           />
         )}
       </div>
@@ -472,10 +486,12 @@ function CalendarPage() {
         onSaved={invalidate}
       />
       <EditBookingDialog
+        open={!!editCtx}
         booking={editCtx}
-        rooms={data?.rooms ?? []}
-        onClose={() => setEditCtx(null)}
-        onSaved={invalidate}
+        onClose={() => {
+          setEditCtx(null);
+          invalidate();
+        }}
       />
       <NewBookingDialog open={newOpen} onClose={() => setNewOpen(false)} />
       <BlockRoomDialog
@@ -932,122 +948,6 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
             }}
           >
             SIMPAN
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
-  const updateFn = useServerFn(updateBookingFromAdmin);
-  const [status, setStatus] = React.useState("");
-  const [roomId, setRoomId] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
-  React.useEffect(() => {
-    if (booking) {
-      setStatus(booking.status ?? "");
-      setRoomId(booking.room_id ?? "");
-      setSaving(false);
-    }
-  }, [booking]);
-  if (!booking) return null;
-  const typeRooms = (rooms ?? []).filter((r: any) => r.room_type_id === booking.room_type_id);
-  return (
-    <Dialog open={!!booking} onOpenChange={(o) => !o && !saving && onClose()}>
-      <DialogContent className={calendarSheetClass}>
-        <DialogHeader className="shrink-0 space-y-1 px-4 pb-2 pr-10 pt-4">
-          <DialogTitle className="break-words text-xl font-black uppercase tracking-tighter">
-            {booking.guests?.full_name ?? "Booking"}
-          </DialogTitle>
-          <DialogDescription className="font-mono text-xs">
-            {booking.reference_code ? <span className="font-semibold text-foreground">{booking.reference_code}</span> : null}
-            {booking.check_in && booking.check_out ? (
-              <span>
-                {booking.reference_code ? " · " : ""}
-                {formatDateId(booking.check_in)} – {formatDateId(booking.check_out)}
-              </span>
-            ) : null}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-4 py-3">
-          <Field label="Kamar">
-            <Select
-              value={roomId || "none"}
-              onValueChange={(v) => setRoomId(v === "none" ? "" : v)}
-              disabled={saving}
-            >
-              <SelectTrigger className="font-bold">
-                <SelectValue placeholder="Pilih kamar" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">BELUM DITUGASKAN</SelectItem>
-                {typeRooms.map((r: any) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.number}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {!booking.booking_room_id && (
-              <p className="text-[11px] leading-snug text-muted-foreground">
-                Booking ini belum punya baris kamar. Status tetap bisa disimpan jika kamar dibiarkan
-                &quot;Belum ditugaskan&quot;. Untuk menetapkan kamar, gunakan halaman Bookings.
-              </p>
-            )}
-          </Field>
-          <Field label="Status">
-            <Select value={status} onValueChange={setStatus} disabled={saving}>
-              <SelectTrigger className="font-bold">
-                <SelectValue placeholder="Pilih status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">PENDING</SelectItem>
-                <SelectItem value="confirmed">CONFIRMED</SelectItem>
-                <SelectItem value="checked_in">CHECKED-IN</SelectItem>
-                <SelectItem value="checked_out">CHECKED-OUT</SelectItem>
-                <SelectItem value="cancelled">CANCELLED</SelectItem>
-                <SelectItem value="expired">EXPIRED</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-        </div>
-        <DialogFooter className={calendarSheetFooterClass}>
-          <Button variant="outline" className="h-10 font-bold" onClick={onClose} disabled={saving}>
-            TUTUP
-          </Button>
-          <Button
-            className="h-10 font-bold"
-            disabled={saving || !status}
-            onClick={async () => {
-              if (saving) return;
-              setSaving(true);
-              try {
-                await updateFn({
-                  data: {
-                    id: booking.id,
-                    status,
-                    // "" gagal validasi uuid. "Belum ditugaskan" harus null.
-                    bookingRoomId: booking.booking_room_id || null,
-                    roomId: roomId || null,
-                  },
-                });
-                toast.success("UPDATE BERHASIL!");
-                onSaved();
-                onClose();
-              } catch (e) {
-                const message =
-                  e instanceof Error && e.message.trim()
-                    ? e.message
-                    : "Gagal menyimpan booking. Cek console untuk detail.";
-                console.error("[EditBookingDialog] gagal menyimpan booking:", e);
-                toast.error(message, { duration: 8000 });
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            {saving ? "MENYIMPAN..." : "SIMPAN"}
           </Button>
         </DialogFooter>
       </DialogContent>
