@@ -25,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
 import { EditBookingDialog, type EditableBooking } from "@/admin/components/edit-booking-dialog";
-import { GuestWhatsAppButton } from "@/admin/components/guest-whatsapp-button";
+import { GuestCustomerCareButton, GuestWhatsAppButton } from "@/admin/components/guest-whatsapp-button";
 
 const InvoiceDialog = React.lazy(() =>
   import("@/admin/components/invoice-dialog").then((m) => ({ default: m.InvoiceDialog })),
@@ -631,6 +631,7 @@ function MobileBookingCard({ booking: b, onEdit, onStatusChange, onDelete, onOpe
           <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
         </Select>
         <GuestWhatsAppButton phone={b.guests?.phone} />
+        <GuestCustomerCareButton phone={b.guests?.phone} />
       </div>
 
       <div className="mt-4 flex items-center justify-between border-t border-border/70 pt-2.5">
@@ -645,7 +646,7 @@ function DesktopBookingRow({ booking: b, onEdit, onStatusChange, onDelete, onOpe
   return (
     <div onClick={onEdit} className="hidden cursor-pointer gap-4 rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-md lg:grid lg:items-center lg:px-5" style={{ gridTemplateColumns: BOOKING_GRID }}>
       <div><span className="inline-block rounded-md bg-secondary px-2 py-1 font-mono text-xs font-semibold text-secondary-foreground">{b.reference_code ?? "—"}</span></div>
-      <div><p className="font-medium">{b.guests?.full_name}</p><div className="flex items-center gap-1"><p className="font-mono text-xs text-muted-foreground tabular-nums">{b.guests?.phone || "—"}</p>{b.guests?.phone ? <GuestWhatsAppButton phone={b.guests.phone} className="-my-2" /> : null}</div></div>
+      <div><p className="font-medium">{b.guests?.full_name}</p><div className="flex items-center gap-1"><p className="font-mono text-xs text-muted-foreground tabular-nums">{b.guests?.phone || "—"}</p>{b.guests?.phone ? <><GuestWhatsAppButton phone={b.guests.phone} className="-my-2" /><GuestCustomerCareButton phone={b.guests.phone} className="-my-2" /></> : null}</div></div>
       <div><RoomSummary rooms={b.booking_rooms} /></div>
       <div className="text-center font-mono tabular-nums">{b.booking_rooms?.length ?? 0}</div>
       <div className="text-xs"><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-In</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_in)}</p><p className="mt-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-Out</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_out)}</p><p className="mt-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{nightsBetween(b.check_in, b.check_out)} malam</p></div>
