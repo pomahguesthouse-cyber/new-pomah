@@ -204,6 +204,9 @@ function AuthSync() {
         router.navigate({ to: "/login", search: { next: undefined } });
         return;
       }
+      // USER_UPDATED / MFA / PASSWORD_RECOVERY keep the same user: re-running every
+      // loader there re-rendered the page like a refresh. Only a new sign-in does.
+      if (event !== "SIGNED_IN") return;
       router.invalidate();
       qc.invalidateQueries();
     });

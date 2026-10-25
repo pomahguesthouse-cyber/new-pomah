@@ -423,6 +423,11 @@ html.native-app .backdrop-blur {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+/* No WebView overscroll glow/bounce; pull-to-refresh is handled in native-admin.ts. */
+html.native-app,
+html.native-app body {
+  overscroll-behavior-y: none;
+}
 html.native-app .admin-mobile-nav,
 html.native-app .admin-topbar {
   background-color: var(--background);

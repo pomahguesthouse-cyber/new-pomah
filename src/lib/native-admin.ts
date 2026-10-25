@@ -189,31 +189,77 @@ function scrollableAncestor(target: EventTarget | null): HTMLElement | null {
   return null;
 }
 
+/** Pull-to-refresh must never throw away a form, dialog, or menu in progress. */
+function hasUnsafeUi(): boolean {
+  if (typeof document === "undefined") return true;
+  if (
+    document.querySelector(
+      '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-state="open"][data-radix-popper-content-wrapper], [data-vaul-drawer]',
+    )
+  ) {
+    return true;
+  }
+  const active = document.activeElement as HTMLElement | null;
+  if (active && (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName))) return true;
+  const selection = window.getSelection?.();
+  return !!selection && selection.toString().length > 0;
+}
+
+/** Gestures that start in a sideways scroller (calendar grid, chips) are not pulls. */
+function insideHorizontalScroller(target: EventTarget | null): boolean {
+  let el = target instanceof HTMLElement ? target : null;
+  while (el) {
+    if (el.dataset.noPullRefresh !== undefined) return true;
+    const style = window.getComputedStyle(el);
+    const sideways = style.overflowX === "auto" || style.overflowX === "scroll";
+    if (sideways && el.scrollWidth > el.clientWidth + 2) return true;
+    el = el.parentElement;
+  }
+  return false;
+}
+
+const PULL_MIN_DISTANCE = 140;
+
 function attachPullToRefresh(): Stop {
   let startY = 0;
+  let startX = 0;
   let tracking = false;
   let scroller: HTMLElement | null = null;
   const onStart = (event: TouchEvent) => {
+    tracking = false;
+    if (event.touches.length !== 1) return;
+    if (hasUnsafeUi() || insideHorizontalScroller(event.target)) return;
     scroller = scrollableAncestor(event.target);
     if (scroller && scroller.scrollTop > 2) return;
     if (!scroller && window.scrollY > 2) return;
     startY = event.touches[0]?.clientY ?? 0;
+    startX = event.touches[0]?.clientX ?? 0;
     tracking = true;
   };
   const onEnd = (event: TouchEvent) => {
     if (!tracking) return;
     tracking = false;
     const endY = event.changedTouches[0]?.clientY ?? startY;
-    if (endY - startY < 90) return;
+    const endX = event.changedTouches[0]?.clientX ?? startX;
+    const dy = endY - startY;
+    const dx = Math.abs(endX - startX);
+    // Long, clearly vertical pull only. Diagonal drags (calendar, swipes) used to reload.
+    if (dy < PULL_MIN_DISTANCE || dy < dx * 2.5) return;
     if (scroller && scroller.scrollTop > 2) return;
     if (!scroller && window.scrollY > 2) return;
+    if (hasUnsafeUi()) return;
     window.location.reload();
+  };
+  const onCancel = () => {
+    tracking = false;
   };
   window.addEventListener("touchstart", onStart, { passive: true });
   window.addEventListener("touchend", onEnd, { passive: true });
+  window.addEventListener("touchcancel", onCancel, { passive: true });
   return () => {
     window.removeEventListener("touchstart", onStart);
     window.removeEventListener("touchend", onEnd);
+    window.removeEventListener("touchcancel", onCancel);
   };
 }
 

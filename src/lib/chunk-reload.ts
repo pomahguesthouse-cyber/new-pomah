@@ -45,8 +45,26 @@ export function reloadOnceOnChunkError(): boolean {
   } catch {
     return false;
   }
+  // A dialog or form in progress would be lost. Offer the reload instead.
+  if (formInProgress()) {
+    void import("sonner").then(({ toast }) =>
+      toast("Versi baru tersedia", {
+        description: "Simpan pekerjaan Anda, lalu muat ulang.",
+        duration: Infinity,
+        action: { label: "Muat ulang", onClick: () => window.location.reload() },
+      }),
+    );
+    return false;
+  }
   window.location.reload();
   return true;
+}
+
+function formInProgress(): boolean {
+  if (typeof document === "undefined") return false;
+  if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return true;
+  const active = document.activeElement as HTMLElement | null;
+  return !!active && (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName));
 }
 
 export function installChunkReloadGuard(): void {
