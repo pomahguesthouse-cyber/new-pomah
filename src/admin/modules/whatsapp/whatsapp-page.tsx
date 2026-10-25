@@ -1097,7 +1097,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
       style={{ gridTemplateColumns: `300px 1fr ${rightOpen ? "320px" : "44px"}` }}
     >
       {/* THREADS LIST */}
-      <aside className={cn("min-h-0 flex-col border-r border-border bg-white w-full lg:w-auto lg:flex", activeId ? "hidden lg:flex" : "flex")}>
+      <aside className={cn("min-h-0 flex-col border-r border-border bg-white dark:bg-card w-full lg:w-auto lg:flex", activeId ? "hidden lg:flex" : "flex")}>
         <div className="border-b border-border p-4">
           {/* Tab switcher: Inbox | Monitor */}
           <div className="flex gap-1 mb-3">
@@ -1132,7 +1132,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
               {openAlerts.length > 0 && (
                 <span className={cn(
                   "ml-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold",
-                  sidebarTab === "monitor" ? "bg-white/20" : "bg-rose-100 text-rose-700"
+                  sidebarTab === "monitor" ? "bg-white/20" : "bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300"
                 )}>
                   {openAlerts.length}
                 </span>
@@ -1208,7 +1208,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
               {openAlerts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <CheckCircle2 className="h-8 w-8 text-emerald-400 mb-2" />
-                  <p className="text-xs font-medium text-emerald-700">Semua percakapan aman</p>
+                  <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Semua percakapan aman</p>
                   <p className="text-[10px] text-muted-foreground mt-1">Tidak ada alert aktif saat ini</p>
                 </div>
               ) : (
@@ -1446,11 +1446,11 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
 
       {/* GUEST CONTEXT */}
       {!rightOpen ? (
-        <aside className="hidden lg:flex min-h-0 flex-col items-center border-l border-[#E2E8F0] bg-[#F8FAFC] py-3">
+        <aside className="hidden lg:flex min-h-0 flex-col items-center border-l border-[#E2E8F0] dark:border-border bg-[#F8FAFC] dark:bg-muted py-3">
           <button
             type="button"
             onClick={() => setRightOpen(true)}
-            className="rounded-md p-1.5 text-[#64748B] hover:bg-white hover:text-[#0F172A]"
+            className="rounded-md p-1.5 text-[#64748B] dark:text-muted-foreground hover:bg-white dark:hover:bg-muted hover:text-[#0F172A] dark:hover:text-foreground"
             title="Buka panel tamu"
             aria-label="Buka panel tamu"
           >
@@ -1458,15 +1458,15 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
           </button>
         </aside>
       ) : (
-      <aside className="hidden lg:flex min-h-0 flex-col border-l border-[#E2E8F0] bg-[#F8FAFC] text-[#0F172A]">
-        <div className="flex items-center justify-between border-b border-[#E2E8F0] px-4 py-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
+      <aside className="hidden lg:flex min-h-0 flex-col border-l border-[#E2E8F0] dark:border-border bg-[#F8FAFC] dark:bg-muted text-[#0F172A] dark:text-foreground">
+        <div className="flex items-center justify-between border-b border-[#E2E8F0] dark:border-border px-4 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B] dark:text-muted-foreground">
             Panel Tamu
           </p>
           <button
             type="button"
             onClick={() => setRightOpen(false)}
-            className="rounded-md p-1 text-[#64748B] hover:bg-white hover:text-[#0F172A]"
+            className="rounded-md p-1 text-[#64748B] dark:text-muted-foreground hover:bg-white dark:hover:bg-muted hover:text-[#0F172A] dark:hover:text-foreground"
             title="Tutup panel tamu"
             aria-label="Tutup panel tamu"
           >
@@ -1476,8 +1476,8 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
         {current && thread?.thread ? (
           <ScrollArea className="flex-1">
             <div className="space-y-4 p-4">
-              <div className="rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
+              <div className="rounded-xl border border-[#E2E8F0] dark:border-border bg-white dark:bg-card p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B] dark:text-muted-foreground">
                   Guest
                 </p>
                 <div className="mt-2 flex items-center gap-3">
@@ -1487,10 +1487,10 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[#0F172A]">
+                    <p className="truncate text-sm font-semibold text-[#0F172A] dark:text-foreground">
                       {conversationNameLabel(thread.thread)}
                     </p>
-                    <p className="flex items-center gap-1 font-mono text-[11px] text-[#64748B]">
+                    <p className="flex items-center gap-1 font-mono text-[11px] text-[#64748B] dark:text-muted-foreground">
                       <Phone className="h-3 w-3" /> {conversationPhoneLabel(thread.thread)}
                     </p>
                   </div>
@@ -1506,8 +1506,8 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                 )}
               </div>
 
-              <div className="rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
+              <div className="rounded-xl border border-[#E2E8F0] dark:border-border bg-white dark:bg-card p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B] dark:text-muted-foreground">
                   Profile
                 </p>
                 {thread.guest ? (
@@ -1520,47 +1520,47 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                       <Row icon={UserIcon} label="Country" value={thread.guest.country} />
                     )}
                     {thread.guest.notes && (
-                      <div className="rounded-md border border-[#E2E8F0] bg-[#F8FAFC] p-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B]">
+                      <div className="rounded-md border border-[#E2E8F0] dark:border-border bg-[#F8FAFC] dark:bg-muted p-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] dark:text-muted-foreground">
                           Notes
                         </p>
-                        <p className="mt-1 text-xs font-medium text-[#0F172A]">{thread.guest.notes}</p>
+                        <p className="mt-1 text-xs font-medium text-[#0F172A] dark:text-foreground">{thread.guest.notes}</p>
                       </div>
                     )}
                   </dl>
                 ) : (
-                  <p className="mt-2 text-xs text-[#64748B]">
+                  <p className="mt-2 text-xs text-[#64748B] dark:text-muted-foreground">
                     No guest profile linked to this number yet.
                   </p>
                 )}
               </div>
 
-              <div className="rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
+              <div className="rounded-xl border border-[#E2E8F0] dark:border-border bg-white dark:bg-card p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B] dark:text-muted-foreground">
                   Latest Booking
                 </p>
                 {thread.booking ? (
                   <div className="mt-2 text-xs">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-1.5 font-medium text-[#0F172A]">
+                      <span className="flex items-center gap-1.5 font-medium text-[#0F172A] dark:text-foreground">
                         <CalendarDays className="h-3.5 w-3.5 text-primary" />
                         {formatDateID(thread.booking.check_in)} →{" "}
                         {formatDateID(thread.booking.check_out)}
                       </span>
                       <StatusBadge kind="booking" value={thread.booking.status} />
                     </div>
-                    <p className="mt-1.5 text-[11px] font-medium text-[#0F172A]">
+                    <p className="mt-1.5 text-[11px] font-medium text-[#0F172A] dark:text-foreground">
                       {thread.booking.adults} adult{thread.booking.adults !== 1 && "s"}
                       {thread.booking.children > 0 && `, ${thread.booking.children} child`}
                     </p>
                     {thread.booking.special_requests && (
-                      <p className="mt-2 border-t border-[#E2E8F0] pt-2 text-[11px] italic text-[#64748B]">
+                      <p className="mt-2 border-t border-[#E2E8F0] dark:border-border pt-2 text-[11px] italic text-[#64748B] dark:text-muted-foreground">
                         "{thread.booking.special_requests}"
                       </p>
                     )}
                   </div>
                 ) : (
-                  <p className="mt-2 text-xs text-[#64748B]">No booking on file.</p>
+                  <p className="mt-2 text-xs text-[#64748B] dark:text-muted-foreground">No booking on file.</p>
                 )}
               </div>
 
@@ -1579,16 +1579,16 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
               />
 
               {/* ── MANUAL ALERT (dashboard monitor) ───────────────── */}
-              <div className="rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
-                <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
+              <div className="rounded-xl border border-[#E2E8F0] dark:border-border bg-white dark:bg-card p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-[#64748B] dark:text-muted-foreground">
                   <ShieldAlert className="h-3 w-3 text-rose-500" />
                   Eskalasi ke Super Admin
                 </p>
-                <p className="mt-1 text-[11px] text-[#64748B]">
+                <p className="mt-1 text-[11px] text-[#64748B] dark:text-muted-foreground">
                   Catat alert di monitor percakapan jika chat ini butuh perhatian segera.
                 </p>
                 <textarea
-                  className="mt-2 w-full resize-none rounded-md border border-[#E2E8F0] bg-[#F8FAFC] p-2 text-xs text-[#0F172A] placeholder:text-[#64748B] focus:outline-none focus:ring-1 focus:ring-rose-400"
+                  className="mt-2 w-full resize-none rounded-md border border-[#E2E8F0] dark:border-border bg-[#F8FAFC] dark:bg-muted p-2 text-xs text-[#0F172A] dark:text-foreground placeholder:text-[#64748B] dark:placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-rose-400"
                   rows={2}
                   placeholder="Catatan untuk super admin (wajib)…"
                   {...WA_KEYBOARD_TEXT_PROPS}
@@ -1613,7 +1613,7 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
             </div>
           </ScrollArea>
         ) : (
-          <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-[#64748B]">
+          <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-[#64748B] dark:text-muted-foreground">
             Guest context will appear here.
           </div>
         )}
@@ -1706,7 +1706,7 @@ function WhatsappSummary({
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 px-2 text-[10px] text-rose-600 hover:text-rose-700"
+                className="h-6 px-2 text-[10px] text-rose-600 dark:text-rose-400 hover:text-rose-700"
                 disabled={clearing}
                 onClick={() => {
                   if (window.confirm("Hapus Context Summary untuk thread ini?")) {
@@ -1855,18 +1855,18 @@ function StatusBadge({
   kind: "booking" | "payment";
   value: string | null | undefined;
 }) {
-  if (!value) return <span className="text-[11px] font-medium text-[#0F172A]">—</span>;
+  if (!value) return <span className="text-[11px] font-medium text-[#0F172A] dark:text-foreground">—</span>;
   const v = String(value).toLowerCase();
-  let cls = "bg-slate-100 text-slate-700 border-slate-200";
+  let cls = "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700";
   if (kind === "payment") {
-    if (/(lunas|paid|success|completed|settled)/.test(v)) cls = "bg-emerald-100 text-emerald-800 border-emerald-200";
-    else if (/(pending|menunggu|proses|processing|dp|partial)/.test(v)) cls = "bg-amber-100 text-amber-800 border-amber-200";
-    else if (/(gagal|failed|refund|cancel|batal)/.test(v)) cls = "bg-rose-100 text-rose-800 border-rose-200";
+    if (/(lunas|paid|success|completed|settled)/.test(v)) cls = "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800";
+    else if (/(pending|menunggu|proses|processing|dp|partial)/.test(v)) cls = "bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border-amber-200 dark:border-amber-800";
+    else if (/(gagal|failed|refund|cancel|batal)/.test(v)) cls = "bg-rose-100 dark:bg-rose-900/50 text-rose-800 dark:text-rose-200 border-rose-200 dark:border-rose-800";
   } else {
-    if (/(confirmed|checked_?in|active|aktif|paid)/.test(v)) cls = "bg-emerald-100 text-emerald-800 border-emerald-200";
-    else if (/(pending|hold|menunggu|awaiting|inquiry)/.test(v)) cls = "bg-amber-100 text-amber-800 border-amber-200";
-    else if (/(cancel|batal|no_?show|failed)/.test(v)) cls = "bg-rose-100 text-rose-800 border-rose-200";
-    else if (/(checked_?out|completed|done|selesai)/.test(v)) cls = "bg-slate-100 text-slate-700 border-slate-200";
+    if (/(confirmed|checked_?in|active|aktif|paid)/.test(v)) cls = "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 border-emerald-200 dark:border-emerald-800";
+    else if (/(pending|hold|menunggu|awaiting|inquiry)/.test(v)) cls = "bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 border-amber-200 dark:border-amber-800";
+    else if (/(cancel|batal|no_?show|failed)/.test(v)) cls = "bg-rose-100 dark:bg-rose-900/50 text-rose-800 dark:text-rose-200 border-rose-200 dark:border-rose-800";
+    else if (/(checked_?out|completed|done|selesai)/.test(v)) cls = "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700";
   }
   return (
     <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", cls)}>
@@ -1881,14 +1881,14 @@ function SummaryField({ label, value }: { label: string; value: string | null | 
   const isBooking = lower.includes("status booking") || lower === "status booking";
   const isPayment = lower.includes("pembayaran") || lower.includes("payment");
   return (
-    <div className="rounded-md border border-[#E2E8F0] bg-[#F8FAFC] px-2 py-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B]">{label}</p>
+    <div className="rounded-md border border-[#E2E8F0] dark:border-border bg-[#F8FAFC] dark:bg-muted px-2 py-1.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] dark:text-muted-foreground">{label}</p>
       {isBooking || isPayment ? (
         <div className="mt-1">
           <StatusBadge kind={isPayment ? "payment" : "booking"} value={value ?? null} />
         </div>
       ) : (
-        <p className="truncate text-[11px] font-medium text-[#0F172A]">{display}</p>
+        <p className="truncate text-[11px] font-medium text-[#0F172A] dark:text-foreground">{display}</p>
       )}
     </div>
   );
@@ -1906,10 +1906,10 @@ function Row({
   if (!value) return null;
   return (
     <div className="flex items-start gap-2">
-      <Icon className="mt-0.5 h-3 w-3 text-[#64748B]" />
+      <Icon className="mt-0.5 h-3 w-3 text-[#64748B] dark:text-muted-foreground" />
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B]">{label}</p>
-        <p className="truncate text-xs font-medium text-[#0F172A]">{value}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] dark:text-muted-foreground">{label}</p>
+        <p className="truncate text-xs font-medium text-[#0F172A] dark:text-foreground">{value}</p>
       </div>
     </div>
   );
