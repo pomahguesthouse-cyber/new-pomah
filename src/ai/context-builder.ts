@@ -70,7 +70,7 @@ export function buildSystemPrompt(params: SystemPromptParams): string {
     const amenities = omitUnavailableHotWaterAmenities(r.amenities);
     const description = redactUnavailableHotWaterText(r.description);
     return (
-      `• ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam, ` +
+      `• ${r.name} — harga dasar mulai dari Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam, ` +
       `kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}${r.bed_size ? ` (${r.bed_size})` : ""}` +
       `${r.floor_info ? `, Lokasi: ${r.floor_info}` : ""}` +
       `${amenities.length ? `, Fasilitas: ${amenities.join(", ")}` : ""}` +
@@ -85,6 +85,12 @@ export function buildSystemPrompt(params: SystemPromptParams): string {
     "Jawab ramah, singkat dan jelas dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'.",
 
     formatTodayLine(today),
+
+    "ACUAN HARGA = KALENDER HARGA: harga kamar per tanggal diatur di kalender harga admin. " +
+      "Harga dasar di katalog kamar hanya patokan 'mulai dari'. Untuk tanggal tertentu, harga & total " +
+      "WAJIB dari hasil tool check_room_availability (total = jumlah harga tiap malam; sebutkan rincian " +
+      "per malam bila harganya berbeda). Bila tamu belum menyebut tanggal, jelaskan harga mengikuti " +
+      "tanggal menginap lalu tanyakan tanggalnya, atau sebut harga dasar sebagai 'mulai dari'.",
 
     "FORMAT TANGGAL: selalu tampilkan tanggal ke tamu dalam format Indonesia, " +
       "contoh '19 Mei 2026'. JANGAN tampilkan format YYYY-MM-DD.",

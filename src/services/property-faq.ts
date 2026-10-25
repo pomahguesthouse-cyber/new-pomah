@@ -122,9 +122,6 @@ const ONE_LINER_MAX_LEN = 80;
 /** Tarif early check-in / late check-out, per jam berjalan. */
 export const EARLY_LATE_HOURLY_FEE_IDR = 25_000;
 
-/** Tarif extra bed per malam — sama di semua channel booking. */
-export const EXTRA_BED_RATE_IDR = 100_000;
-
 /** Area properti, dipakai saat menjawab pertanyaan jarak. */
 export const PROPERTY_AREA = "Sampangan, Semarang";
 
@@ -455,7 +452,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
       return {
         reply:
           `${opener}Extra bed tetap tersedia apapun channel bookingnya, Kak — properti dan tarif extra bed ` +
-          `(${idr(EXTRA_BED_RATE_IDR)}/malam) sama saja.\n` +
+          `sama saja (tarifnya mengikuti tipe kamar & tanggal menginap).\n` +
           `Kalau booking lewat OTA, konfirmasikan kebutuhan extra bed ke kami setelah reservasi selesai ya, nanti kami siapkan.`,
         intent: "faq_ota_extra_bed",
       };

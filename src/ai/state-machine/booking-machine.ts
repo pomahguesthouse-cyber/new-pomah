@@ -7,6 +7,7 @@ import { computeExtraBedTotal, computeGrandTotal, totalsMatch, toRupiah } from "
 import { markBookingDraft, saveBookingDraft } from "@/services/booking-draft.service";
 import { runDeferred } from "@/lib/cf-context";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
+import { formatNightlyBreakdownLines, hasVaryingRates } from "@/services/pricing/price-quote";
 import { FULL_PAYMENT_POLICY_TEXT, requiresFullPayment } from "@/lib/deposit-policy";
 import { capAvailabilityWithStopSell } from "@/services/pricing/stop-sell-availability";
 import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
@@ -549,6 +550,7 @@ function buildBookingSummary(
     roomSubtotal?: number;
     displayRatePerNight?: number;
     hasDynamicBreakdown?: boolean;
+    nightlyBreakdown?: string[];
   },
 ): StateMachineResult {
   // --- Room line ---
@@ -664,6 +666,9 @@ function buildBookingSummary(
     `• Durasi: ${nights != null ? `${nights} malam` : "—"}\n` +
     `• Jumlah tamu: ${guestLine}\n` +
     `• Harga: ${pricePerNight ? `${ratePrefix}${fmtRp(pricePerNight)}/malam` : "—"}\n` +
+    (overrides?.nightlyBreakdown && overrides.nightlyBreakdown.length > 0
+      ? `• Rincian per malam:\n${overrides.nightlyBreakdown.join("\n")}\n`
+      : "") +
     extraBedLine +
     paymentLine +
     `• Total: ${grandTotal ? fmtRp(grandTotal) : "—"}` +
@@ -687,6 +692,7 @@ async function resolveBookingSummaryRates(
   roomSubtotal: number;
   displayRatePerNight: number;
   hasDynamicBreakdown: boolean;
+  nightlyBreakdown: string[];
   stopSellDates: string[];
 } | null> {
   if (!context.checkIn || !context.checkOut) return null;
@@ -703,6 +709,7 @@ async function resolveBookingSummaryRates(
   const stopSellDates: string[] = [];
   let roomSubtotal = 0;
   let hasDynamicBreakdown = false;
+  const nightlyBreakdown: string[] = [];
   let firstAvg: number | null = null;
   let sameRate = true;
   let avgSum = 0;
@@ -718,6 +725,12 @@ async function resolveBookingSummaryRates(
     const resolved = resolveRoomNightlyRates(rt, context.checkIn, context.checkOut, overrides.get(item.roomTypeId));
     if (resolved.has_stop_sell) stopSellDates.push(...resolved.stop_sell_dates);
     if (!resolved.all_base) hasDynamicBreakdown = true;
+    // Kalender harga beda per malam → tampilkan rincian supaya total transparan.
+    if (hasVaryingRates(resolved.nightly)) {
+      const label = items.length > 1 ? `${item.roomTypeName}${item.quantity > 1 ? ` ×${item.quantity}` : ""}` : "";
+      if (label) nightlyBreakdown.push(`  ${label}:`);
+      nightlyBreakdown.push(...formatNightlyBreakdownLines(resolved.nightly, label ? "    · " : "  · "));
+    }
     roomSubtotal += resolved.total * item.quantity;
     const avg = resolved.nights ? Math.round(resolved.total / resolved.nights) : item.pricePerNight;
     resolvedRooms.push({ ...item, pricePerNight: avg });
@@ -734,6 +747,7 @@ async function resolveBookingSummaryRates(
     roomSubtotal,
     displayRatePerNight,
     hasDynamicBreakdown,
+    nightlyBreakdown,
     stopSellDates: Array.from(new Set(stopSellDates)),
   };
 }
@@ -793,6 +807,7 @@ function buildBookingSummaryFromResolvedSync(
       roomSubtotal: resolved.roomSubtotal,
       displayRatePerNight: resolved.displayRatePerNight,
       hasDynamicBreakdown: resolved.hasDynamicBreakdown,
+      nightlyBreakdown: resolved.nightlyBreakdown,
     });
   }
   return buildBookingSummary(context, ctx.rooms);

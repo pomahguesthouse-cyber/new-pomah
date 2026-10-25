@@ -1,3 +1,4 @@
+import { formatRoomQuoteText } from "@/services/pricing/price-quote";
 /**
  * Multi-Agent Orchestrator.
  *
@@ -143,9 +144,8 @@ function formatToolDraftReply(toolName: string, output: string): string | null {
         .map((r: any) => {
           const available = Number(r.kamar_tersedia ?? 0);
           const icon = available > 0 ? "✅" : "❌";
-          const price = Number(r.harga_per_malam ?? r.nightly_rate ?? 0).toLocaleString("id-ID");
           const stock = Number.isFinite(available) ? `${available} kamar tersedia` : "stok belum diatur";
-          return `${icon} ${r.nama}: ${stock}, Rp${price}/malam`;
+          return `${icon} ${r.nama}: ${stock}${formatRoomQuoteText(r)}`;
         })
         .join("\n");
       if (rows) {
