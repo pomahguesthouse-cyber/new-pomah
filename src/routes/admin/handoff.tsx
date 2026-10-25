@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
+import { ConversationAlertsPanel } from "@/admin/components/conversation-alerts-panel";
 import { formatDateID } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/handoff")({
@@ -112,6 +113,8 @@ function HandoffPage() {
           </SelectContent>
         </Select>
       </div>
+
+      <ConversationAlertsPanel />
 
       {isLoading && (
         <Card className="p-8 text-center text-sm text-muted-foreground">Memuat…</Card>
