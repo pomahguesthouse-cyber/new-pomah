@@ -480,6 +480,9 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
 
     ROOM_SHARING_HARD_GUARD_PROMPT,
 
+    when(g.faq, "TAMU SUDAH TIBA & TIDAK ADA YANG JAGA: Bila tamu bilang sudah sampai/tiba di penginapan tetapi " +
+      "tidak ada staf/resepsionis yang berjaga atau pintu tertutup, jawab: 'Mohon maaf Kak, silakan tekan bel yang ada " +
+      "di pintu masuk ya 🙏 Staf kami akan segera membukakan dan membantu check-in Kakak.' Jangan menyuruh tamu menunggu tanpa arahan."),
     when(g.faq, "EARLY CHECK-IN / LATE CHECK-OUT (KEBIJAKAN TETAP — JANGAN DIALIHKAN KE TIM): " +
       "Jam check-in standar 14.00 WIB, jam check-out standar 12.00 WIB. Early check-in " +
       "(masuk kamar sebelum 14.00) dan late check-out (keluar setelah 12.00) DIKENAKAN " +

@@ -239,6 +239,29 @@ const lite = frontOfficeAgent.buildSystemPrompt({
 assert.ok(/jangan arahkan ke website atau Instagram untuk foto/i.test(lite));
 assert.ok(/panggil send_room_photos/i.test(lite));
 
+// Tamu sudah tiba & tidak ada yang jaga → bel di pintu masuk (Faizal 28 Okt 2026)
+{
+  const { buildPropertyFaqReply: faq, ARRIVAL_BELL_REPLY } = await import("../src/services/property-faq");
+  for (const m of [
+    "Kak saya sudah sampai tapi tidak ada yang jaga",
+    "udah nyampe kok sepi ga ada orang",
+    "kak kok gak ada yang jaga ya",
+    "saya sudah di depan, pintunya dikunci",
+    "sudah tiba tapi gak bisa masuk",
+    "resepsionis kosong kak",
+  ]) {
+    for (const mode of ["early", "late"] as const) {
+      const r = faq({ message: m, property: PROPERTY as any, rooms: [], mode });
+      assert.equal(r?.intent, "arrival_ring_bell", `${mode}: ${m}`);
+      assert.equal(r?.reply, ARRIVAL_BELL_REPLY);
+    }
+  }
+  assert.ok(/pintu masuk/.test(ARRIVAL_BELL_REPLY) && /bel/.test(ARRIVAL_BELL_REPLY));
+  for (const m of ["ada kamar kosong tanggal 5?", "check in jam berapa?", "sudah sampai mana kak prosesnya"]) {
+    assert.notEqual(faq({ message: m, property: PROPERTY as any, rooms: [], mode: "late" })?.intent, "arrival_ring_bell", m);
+  }
+}
+
 console.log(
   `✓ property FAQ fast-path regressions passed — ` +
     `6 topik baru dijawab tanpa token, ${KNOWN_LANDMARKS.length} landmark tersinkron dengan prompt`,

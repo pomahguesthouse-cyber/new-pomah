@@ -198,6 +198,29 @@ export function parseRequestedHour(text: string, direction: "in" | "out"): numbe
   return hour >= 0 && hour <= 23 ? hour : null;
 }
 
+/**
+ * Tamu sudah tiba tetapi tidak ada staf yang berjaga (permintaan Faizal,
+ * 28 Okt 2026): arahkan tamu menekan bel di pintu masuk.
+ */
+const ARRIVED_RE =
+  /\b(sudah|udah|udh|sdh|baru|barusan)\s+(?:saya\s+|kami\s+|aku\s+)?(sampai|sampe|nyampe|nyampai|tiba|datang|dateng|di depan|di lokasi|di pomah|di penginapan)\b|\b(saya|kami|aku)\s+(?:sudah\s+|udah\s+)?(di depan|di lokasi|di depan pintu|di depan gerbang)\b/i;
+const NOBODY_RE =
+  /\b(tidak ada|gak ada|ga ada|nggak ada|ngga ada|enggak ada|g ada|gaada|gada|kok sepi|sepi|kosong|tutup|dikunci|terkunci|belum dibuka|gak dibuka|ga dibuka|tidak dibuka|gak bisa masuk|ga bisa masuk|tidak bisa masuk|gabisa masuk)\b/i;
+const STAFF_RE =
+  /\b(orang|orangnya|yang jaga|jaga|penjaga|staf|staff|petugas|resepsionis|receptionist|admin|front ?desk|front office|siapa.?siapa|pintu|pintunya|gerbang|gerbangnya|masuk)\b/i;
+
+export const ARRIVAL_BELL_REPLY =
+  "Mohon maaf Kak, silakan tekan bel yang ada di pintu masuk ya 🙏 Staf kami akan segera membukakan dan membantu check-in Kakak.";
+
+export function isArrivedNobodyOnDuty(raw: string): boolean {
+  const t = raw.toLowerCase().replace(/\s+/g, " ").trim();
+  const nobody = NOBODY_RE.test(t) && STAFF_RE.test(t);
+  if (nobody && ARRIVED_RE.test(t)) return true;
+  // "kok gak ada yang jaga?", "resepsionisnya kosong", "pintunya dikunci"
+  return /\b(tidak ada|gak ada|ga ada|nggak ada|gaada|gada|g ada)\b.{0,20}\b(yang jaga|penjaga|orang|staf|staff|petugas|resepsionis|receptionist)\b/i.test(t) ||
+    /\b(resepsionis|receptionist|front ?desk|lobby|lobi|pintu|pintunya|gerbang|gerbangnya)\b.{0,15}\b(kosong|sepi|dikunci|terkunci|tutup|belum dibuka)\b/i.test(t);
+}
+
 // ─── Builder ─────────────────────────────────────────────────────────────────
 
 export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply | null {
@@ -216,6 +239,12 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   // WiFi password, dapur/alat masak, handuk, hairdryer, titik check-in dijawab
   // dari knowledge base fasilitas (room-facility-kb), bukan template di sini.
   if (detectFacilityTopic(raw)) return null;
+
+  // Tamu sudah tiba & tidak ada yang jaga → arahkan ke bel di pintu masuk.
+  // Sebelum COMPLAINT_SIGNAL ("gak bisa masuk") dan FAQ_BLOCK ("tamu", "check in").
+  if (isArrivedNobodyOnDuty(raw)) {
+    return { reply: ARRIVAL_BELL_REPLY, intent: "arrival_ring_bell" };
+  }
 
   // Pertanyaan DP / bayar di tempat harus dijawab sebelum sinyal komplain
   // ("tidak bisa") dan sebelum FAQ_BLOCK yang memuat kata dp/bayar/malam.
