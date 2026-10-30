@@ -35,6 +35,14 @@ export const NEARBY_CATEGORIES: ReadonlyArray<NearbyCategory> = [
     ],
   },
   {
+    key: "brt",
+    label: "halte BRT Trans Semarang (transportasi umum)",
+    re: /\b(halte(?:\s+(?:bus|brt))?|brt|trans\s*semarang|bus\s+raya\s+terpadu|bus|transportasi\s+umum|kendaraan\s+umum|angkutan\s+umum)\b/i,
+    standalone: true,
+    // Sumber: Faizal (pemilik), 31 Okt 2026. Nomor koridor sengaja tidak disebut.
+    places: [{ name: "Halte BRT Sampangan Timur", distance: "sekitar 100 m", time: "kurang lebih 1–2 menit jalan kaki" }],
+  },
+  {
     key: "pasar",
     label: "pasar",
     re: /\bpasar\b/i,
@@ -99,7 +107,7 @@ const NEARBY_SIGNAL_RE = /\b(dekat|deket|terdekat|sekitar|seputar|deket2|dekat2|
 const GENERIC_FOLLOW = new Set([
   "terdekat", "dekat", "deket", "ga", "gak", "nggak", "enggak", "tidak", "kak", "ka", "kakak", "ya", "yg", "yang",
   "sekitar", "atau", "dan", "dong", "nya", "ada", "dimana", "mana", "dmn", "sini", "situ", "buat", "untuk", "jauh",
-  "berapa", "gitu", "juga", "deh", "min", "mas", "mbak", "pak", "bu", "di",
+  "berapa", "gitu", "dari", "gimana", "bagaimana", "apa", "juga", "deh", "min", "mas", "mbak", "pak", "bu", "di",
 ]);
 
 export function findNearbyCategory(raw: string): NearbyCategory | null {
@@ -107,6 +115,8 @@ export function findNearbyCategory(raw: string): NearbyCategory | null {
   const cat = NEARBY_CATEGORIES.find((c) => c.re.test(t));
   if (!cat) return null;
   if (!cat.standalone && !NEARBY_SIGNAL_RE.test(t)) return null;
+  // Terminal/stasiun/bandara punya jawaban landmark sendiri.
+  if (cat.key === "brt" && /\b(terminal|stasiun|bandara|airport|ahmad\s*yani|poncol|tawang)\b/i.test(t)) return null;
   // "pasar johar", "atm di simpang lima" = tempat bernama/di lokasi lain → AI.
   const m = cat.re.exec(t);
   const next = m ? t.slice(m.index + m[0].length).match(/^[\s,]*([a-z0-9]+)/)?.[1] : undefined;

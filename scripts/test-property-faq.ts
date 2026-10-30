@@ -304,12 +304,22 @@ console.log(
     ["kalau mau ke klinik terdekat?", /Klinik Pratama/],
     ["spbu terdekat?", /SPBU/],
     ["gereja dekat sini ada?", /GKJ/],
+    ["halte brt terdekat dimana kak?", /Halte BRT Sampangan Timur — sekitar 100 m, kurang lebih 1–2 menit jalan kaki/],
+    ["naik trans semarang dari mana kak?", /Halte BRT Sampangan Timur/],
+    ["ada bus dekat sini?", /Halte BRT Sampangan Timur/],
+    ["transportasi umum gimana kak?", /Halte BRT Sampangan Timur/],
   ] as const) assert.ok(re.test(hits(m, "faq_nearby_place")), m);
   // Kategori di luar daftar & pertanyaan ketersediaan tetap ke AI.
   assert.equal(ask("laundry terdekat dimana kak?"), null, "laundry harus ke AI, bukan alamat");
   for (const m of ["laundry terdekat dimana kak?", "mall cafe atau apapun itu", "ada kamar tgl 5? dekat indomaret gak?"]) {
     assert.notEqual(ask(m)?.intent, "faq_nearby_place", m);
   }
+  for (const m of ["stasiun poncol jauh ga kak?", "ke bandara berapa menit?", "terminal bus terdekat?"]) {
+    assert.notEqual(ask(m)?.intent, "faq_nearby_place", m);
+  }
+  assert.equal(ask("stasiun poncol jauh ga kak?")?.intent, "faq_distance");
+  assert.equal(ask("ke bandara berapa menit?")?.intent, "faq_distance");
+  assert.ok(!/koridor/i.test(hits("halte brt terdekat?", "faq_nearby_place")));
   assert.ok(prompt.includes("Alfamart Sampangan") && prompt.includes("kami cek terlebih dahulu"), "daftar tempat terdekat hilang dari prompt");
   for (const c of NEARBY_CATEGORIES) for (const p of c.places) assert.ok(/^sekitar /.test(p.distance), p.name);
   assert.equal(hits("ke unika berapa menit kak?", "faq_distance").includes("2,8 km"), true);
