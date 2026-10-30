@@ -31,6 +31,7 @@ import { mentionsExplicitDateSignal } from "@/lib/id-date";
 import { isGeneralFacilityQuestion } from "@/lib/guest-media-request";
 import { buildRoomSharingReply } from "@/services/room-sharing-policy";
 import { detectFacilityTopic } from "@/services/room-facility-kb";
+import { findNearbyCategory, formatNearbyReply } from "./nearby-places";
 
 export interface PropertyFaqReply {
   reply: string;
@@ -156,6 +157,7 @@ export const KNOWN_LANDMARKS: ReadonlyArray<{ re: RegExp; label: string; distanc
   { re: /\bakpelni\b|\bpawiyatan\s+luhur\b/i, label: "AKPELNI", distance: "sekitar 5 menit berkendara — dekat sekali" },
   { re: /\bunnes\b|\bsekaran\b|\buniversitas\s+negeri\s+semarang\b/i, label: "UNNES Sekaran", distance: "sekitar 4,5 km, kurang lebih 10–15 menit berkendara" },
   { re: /\bsimpang\s*lima\b|\bpusat\s+kota\b/i, label: "Simpang Lima / pusat kota", distance: "sekitar 15–20 menit berkendara" },
+  { re: /\bunika\b|\bsoegijapranata\b|\bsoegija\b/i, label: "UNIKA Soegijapranata", distance: "sekitar 2,8 km, kurang lebih 8–10 menit berkendara" },
   { re: /\buntag\b|\btujuh\s+belas\s+agustus\b|\bfakultas\s+hukum\b/i, label: "Fakultas Hukum UNTAG", distance: "sekitar 1,9 km, kurang lebih 5 menit berkendara" },
   { re: /\bahmad\s*yani\b|\bbandara\b/i, label: "Bandara Ahmad Yani", distance: "sekitar 9 km, kurang lebih 25–35 menit berkendara" },
   { re: /\bponcol\b/i, label: "Stasiun Poncol", distance: "sekitar 7 km, kurang lebih 15–20 menit berkendara" },
@@ -397,6 +399,20 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
       reply: `Sama-sama, Kak 🙏 Kalau ada yang ingin ditanyakan lagi, kabari kami kapan saja ya.`,
       intent: "thanks",
     };
+  }
+
+  // — Tempat terdekat (minimarket, ATM, apotek, masjid, …) — data OSM tetap
+  // di nearby-places.ts. Kategori di luar daftar dilewatkan ke AI.
+  const nearby = findNearbyCategory(raw);
+  if (nearby && !AVAILABILITY_OR_PRICE_RE.test(raw)) {
+    return { reply: `${opener}${formatNearbyReply(nearby)}`, intent: "faq_nearby_place" };
+  }
+
+  // "laundry terdekat dimana?" — tempat di luar daftar, bukan tanya alamat Pomah.
+  // Biarkan AI menjawab "kami cek terlebih dahulu" alih-alih mengirim alamat.
+  if (/\b(terdekat|dekat sini|deket sini|di sekitar|sekitar sini)\b/i.test(raw) &&
+    !/\b(alamat|lokasi|lokasinya|maps?|google maps|pomah)\b/i.test(raw)) {
+    return null;
   }
 
   // — Alamat / lokasi —

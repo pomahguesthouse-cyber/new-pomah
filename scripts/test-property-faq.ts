@@ -285,3 +285,28 @@ console.log(
   `✓ property FAQ fast-path regressions passed — ` +
     `6 topik baru dijawab tanpa token, ${KNOWN_LANDMARKS.length} landmark tersinkron dengan prompt`,
 );
+
+// ═══ F. Tempat terdekat (nearby-places.ts) ═══════════════════════════════════
+{
+  const { NEARBY_CATEGORIES } = await import("../src/services/nearby-places");
+  // Pertanyaan asli dari log WA 30 Okt 2026.
+  const real = hits("untuk di dekat penginapan apakah ada warung atau minimarket kak?", "faq_nearby_place");
+  assert.ok(/Alfamart/.test(real) && /Indomaret/.test(real), real);
+  for (const [m, re] of [
+    ["indomaret terdekat dimana kak?", /Indomaret/],
+    ["ada atm dekat sini?", /ATM BNI/],
+    ["apotek terdekat?", /Apotek Viva Generik/],
+    ["masjid terdekat dimana ya kak", /Nurul Ilmi/],
+    ["kalau mau ke klinik terdekat?", /Klinik Pratama/],
+    ["spbu terdekat?", /SPBU/],
+    ["gereja dekat sini ada?", /GKJ/],
+  ] as const) assert.ok(re.test(hits(m, "faq_nearby_place")), m);
+  // Kategori di luar daftar & pertanyaan ketersediaan tetap ke AI.
+  assert.equal(ask("laundry terdekat dimana kak?"), null, "laundry harus ke AI, bukan alamat");
+  for (const m of ["laundry terdekat dimana kak?", "mall cafe atau apapun itu", "ada kamar tgl 5? dekat indomaret gak?"]) {
+    assert.notEqual(ask(m)?.intent, "faq_nearby_place", m);
+  }
+  assert.ok(prompt.includes("Alfamart Sampangan") && prompt.includes("kami cek terlebih dahulu"), "daftar tempat terdekat hilang dari prompt");
+  for (const c of NEARBY_CATEGORIES) for (const p of c.places) assert.ok(/^sekitar /.test(p.distance), p.name);
+  assert.equal(hits("ke unika berapa menit kak?", "faq_distance").includes("2,8 km"), true);
+}
