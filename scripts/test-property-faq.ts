@@ -262,6 +262,25 @@ assert.ok(/panggil send_room_photos/i.test(lite));
   }
 }
 
+// ═══ Lokasi: Dewi Sartika, BUKAN Lumbung (30 Okt 2026) ═══════════════════════
+{
+  const { ensureLocationCorrection, POMAH_ADDRESS, WRONG_LOCATION_CORRECTION } = await import("../src/services/property-faq");
+  assert.equal(POMAH_ADDRESS, "Jl. Dewi Sartika IV No. 71, Sampangan, Semarang 50221");
+  for (const m of ["alamatnya dimana kak?", "lokasi pomah di lumbungsari ya?", "share maps dong"]) {
+    const r = hits(m, "location_question");
+    assert.ok(r.includes(POMAH_ADDRESS), m);
+    assert.ok(!/lumbung/i.test(r) || /bukan di Lumbungsari/.test(r), m);
+  }
+  const inbound = "Halo kaa. Untuk Pomah Guest House Lumbungsari Raya utk tgl 31 Des-4 Jan 2027 tipe family room apakah masih avail?";
+  const fixed = ensureLocationCorrection("Masih ada, Kak. Family Room tersisa 1 unit.", inbound);
+  assert.ok(fixed.startsWith(WRONG_LOCATION_CORRECTION));
+  assert.equal(ensureLocationCorrection("Masih ada, Kak.", "ada kamar tgl 5?"), "Masih ada, Kak.");
+  const bad = ensureLocationCorrection("Betul Kak, kami di Lumbungsari Raya. Kamar masih ada.", "lokasi?");
+  assert.ok(!/lumbung/i.test(bad), bad);
+  const { readFileSync } = await import("node:fs");
+  assert.ok(readFileSync("src/ai/agents/front-office.agent.ts", "utf8").includes("Pomah TIDAK berada di Lumbung"));
+}
+
 console.log(
   `✓ property FAQ fast-path regressions passed — ` +
     `6 topik baru dijawab tanpa token, ${KNOWN_LANDMARKS.length} landmark tersinkron dengan prompt`,

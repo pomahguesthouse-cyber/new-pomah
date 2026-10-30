@@ -44,7 +44,7 @@ import { retrieveRelevantSopContext } from "@/ai/rag.service";
 import { getBookingState } from "@/ai/state-machine/booking-machine";
 import { STAFF_REPLY_SILENCE_MS, staffSilenceUntil } from "@/services/wa-autoreply/staff-silence";
 import { planPaymentProofGuestReply } from "@/services/wa-inbound-media";
-import { buildPropertyFaqReply } from "@/services/property-faq";
+import { buildPropertyFaqReply, ensureLocationCorrection } from "@/services/property-faq";
 import { buildRoomSharingReply } from "@/services/room-sharing-policy";
 import {
   AI_TIMEOUT_MS,
@@ -2521,6 +2521,8 @@ export async function executeAutoreplyForPhone(
   if (brochureFailureUrl && !finalReply.includes(brochureFailureUrl)) {
     finalReply = `${finalReply}\n\n${brochureLinkFallbackReply(brochureFailureUrl)}`.trim();
   }
+  // Pomah ada di Jl. Dewi Sartika, BUKAN Lumbung/Lumbungsari (30 Okt 2026).
+  if (!isManager && lastMessage) finalReply = ensureLocationCorrection(finalReply, lastMessage);
 
   // Invarian #5: balasan media jangan menanyakan ulang slot yang sudah
   // disebut tamu di percakapan ini (insiden 28 Sep 2026).
