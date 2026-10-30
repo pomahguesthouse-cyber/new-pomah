@@ -363,7 +363,7 @@ export const APPROVED_AKPELNI_LP: ApprovedLandingContent = {
     heading: "Jarak & rute ke Akpelni",
     intro: "Pomah dan Akpelni sama-sama berada di sisi selatan Semarang, di kawasan Sampangan–Bendan Duwur.",
     bullets: [
-      "**Kampus Politeknik Bumi Akpelni (Jl. Pawiyatan Luhur II No. 17, Bendan Duwur):** sekitar 1,2 km berkendara, sekitar 2–3 menit.",
+      "**Kampus Politeknik Bumi Akpelni (Jl. Pawiyatan Luhur II No. 17, Bendan Duwur):** sekitar 1,2 km, kurang lebih 5 menit berkendara.",
       "**Kampus UNNES Sekaran:** sekitar 4,5 km, kurang lebih 10–15 menit berkendara.",
     ],
     note: "Pada hari pelantikan atau wisuda, jalan sekitar kampus biasanya lebih ramai. Sebaiknya berangkat lebih awal; taksi atau ojek online membantu supaya tidak perlu mencari parkir.",
@@ -410,7 +410,7 @@ export const APPROVED_AKPELNI_LP: ApprovedLandingContent = {
     { anchor: "tempat wisata di Semarang", href: "/explore" },
   ],
   faq: [
-    { question: "Berapa jarak Pomah Guesthouse ke kampus Akpelni Semarang?", answer: "Sekitar 1,2 km berkendara, sekitar 2–3 menit ke Jl. Pawiyatan Luhur II No. 17, Bendan Duwur." },
+    { question: "Berapa jarak Pomah Guesthouse ke kampus Akpelni Semarang?", answer: "Sekitar 1,2 km, kurang lebih 5 menit berkendara ke Jl. Pawiyatan Luhur II No. 17, Bendan Duwur." },
     { question: "Jam berapa check-in dan check-out?", answer: "Check-in mulai 14.00, check-out paling lambat 12.00." },
     { question: "Ada kamar untuk keluarga 4 orang?", answer: `Ada. Family Room 222 dan Family Suite 100 punya dua kamar tidur dan muat hingga 4 tamu, mulai ${rp("family-room-222")} per malam.` },
     { question: "Kamar mana yang cocok untuk peserta diklat yang datang sendiri?", answer: `Kamar Single, mulai ${rp("kamar-single")} per malam, dengan AC dan WiFi.` },
