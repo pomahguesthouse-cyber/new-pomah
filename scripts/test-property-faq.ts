@@ -285,3 +285,42 @@ console.log(
   `✓ property FAQ fast-path regressions passed — ` +
     `6 topik baru dijawab tanpa token, ${KNOWN_LANDMARKS.length} landmark tersinkron dengan prompt`,
 );
+
+// ═══ F. Tempat terdekat (nearby-places.ts) ═══════════════════════════════════
+{
+  const { NEARBY_CATEGORIES } = await import("../src/services/nearby-places");
+  // Pertanyaan asli dari log WA 30 Okt 2026.
+  const real = hits("untuk di dekat penginapan apakah ada warung atau minimarket kak?", "faq_nearby_place");
+  assert.ok(/Alfamart/.test(real) && /Indomaret/.test(real), real);
+  assert.ok(/^• Indomaret terdekat — sekitar 250 m, kurang lebih 3 menit jalan kaki/m.test(real) && real.indexOf("Indomaret terdekat") < real.indexOf("Alfamart"), real);
+  const atm = hits("ada atm dekat sini?", "faq_nearby_place");
+  assert.ok(atm.indexOf("ATM BCA") < atm.indexOf("ATM Bank Mandiri") && atm.indexOf("ATM Bank Mandiri") < atm.indexOf("ATM BNI"), atm);
+  assert.ok(/ATM BCA — sekitar 400 m, kurang lebih 5 menit jalan kaki/.test(atm) && !/di Indomaret/.test(atm), atm);
+  for (const [m, re] of [
+    ["indomaret terdekat dimana kak?", /Indomaret/],
+    ["ada atm dekat sini?", /ATM BNI/],
+    ["apotek terdekat?", /Apotek Viva Generik/],
+    ["masjid terdekat dimana ya kak", /Nurul Ilmi/],
+    ["kalau mau ke klinik terdekat?", /Klinik Pratama/],
+    ["spbu terdekat?", /SPBU/],
+    ["gereja dekat sini ada?", /GKJ/],
+    ["halte brt terdekat dimana kak?", /Halte BRT Sampangan Timur — sekitar 100 m, kurang lebih 1–2 menit jalan kaki/],
+    ["naik trans semarang dari mana kak?", /Halte BRT Sampangan Timur/],
+    ["ada bus dekat sini?", /Halte BRT Sampangan Timur/],
+    ["transportasi umum gimana kak?", /Halte BRT Sampangan Timur/],
+  ] as const) assert.ok(re.test(hits(m, "faq_nearby_place")), m);
+  // Kategori di luar daftar & pertanyaan ketersediaan tetap ke AI.
+  assert.equal(ask("laundry terdekat dimana kak?"), null, "laundry harus ke AI, bukan alamat");
+  for (const m of ["laundry terdekat dimana kak?", "mall cafe atau apapun itu", "ada kamar tgl 5? dekat indomaret gak?"]) {
+    assert.notEqual(ask(m)?.intent, "faq_nearby_place", m);
+  }
+  for (const m of ["stasiun poncol jauh ga kak?", "ke bandara berapa menit?", "terminal bus terdekat?"]) {
+    assert.notEqual(ask(m)?.intent, "faq_nearby_place", m);
+  }
+  assert.equal(ask("stasiun poncol jauh ga kak?")?.intent, "faq_distance");
+  assert.equal(ask("ke bandara berapa menit?")?.intent, "faq_distance");
+  assert.ok(!/koridor/i.test(hits("halte brt terdekat?", "faq_nearby_place")));
+  assert.ok(prompt.includes("Alfamart Sampangan") && prompt.includes("kami cek terlebih dahulu"), "daftar tempat terdekat hilang dari prompt");
+  for (const c of NEARBY_CATEGORIES) for (const p of c.places) assert.ok(/^sekitar /.test(p.distance), p.name);
+  assert.equal(hits("ke unika berapa menit kak?", "faq_distance").includes("2,8 km"), true);
+}
