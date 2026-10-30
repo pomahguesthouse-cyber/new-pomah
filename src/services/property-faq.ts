@@ -125,6 +125,28 @@ export const EARLY_LATE_HOURLY_FEE_IDR = 25_000;
 /** Area properti, dipakai saat menjawab pertanyaan jarak. */
 export const PROPERTY_AREA = "Sampangan, Semarang";
 
+/** Alamat resmi Pomah — sumber tunggal untuk jawaban lokasi bot (bukan dari DB). */
+export const POMAH_ADDRESS = "Jl. Dewi Sartika IV No. 71, Sampangan, Semarang 50221";
+
+/**
+ * Lokasi yang SALAH dikira tamu (mis. "Pomah Guest House Lumbungsari Raya").
+ * Pomah TIDAK berada di Lumbung/Lumbungsari — bot wajib meluruskan.
+ */
+export const WRONG_LOCATION_RE = /\blumbung\s*sari\b|\blumbungsari\b|\blumbung\b/i;
+
+export const WRONG_LOCATION_CORRECTION =
+  `Sebagai info Kak, Pomah Guesthouse berlokasi di ${POMAH_ADDRESS} ya, bukan di Lumbungsari 🙏`;
+
+/** Tambahkan koreksi lokasi kalau tamu menyebut lokasi salah dan balasan belum meluruskannya. */
+export function ensureLocationCorrection(reply: string, inbound: string): string {
+  let out = reply.replace(/[^.\n]*\blumbung\s*sari\b[^.\n]*|[^.\n]*\blumbung(?:sari)?\b[^.\n]*/gi, (m) =>
+    /\bbukan\b/i.test(m) ? m : "").replace(/\n{3,}/g, "\n\n").trim();
+  if (WRONG_LOCATION_RE.test(inbound) && !/dewi\s+sartika/i.test(out)) {
+    out = `${WRONG_LOCATION_CORRECTION}\n\n${out}`.trim();
+  }
+  return out;
+}
+
 /**
  * Landmark yang jarak tempuhnya sudah diketahui pasti. Landmark DI LUAR daftar
  * ini sengaja tidak dijawab fast-path — mengarang angka jarak jauh lebih mahal
@@ -379,15 +401,14 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
 
   // — Alamat / lokasi —
   if (
-    /\b(alamat|lokasi|dimana|di mana|dmn|maps?|map|lokasinya|rute|arah|arahan|posisi|google maps)\b/i.test(raw) &&
-    address
-  ) {
+    /\b(alamat|lokasi|dimana|di mana|dmn|maps?|map|lokasinya|rute|arah|arahan|posisi|google maps)\b/i.test(raw)) {
     const mapsLink =
       mapUrl ||
       (placeId
         ? `https://www.google.com/maps/place/?q=place_id:${placeId}`
-        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`);
-    const lines = [`${opener}Alamat kami:\n📍 ${address}`, `Maps: ${mapsLink}`];
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`Pomah Guesthouse ${POMAH_ADDRESS}`)}`);
+    const wrong = WRONG_LOCATION_RE.test(raw) ? " (bukan di Lumbungsari ya Kak)" : "";
+    const lines = [`${opener}Alamat kami${wrong}:\n📍 ${POMAH_ADDRESS}`, `Maps: ${mapsLink}`];
     if (phone) lines.push(`Kalau Kakak kesulitan mencari lokasi, bisa hubungi kami di ${phone}.`);
     return { reply: lines.join("\n\n"), intent: "location_question" };
   }
