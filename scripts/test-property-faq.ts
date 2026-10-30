@@ -292,6 +292,10 @@ console.log(
   // Pertanyaan asli dari log WA 30 Okt 2026.
   const real = hits("untuk di dekat penginapan apakah ada warung atau minimarket kak?", "faq_nearby_place");
   assert.ok(/Alfamart/.test(real) && /Indomaret/.test(real), real);
+  assert.ok(/^• Indomaret terdekat — sekitar 250 m, kurang lebih 3 menit jalan kaki/m.test(real) && real.indexOf("Indomaret terdekat") < real.indexOf("Alfamart"), real);
+  const atm = hits("ada atm dekat sini?", "faq_nearby_place");
+  assert.ok(atm.indexOf("ATM BCA") < atm.indexOf("ATM Bank Mandiri") && atm.indexOf("ATM Bank Mandiri") < atm.indexOf("ATM BNI"), atm);
+  assert.ok(/ATM BCA — sekitar 400 m, kurang lebih 5 menit jalan kaki/.test(atm) && !/di Indomaret/.test(atm), atm);
   for (const [m, re] of [
     ["indomaret terdekat dimana kak?", /Indomaret/],
     ["ada atm dekat sini?", /ATM BNI/],

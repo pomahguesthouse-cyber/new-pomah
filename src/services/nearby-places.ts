@@ -28,6 +28,8 @@ export const NEARBY_CATEGORIES: ReadonlyArray<NearbyCategory> = [
     re: /\b(indomaret|alfamart|alfa\s*mart|minimarket|mini\s*market|swalayan|toko\s+kelontong)\b/i,
     standalone: true,
     places: [
+      // Sumber: Faizal (pemilik), 31 Okt 2026 — belum tercatat di OSM (<600 m).
+      { name: "Indomaret terdekat", distance: "sekitar 250 m", time: "kurang lebih 3 menit jalan kaki" },
       { name: "Alfamart Sampangan", distance: "sekitar 1,5 km", time: "kurang lebih 5 menit berkendara" },
       { name: "Indomaret Sampangan", distance: "sekitar 1,5 km", time: "kurang lebih 5 menit berkendara" },
     ],
@@ -45,6 +47,9 @@ export const NEARBY_CATEGORIES: ReadonlyArray<NearbyCategory> = [
     re: /\b(atm|bank|bni|bri|mandiri|bca|tarik\s+tunai)\b/i,
     standalone: true,
     places: [
+      // Sumber: Faizal (pemilik), 31 Okt 2026 — lokasi terpisah dari Indomaret.
+      { name: "ATM BCA", distance: "sekitar 400 m", time: "kurang lebih 5 menit jalan kaki" },
+      { name: "ATM Bank Mandiri", distance: "sekitar 400 m", time: "kurang lebih 5 menit jalan kaki" },
       { name: "ATM BNI (dekat SPBU Sampangan)", distance: "sekitar 1 km", time: "kurang lebih 3 menit berkendara" },
       { name: "Bank BRI Sampangan", distance: "sekitar 1,2 km", time: "kurang lebih 3–5 menit berkendara" },
     ],
