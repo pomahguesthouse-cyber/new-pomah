@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import {
   sendMessage,
+  sendBrochure,
   markRead,
   togglePinned,
   setAiMode,
@@ -97,6 +98,7 @@ import {
   validateClientPick,
 } from "@/services/wa-outbound-attachment";
 import { ReplyComposer } from "@/admin/modules/whatsapp/wa-reply-composer";
+import { canSendBrochure } from "@/admin/modules/whatsapp/wa-brochure-send";
 import {
   isWaChatFixtureRequest,
   waChatFixtureThread,
@@ -384,6 +386,9 @@ export function WhatsAppPage({
   initialSearch?: string;
 }) {
   const sendFn = useServerFn(sendMessage);
+  const sendBrochureFn = useServerFn(sendBrochure);
+  const [brochureSending, setBrochureSending] = useState(false);
+  const brochureInflight = useRef(false);
   const markReadFn = useServerFn(markRead);
   const pinFn = useServerFn(togglePinned);
 
@@ -875,6 +880,36 @@ export function WhatsAppPage({
     [current, metaWindowClosed, sendFn, qc],
   );
 
+  const onSendBrochure = useCallback(() => {
+    if (
+      brochureInflight.current ||
+      !canSendBrochure({ hasThread: !!current, metaWindowClosed, sending: brochureSending })
+    ) {
+      return;
+    }
+    const threadId = current as string;
+    brochureInflight.current = true;
+    setBrochureSending(true);
+    stickRef.current = true;
+    void sendBrochureFn({ data: { threadId } })
+      .then((res) => {
+        if (res.ok) {
+          toast.success(res.delivery === "link" ? "Brosur terkirim (sebagai tautan)" : "Brosur terkirim");
+        } else {
+          toast.error(res.error);
+        }
+      })
+      .catch((e: unknown) => {
+        toast.error(e instanceof Error ? e.message : "Brosur gagal dikirim.");
+      })
+      .finally(() => {
+        brochureInflight.current = false;
+        setBrochureSending(false);
+        void qc.invalidateQueries({ queryKey: ["wa-thread", threadId] });
+        void qc.invalidateQueries({ queryKey: ["wa-threads"] });
+      });
+  }, [current, metaWindowClosed, brochureSending, sendBrochureFn, qc]);
+
   const retryRef = useRef<(message: any) => void>(() => {});
   retryRef.current = (message: any) => {
     if (!canRetryMessage(message)) return;
@@ -1328,6 +1363,8 @@ export function WhatsAppPage({
               onPickFile={(list) => void onPickFile(list)}
               onClearAttachment={clearAttachment}
               fileAccept={WA_FILE_INPUT_ACCEPT}
+              onSendBrochure={onSendBrochure}
+              brochureSending={brochureSending}
             />
           </>
         ) : (

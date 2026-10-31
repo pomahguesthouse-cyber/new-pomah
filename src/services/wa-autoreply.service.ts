@@ -4,6 +4,7 @@
  */
 import { stripEchoedGuestQuestions, stripUnrequestedPriceList, trimHistoryAtGap } from "@/services/wa-autoreply/reply-relevance";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
+import { loadPublicBrochure } from "@/services/wa-autoreply/brochure-loader";
 import { saveOutboundMessage, updateThreadAutoReplyMeta } from "@/repositories/message.repository";
 import { sendWhatsAppMessage, markWaSeen, setWaTyping } from "@/services/whatsapp.service";
 import { isMetaConfigured } from "@/services/whatsapp-meta.service";
@@ -596,34 +597,6 @@ async function buildTonightPriceReply(params: {
 
 /** Hard cap on persisted `short_summary` length (chars). Prevents prompt bloat. */
 export { regenerateThreadSummary };
-
-/**
- * Brosur PDF publik untuk dikirim ke tamu. Lihat `brochure-source.ts` untuk
- * urutan sumber (env → sop_documents bucket `brosur` → Storage bucket `brosur`).
- */
-async function loadPublicBrochure(): Promise<BrochureFile | null> {
-  const supabaseUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
-  const envUrl = process.env.BROCHURE_PDF_URL ?? "";
-  if (!supabaseUrl && !envUrl) return null;
-  const direct = pickBrochure({ supabaseUrl, envUrl });
-  if (direct) return direct;
-  const [{ data: docs }, storageList] = await Promise.all([
-    (supabaseAdmin as any)
-      .from("sop_documents")
-      .select("name, file_path, storage_bucket")
-      .eq("storage_bucket", BROCHURE_BUCKET)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    (supabaseAdmin as any).storage
-      .from(BROCHURE_BUCKET)
-      .list("", { limit: 50, sortBy: { column: "created_at", order: "desc" } })
-      .catch((e: unknown) => ({ data: null, error: e })),
-  ]);
-  if (storageList?.error) {
-    console.warn("[Autoreply] brosur bucket list failed:", storageList.error);
-  }
-  return pickBrochure({ supabaseUrl, docs: docs ?? [], storageObjects: storageList?.data ?? [] });
-}
 
 /** Daftar file brosur untuk `pickAttachment`, termasuk bila retrieval SOP dilewati. */
 async function loadBrosurAttachmentFiles(): Promise<{ name: string; url: string }[]> {
