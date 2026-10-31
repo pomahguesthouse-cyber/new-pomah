@@ -1,6 +1,6 @@
 import { memo, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { WA_KEYBOARD_TEXT_PROPS } from "./wa-keyboard";
-import { FileText, Paperclip, Send, X } from "lucide-react";
+import { BookOpen, FileText, Loader2, Paperclip, Send, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { formatFileSize } from "@/services/wa-outbound-attachment";
@@ -29,6 +29,8 @@ type ReplyComposerProps = {
   onPickFile: (list: FileList | null) => void;
   onClearAttachment: () => void;
   fileAccept: string;
+  onSendBrochure?: () => void;
+  brochureSending?: boolean;
 };
 
 /**
@@ -46,6 +48,8 @@ export const ReplyComposer = memo(function ReplyComposer({
   onPickFile,
   onClearAttachment,
   fileAccept,
+  onSendBrochure,
+  brochureSending = false,
 }: ReplyComposerProps) {
     const [draft, setDraft] = useState("");
     const draftRef = useRef("");
@@ -215,6 +219,14 @@ export const ReplyComposer = memo(function ReplyComposer({
               title={metaWindowClosed ? metaWindowMessage : "Lampirkan berkas"}
               onPick={() => fileRef.current?.click()}
             />
+            {onSendBrochure && (
+              <BrochureButton
+                disabled={metaWindowClosed || brochureSending}
+                sending={brochureSending}
+                title={metaWindowClosed ? metaWindowMessage : "Kirim Brosur"}
+                onSend={onSendBrochure}
+              />
+            )}
             <Textarea
               ref={textareaRef}
               placeholder="Ketik balasan…"
@@ -267,6 +279,14 @@ export const ReplyComposer = memo(function ReplyComposer({
                 title={metaWindowClosed ? metaWindowMessage : "Lampirkan berkas"}
                 onPick={() => fileRef.current?.click()}
               />
+              {onSendBrochure && (
+                <BrochureButton
+                  disabled={metaWindowClosed || brochureSending}
+                  sending={brochureSending}
+                  title={metaWindowClosed ? metaWindowMessage : "Kirim Brosur"}
+                  onSend={onSendBrochure}
+                />
+              )}
               <p className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted-foreground">
                 {draft.length} chars
               </p>
@@ -303,6 +323,34 @@ function AttachButton({
       onClick={onPick}
     >
       <Paperclip className="h-5 w-5" />
+    </button>
+  );
+}
+
+function BrochureButton({
+  disabled,
+  sending,
+  title,
+  onSend,
+}: {
+  disabled: boolean;
+  sending: boolean;
+  title: string;
+  onSend: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="inline-flex h-11 w-11 min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-full text-[#008069] hover:bg-accent disabled:opacity-40 dark:text-emerald-400"
+      style={{ touchAction: "manipulation" }}
+      aria-label="Kirim Brosur"
+      aria-busy={sending}
+      title={sending ? "Mengirim brosur…" : title}
+      disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onSend}
+    >
+      {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <BookOpen className="h-5 w-5" />}
     </button>
   );
 }

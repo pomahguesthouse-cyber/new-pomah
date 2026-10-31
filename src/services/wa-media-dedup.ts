@@ -126,6 +126,7 @@ export async function loadThreadBrochureSendTimes(
       const logged =
         body === BROCHURE_CAPTION ||
         md.source === "bot_brochure" ||
+        md.source === "admin_brochure" ||
         md.agent_key === "brochure-fast-path";
       if (!logged || md.send_status === "failed") continue;
       const at = Date.parse(row.sent_at ?? "");

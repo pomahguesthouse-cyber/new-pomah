@@ -390,6 +390,116 @@ export const sendMessage = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+/**
+ * Tombol "Kirim Brosur" admin: kirim PDF brosur (bucket `brosur`) sebagai
+ * dokumen WhatsApp lewat jalur Meta yang sama dengan kiriman manual staf.
+ * Tidak dibatasi anti-spam bot; tetap dicatat supaya bot tidak mengirim ulang.
+ */
+export const sendBrochure = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ threadId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: thread } = await context.supabase
+      .from("whatsapp_threads")
+      .select("phone")
+      .eq("id", data.threadId)
+      .single();
+    if (!thread) throw new Error("Thread not found");
+
+    const { loadPublicBrochure } = await import("@/services/wa-autoreply/brochure-loader");
+    const { BROCHURE_CAPTION } = await import("@/services/wa-media-dedup");
+    const { adminBrochureLinkText, adminBrochureMetadata } = await import(
+      "@/admin/modules/whatsapp/wa-brochure-send"
+    );
+    const file = await loadPublicBrochure().catch(() => null);
+    if (!file) {
+      return { ok: false as const, error: "File brosur tidak ditemukan di bucket brosur." };
+    }
+
+    const insert = async (
+      body: string,
+      delivery: "document" | "link",
+      sendStatus: "sent" | "failed" | "local_only",
+      wppId: string | null,
+      errorText?: string,
+    ) => {
+      const { error } = await context.supabase.from("whatsapp_messages").insert({
+        thread_id: data.threadId,
+        direction: "out",
+        from_me: true,
+        body,
+        wpp_id: wppId,
+        metadata: {
+          ...adminBrochureMetadata({ fileName: file.name, url: file.url, delivery }),
+          send_status: sendStatus,
+          ...(errorText ? { error: errorText.slice(0, 500) } : {}),
+        },
+      } as any);
+      if (error) throw error;
+    };
+    const idOf = (r: { messageId?: unknown }) =>
+      typeof r.messageId === "string" && r.messageId.trim() ? r.messageId.trim() : null;
+
+    let delivery: "document" | "link" = "document";
+    const { isMetaConfigured } = await import("@/services/whatsapp-meta.service");
+    if (isMetaConfigured()) {
+      const doc = await sendWhatsAppMessage(
+        "",
+        thread.phone,
+        BROCHURE_CAPTION,
+        file.url,
+        file.name,
+        { mediaType: "document", mimetype: "application/pdf" },
+      );
+      if (doc.ok) {
+        await insert(BROCHURE_CAPTION, "document", "sent", idOf(doc));
+      } else {
+        const reengage = isMetaReengagementError(doc);
+        if (reengage) {
+          const message = adminSendFailureMessage(true, doc.error);
+          await insert(BROCHURE_CAPTION, "document", "failed", null, message);
+          return { ok: false as const, error: message };
+        }
+        console.warn("[Admin WhatsApp] brosur document failed, fallback link:", doc.error);
+        const text = adminBrochureLinkText(file.url);
+        const link = await sendWhatsAppMessage("", thread.phone, text);
+        if (!link.ok) {
+          const message = adminSendFailureMessage(isMetaReengagementError(link), link.error);
+          await insert(text, "link", "failed", null, message);
+          return { ok: false as const, error: message };
+        }
+        delivery = "link";
+        await insert(text, "link", "sent", idOf(link));
+      }
+    } else {
+      await insert(BROCHURE_CAPTION, "document", "local_only", null);
+    }
+
+    const pauseMs = await resolveHumanTakeoverMs(context.supabase);
+    let existingPause: string | null = null;
+    try {
+      const { data: th } = await (context.supabase as any)
+        .from("whatsapp_threads")
+        .select("ai_paused_until")
+        .eq("id", data.threadId)
+        .maybeSingle();
+      existingPause = (th as { ai_paused_until?: string | null } | null)?.ai_paused_until ?? null;
+    } catch {
+      existingPause = null;
+    }
+    const staffPause = pauseMs > 0 ? new Date(Date.now() + pauseMs).toISOString() : null;
+    await context.supabase
+      .from("whatsapp_threads")
+      .update({
+        last_message_preview: threadPreview(BROCHURE_CAPTION, file.name),
+        last_message_at: new Date().toISOString(),
+        unread_count: 0,
+        ai_paused_until: laterPause(existingPause, staffPause),
+      } as any)
+      .eq("id", data.threadId);
+    return { ok: true as const, delivery };
+  });
+
 export const markRead = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ threadId: z.string().uuid() }).parse(d))
