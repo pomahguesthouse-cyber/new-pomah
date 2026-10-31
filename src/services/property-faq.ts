@@ -32,6 +32,7 @@ import { isGeneralFacilityQuestion } from "@/lib/guest-media-request";
 import { buildRoomSharingReply } from "@/services/room-sharing-policy";
 import { detectFacilityTopic } from "@/services/room-facility-kb";
 import { findNearbyCategory, formatNearbyReply } from "./nearby-places";
+import { buildRoomComparisonReply, isRoomComparisonQuestion } from "./room-comparison";
 
 export interface PropertyFaqReply {
   reply: string;
@@ -569,6 +570,12 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
         "kabari kami dulu ya supaya bisa dibantu arahkan.",
       intent: "faq_parking",
     };
+  }
+
+  // — Perbandingan tipe kamar — data room_types + tawaran brosur (31 Okt 2026).
+  if (isRoomComparisonQuestion(raw)) {
+    const reply = buildRoomComparisonReply(raw, rooms as never[]);
+    if (reply) return { reply, intent: "faq_room_compare" };
   }
 
   // — Fasilitas: per tipe kamar / perbandingan —

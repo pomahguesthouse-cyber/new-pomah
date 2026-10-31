@@ -324,3 +324,49 @@ console.log(
   for (const c of NEARBY_CATEGORIES) for (const p of c.places) assert.ok(/^sekitar /.test(p.distance), p.name);
   assert.equal(hits("ke unika berapa menit kak?", "faq_distance").includes("2,8 km"), true);
 }
+
+// ─── G. Perbandingan tipe kamar + tawaran brosur (31 Okt 2026) ─────────────
+{
+  const rc = await import("../src/services/room-comparison");
+  // Bentuk data mengikuti room_types produksi (tanpa harga).
+  const DB_ROOMS = [
+    { name: "Single", amenities: ["AC", "WI-FI", "Dapur Bersama"], size_sqm: 15, floor_info: "2", bed_type: "Single", bed_size: "120x200 cm Single", max_occupancy: 1, extrabed_capacity: 1, bedrooms: 1, bathrooms: 1 },
+    { name: "Deluxe", amenities: ["WIfi", "AC", "Shower", "Dapur Bersama", "View Taman"], size_sqm: 18, floor_info: "Lantai 2", bed_type: "Queen", bed_size: "160 x 200 cm", max_occupancy: 2, extrabed_capacity: 1, bedrooms: 1, bathrooms: 1 },
+    { name: "Grand Deluxe", amenities: ["AC", "WI-FI"], size_sqm: 20, floor_info: "Lantai 1", bed_type: "Double", bed_size: "200 x 200 cm", max_occupancy: 2, extrabed_capacity: 1, bedrooms: 1, bathrooms: 1 },
+    { name: "Family Suite 100", amenities: ["2. K. Tidur", "Wi-Fi", "AC", "Smart TV", "Mini Kitchen", "R. Keluarga"], size_sqm: 60, floor_info: "1", bed_type: "Double", bed_size: "180 x 200 cm", max_occupancy: 4, extrabed_capacity: 2, bedrooms: 2, bathrooms: 2 },
+    { name: "Family Room 222", amenities: ["WiFi", "2 K. Tidur", "2 K. Mandi", "R. Keluarga"], size_sqm: 50, floor_info: "2", bed_type: "Queen", bed_size: "180 x 200 cm", max_occupancy: 4, extrabed_capacity: 2, bedrooms: 2, bathrooms: 2 },
+  ];
+  const cmp = (m: string) => buildPropertyFaqReply({ message: m, property: PROPERTY, rooms: DB_ROOMS as never[], mode: "late", greetingUsed: true });
+  // Pertanyaan asli dari log WA (11 Okt, 11 Agu, 6 Sep, 31 Okt).
+  const gd = cmp("Beda antara deluxe dan grand deluxe apa ya kak");
+  assert.equal(gd?.intent, "faq_room_compare");
+  assert.ok(/Grand Deluxe\* lebih luas \(20 m² vs 18 m²\)/.test(gd!.reply), gd!.reply);
+  assert.ok(gd!.reply.trim().endsWith(rc.ROOM_BROCHURE_OFFER), gd!.reply);
+  assert.ok(!/Rp|\d{3}\.000/.test(gd!.reply), "perbandingan tidak boleh menyebut harga");
+  const fam = cmp("Bedanya family suite sama family room apa?");
+  assert.equal(fam?.intent, "faq_room_compare");
+  assert.ok(/hanya \*Family Suite 100\* yang punya dapur sendiri/.test(fam!.reply) && /60 m² vs 50 m²/.test(fam!.reply), fam!.reply);
+  assert.ok(/Family Room 222\*:[^\n]*dapur bersama/.test(fam!.reply), fam!.reply);
+  const sm = cmp("kakak maaf ma nanya bedanya deluxe sm grand deluxe dimananya yaa?");
+  assert.equal(sm?.intent, "faq_room_compare");
+  const generic = cmp("bedanya apa kak ?");
+  assert.equal(generic?.intent, "faq_room_compare");
+  for (const n of ["Single", "Deluxe", "Grand Deluxe", "Family Suite 100", "Family Room 222"]) assert.ok(generic!.reply.includes(`*${n}*`), n);
+  assert.ok(/2 handuk/.test(generic!.reply));
+  for (const m of ["Kak, boleh tau dulu untuk perbedaan kamarnya ga ya", "mana yang lebih luas kak, deluxe atau grand deluxe?", "bedanya family suite 100 sama family room 222 apa ya ka"]) {
+    assert.ok(rc.isRoomComparisonQuestion(m), m);
+  }
+  for (const m of ["bedanya harga weekend sama weekday?", "check in jam berapa?", "ada kamar tgl 5?", "beda harga di traveloka?"]) {
+    assert.ok(!rc.isRoomComparisonQuestion(m), m);
+  }
+  // Tawaran → "mau" → brosur.
+  const offer = { direction: "out", body: gd!.reply };
+  for (const yes of ["mau kak", "boleh", "iya kak kirim", "ya", "boleh kak, kirim brosurnya", "Mau dong 🙏"]) {
+    assert.ok(rc.isBrochureOfferAcceptance([{ direction: "in", body: "x" }, offer, { direction: "in", body: yes }]), yes);
+  }
+  for (const no of ["tidak usah kak", "nanti saja", "kalau tanggal 5 ada?", "ga usah"]) {
+    assert.ok(!rc.isBrochureOfferAcceptance([offer, { direction: "in", body: no }]), no);
+  }
+  assert.ok(!rc.isBrochureOfferAcceptance([{ direction: "out", body: "Harga Deluxe ..." }, { direction: "in", body: "mau" }]));
+  assert.ok(prompt.includes("PERBEDAAN KAMAR (WAJIB)") && prompt.includes("Mau dikirimkan, Kak?"));
+}

@@ -45,6 +45,11 @@ import { getBookingState } from "@/ai/state-machine/booking-machine";
 import { STAFF_REPLY_SILENCE_MS, staffSilenceUntil } from "@/services/wa-autoreply/staff-silence";
 import { planPaymentProofGuestReply } from "@/services/wa-inbound-media";
 import { buildPropertyFaqReply, ensureLocationCorrection } from "@/services/property-faq";
+import {
+  buildRoomComparisonReply,
+  isBrochureOfferAcceptance,
+  isRoomComparisonQuestion,
+} from "@/services/room-comparison";
 import { buildRoomSharingReply } from "@/services/room-sharing-policy";
 import {
   AI_TIMEOUT_MS,
@@ -59,6 +64,7 @@ import {
 import { createQuickAckGate, type QuickAckGate } from "@/services/wa-autoreply/quick-ack-gate";
 import {
   MEDIA_FAST_PATH_ALREADY_SENT_REPLY,
+  MEDIA_FAST_PATH_BROCHURE_REPLY,
   MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY,
   adaptMediaSlotQuestion,
   decideBrochureRepeat,
@@ -1186,7 +1192,7 @@ export async function executeAutoreplyForPhone(
     (supabasePublic as any)
       .from("room_types")
       .select(
-        "id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate, hero_image_url, images",
+        "id, name, base_rate, capacity, max_occupancy, bed_type, bed_size, size_sqm, bedrooms, bathrooms, floor_info, description, amenities, extrabed_capacity, extrabed_rate, hero_image_url, images",
       )
       .order("base_rate"),
   ]);
@@ -1379,7 +1385,9 @@ export async function executeAutoreplyForPhone(
   // Diperiksa atas SELURUH burst pesan tamu yang belum terjawab, bukan hanya
   // pesan terakhir (insiden 9 Agu 2026 — "apakah ada gambarnya kak?" disusul
   // "harganya berapa ya ka" membuat permintaan foto tak terlihat).
-  const wantsMedia = burstWantsMedia(rollingMessages);
+  // Tamu menjawab "ya/mau/boleh" atas tawaran brosur dari jawaban perbandingan kamar.
+  const brochureOfferAccepted = isBrochureOfferAcceptance(rollingMessages);
+  const wantsMedia = burstWantsMedia(rollingMessages) || brochureOfferAccepted;
   const mediaBurstText = inboundBurstText(rollingMessages);
   const facilityAsk = isGeneralFacilityQuestion(mediaBurstText);
   const deferMediaToAi = shouldAnswerMediaWithAi(mediaBurstText);
@@ -1395,9 +1403,11 @@ export async function executeAutoreplyForPhone(
       const contextRoom = roomTypeFromConversation(bookingState);
       const gallery = (rooms ?? []) as any[];
       const cannedPlan =
-        !facilityAsk && !deferMediaToAi
-          ? planMediaFastPath(rollingMessages, gallery, { roomType: contextRoom })
-          : null;
+        brochureOfferAccepted
+          ? ({ kind: "brochure", reply: MEDIA_FAST_PATH_BROCHURE_REPLY, photoFallback: planRoomPhotos("", gallery) } as const)
+          : !facilityAsk && !deferMediaToAi
+            ? planMediaFastPath(rollingMessages, gallery, { roomType: contextRoom })
+            : null;
       const threadSends = await loadThreadBrochureSendTimes(c.thread_id);
       brochureRepeat = decideBrochureRepeat({
         text: mediaBurstText,
@@ -1611,6 +1621,27 @@ export async function executeAutoreplyForPhone(
       }
     } catch (e) {
       console.warn("[Autoreply] facility KB fast-path failed (falling back):", e);
+    }
+  }
+
+  // Perbandingan tipe kamar (31 Okt 2026): dijawab dari data room_types dan
+  // ditutup tawaran brosur — SEBELUM jalur availability, yang dulu menelan
+  // "bedanya family suite sama family room" menjadi balasan harga.
+  if (!reply && !isManager && !multiPendingInbound && !wantsMedia && lastMessage && isRoomComparisonQuestion(lastMessage)) {
+    const comparison = buildRoomComparisonReply(lastMessage, (rooms ?? []) as any[], {
+      includeOffer: !brochureDelivered,
+    });
+    if (comparison) {
+      adoptReply(comparison);
+      orchResult = {
+        agentKey: "front-office",
+        intent: "faq_room_compare",
+        routingConfidence: 1,
+        escalated: false,
+        toolsUsed: ["room-comparison"],
+        fastPath: true,
+      };
+      console.info(`[Autoreply] Room comparison fast-path for ${phone.slice(-6)}`);
     }
   }
 
