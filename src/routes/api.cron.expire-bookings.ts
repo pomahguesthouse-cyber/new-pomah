@@ -35,7 +35,9 @@ async function handle(): Promise<Response> {
     .select("id, reference_code")
     .eq("status", "pending")
     .eq("payment_status", "unpaid")
-    .lt("expires_at", nowIso);
+    .lt("expires_at", nowIso)
+    // Bayar di tempat tidak pernah di-expire (keputusan pemilik 31 Okt 2026).
+    .or("payment_method.is.null,payment_method.not.in.(onsite,cash,pay_at_checkin,bayar_di_tempat)");
 
   if (findErr) {
     console.error("[expire-bookings] query failed:", findErr.message);

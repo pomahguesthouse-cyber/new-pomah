@@ -8,7 +8,7 @@ import { markBookingDraft, saveBookingDraft } from "@/services/booking-draft.ser
 import { runDeferred } from "@/lib/cf-context";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { formatNightlyBreakdownLines, hasVaryingRates } from "@/services/pricing/price-quote";
-import { FULL_PAYMENT_POLICY_TEXT, requiresFullPayment } from "@/lib/deposit-policy";
+import { mentionsPayAtCheckin, requiresFullPayment } from "@/lib/deposit-policy";
 import { capAvailabilityWithStopSell } from "@/services/pricing/stop-sell-availability";
 import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
@@ -134,7 +134,8 @@ export interface BookingContext {
   /** State sebelumnya saat bot sedang menunggu konfirmasi cancel dua langkah. */
   cancelPreviousState?: BookingState;
   /** Skema pembayaran yang dipilih tamu: 'full' = lunas, 'dp' = uang muka dulu. */
-  paymentType?: "full" | "dp";
+  /** "onsite" = bayar di tempat saat check-in (diperbolehkan sejak 31 Okt 2026). */
+  paymentType?: "full" | "dp" | "onsite";
   /** Jumlah DP yang disepakati (nominal, bukan persen). Diisi saat paymentType='dp'. */
   dpAmount?: number;
   /** Pending override yang menunggu konfirmasi "Ya/Tidak" dari tamu. */
@@ -626,8 +627,10 @@ function buildBookingSummary(
   const ratePrefix = overrides?.hasDynamicBreakdown ? "rata-rata " : "";
   const transfer = formatTransferAccountLine();
   const paymentLine =
-    requiresFullPayment(nights)
-        ? `• Pembayaran: Wajib lunas${grandTotal > 0 ? ` ${fmtRp(grandTotal)}` : ""} via transfer ke ${transfer} (${FULL_PAYMENT_POLICY_TEXT}, tanpa DP)\n`
+    context.paymentType === "onsite"
+      ? `• Pembayaran: Bayar di tempat saat check-in${grandTotal > 0 ? ` ${fmtRp(grandTotal)}` : ""}\n`
+      : requiresFullPayment(nights)
+        ? `• Pembayaran: Transfer lunas${grandTotal > 0 ? ` ${fmtRp(grandTotal)}` : ""} ke ${transfer} (tanpa DP), atau bisa bayar di tempat saat check-in\n`
       : context.paymentType === "dp"
         ? `• Pembayaran: DP${context.dpAmount ? ` ${fmtRp(context.dpAmount)}` : " dulu"} (transfer ke ${transfer})\n`
         : context.paymentType === "full"
@@ -2438,11 +2441,28 @@ export async function processBookingState(
     const capacityReply = await respondToOverCapacity(ctx, phone, context, message);
     if (capacityReply) return capacityReply;
   }
+  // Tamu memilih bayar di tempat saat ringkasan booking: catat lalu tampilkan
+  // ringkasan terbaru untuk dikonfirmasi (bukan langsung membuat booking).
+  if (
+    state === "CONFIRMING_BOOKING" &&
+    mentionsPayAtCheckin(message) &&
+    !/\?|\b(bisa|boleh|apakah|apa)\b/i.test(message)
+  ) {
+    context.paymentType = "onsite";
+    context.dpAmount = undefined;
+    const resolvedOnsite = await applyResolvedRatesToContext(ctx, context);
+    await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+    const summary = await buildBookingSummaryFromResolved(ctx, context, resolvedOnsite);
+    if (summary.reply) {
+      summary.reply = `Bisa Kak, pembayarannya bayar di tempat saat check-in ya 🙏\n\n${summary.reply}`;
+    }
+    return summary;
+  }
   const paymentQuestion = isGuestPaymentQuestion(message);
   if (paymentQuestion && state === "CONFIRMING_BOOKING" && !CONFIRM_PATTERN.test(message)) {
     const stayNights =
       context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : null;
-    if (requiresFullPayment(stayNights)) {
+    if (requiresFullPayment(stayNights) && context.paymentType !== "onsite") {
       context.paymentType = "full";
       context.dpAmount = undefined;
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
@@ -3091,7 +3111,7 @@ export async function processBookingState(
     const dpMatch = message.match(/\b(dp|down\s*payment|uang\s*muka|dp\s*dulu|bayar\s*sebagian)\b/i);
     const fullPayMatch = message.match(/\b(lunas|full\s*pay|bayar\s*penuh|langsung\s*lunas)\b/i);
     if (isGuestPaymentQuestion(message) && !CONFIRM_PATTERN.test(message)) {
-      if (requiresFullPayment(stayNights)) {
+      if (requiresFullPayment(stayNights) && context.paymentType !== "onsite") {
         context.paymentType = "full";
         context.dpAmount = undefined;
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
@@ -3107,7 +3127,7 @@ export async function processBookingState(
     }
     if (requiresFullPayment(stayNights)) {
       // 1–2 malam: wajib lunas via transfer, permintaan DP tidak berlaku.
-      if (context.paymentType !== "full" || context.dpAmount !== undefined) {
+      if ((context.paymentType !== "full" && context.paymentType !== "onsite") || context.dpAmount !== undefined) {
         context.paymentType = "full";
         context.dpAmount = undefined;
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);

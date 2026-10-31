@@ -1,10 +1,11 @@
 /**
  * Owner payment policy (16 Oct 2026): "untuk pemesanan 2 malam ke bawah harus lunas".
  *
- *   • 1–2 nights  → paid in full by transfer before arrival, no 50% DP option.
- *   • Pay-at-check-in (bayar di tempat) is disabled for new bookings (owner
- *     decision 16 Oct 2026). Existing bookings marked onsite keep displaying so.
- *   • 3+ nights  → existing rule: DP 50% (or pay in full).
+ *   • Transfer, 1–2 nights → paid in full before arrival, no 50% DP option.
+ *   • Transfer, 3+ nights  → DP 50% (or pay in full).
+ *   • Bayar di tempat (pay at check-in) is allowed for ALL guests again
+ *     (owner decision 31 Oct 2026). Such bookings carry payment_method='onsite',
+ *     have no payment deadline (expires_at null) and are never auto-expired.
  *
  * Every place that decides or communicates the deposit must use these helpers.
  */
@@ -16,7 +17,7 @@ export const DEPOSIT_RATIO = 0.5;
 export const DEPOSIT_PERCENT = Math.round(DEPOSIT_RATIO * 100);
 
 /** Guest-facing policy sentence. */
-export const FULL_PAYMENT_POLICY_TEXT = "pemesanan 1–2 malam wajib lunas";
+export const FULL_PAYMENT_POLICY_TEXT = "pembayaran transfer untuk pemesanan 1–2 malam dibayar lunas";
 
 function validNights(nights: number | null | undefined): number | null {
   const n = Number(nights);
@@ -35,9 +36,28 @@ export function allowsDeposit(nights: number | null | undefined): boolean {
   return n != null && n > FULL_PAYMENT_MAX_NIGHTS;
 }
 
-/** Pay-at-check-in is disabled for every new booking (owner decision 16 Oct 2026). */
+/** Bayar di tempat diperbolehkan untuk semua tamu (keputusan pemilik 31 Okt 2026). */
 export function allowsPayAtCheckin(_nights?: number | null): boolean {
-  return false;
+  return true;
+}
+
+/** Nilai bookings.payment_method untuk bayar di tempat. */
+export const ONSITE_PAYMENT_METHOD = "onsite";
+
+/** Kalimat opsi bayar di tempat untuk tamu. */
+export const PAY_AT_CHECKIN_TEXT = "bisa juga bayar di tempat saat check-in";
+
+/** True bila payment_method menandai bayar di tempat (termasuk nilai lama). */
+export function isOnsitePaymentMethod(method: string | null | undefined): boolean {
+  const m = String(method ?? "").trim().toLowerCase();
+  return m === "onsite" || m === "cash" || m === "pay_at_checkin" || m === "bayar_di_tempat";
+}
+
+/** Tamu memilih bayar di tempat ("bayar di tempat ya", "cash saat check-in"). */
+export function mentionsPayAtCheckin(message: string): boolean {
+  return /\b(bayar(?:nya)?\s+(?:di\s+tempat|di\s+lokasi|langsung\s+di\s+tempat|pas\s+(?:datang|check[\s-]?in|sampai)|saat\s+(?:datang|check[\s-]?in|tiba))|lunas\s+di\s+tempat|cash\s+(?:di\s+tempat|saat\s+check[\s-]?in|pas\s+datang)|cod)\b/i.test(
+    message,
+  );
 }
 
 /**

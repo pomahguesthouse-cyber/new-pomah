@@ -342,8 +342,8 @@ export function formatStaffPaymentLine(input: StaffPaymentInput): string {
   const method = String(input.paymentMethod ?? "").trim().toLowerCase();
   const status = String(input.paymentStatus ?? "").toLowerCase();
 
-  // Bayar di tempat sudah tidak ditawarkan (16 Okt 2026). Hanya booking lama
-  // yang eksplisit ditandai onsite/cash yang masih tampil "Bayar di tempat".
+  // Bayar di tempat diperbolehkan lagi (31 Okt 2026); booking bertanda
+  // onsite/cash tampil "Bayar di tempat".
   if (paid <= 0 && isMarkedPayAtCheckin(method) && !isExplicitTransfer(method)) {
     return "Bayar di tempat";
   }

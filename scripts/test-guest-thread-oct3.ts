@@ -380,19 +380,19 @@ assert.equal(conflicting.accountNumber, OFFICIAL_TRANSFER_ACCOUNT.accountNumber)
 assert.equal(conflicting.bankName, "BCA");
 
 const oneNight = buildPaymentPolicyAnswer({ nights: 1, totalPrice: 350000 });
-// 16 Okt 2026: bayar di tempat dinonaktifkan; 1 malam wajib transfer lunas sebelum kedatangan.
-assert.match(oneNight, /pemesanan 1–2 malam wajib lunas/);
-assert.match(oneNight, /sebelum kedatangan/);
-assert.doesNotMatch(oneNight, /bayar langsung di tempat|lunas di tempat/i);
+// 31 Okt 2026: bayar di tempat diperbolehkan; transfer 1–2 malam tetap lunas.
+assert.match(oneNight, /bayar di tempat saat check-in/);
+assert.match(oneNight, /dibayar lunas/);
 assert.match(oneNight, /0095584379/);
 assert.match(oneNight, /Faizal Abdurachman/);
-assert.match(oneNight, /tidak ada opsi DP/i);
+assert.match(oneNight, /tanpa DP/i);
 assert.doesNotMatch(oneNight, /tidak bisa bayar di tempat/i);
 assert.doesNotMatch(oneNight, /DP dulu 50%/);
 
-// Kebijakan 16 Okt 2026: pemesanan 1–2 malam wajib lunas; DP 50% hanya 3+ malam.
+// Transfer 1–2 malam lunas; DP 50% hanya 3+ malam; bayar di tempat selalu boleh.
 const twoNights = buildPaymentPolicyAnswer({ nights: 2, totalPrice: 700000 });
-assert.match(twoNights, /pemesanan 1–2 malam wajib lunas/);
+assert.match(twoNights, /dibayar lunas/);
+assert.match(twoNights, /bayar di tempat/);
 assert.doesNotMatch(twoNights, /DP dulu 50%/);
 assert.match(twoNights, /Rp700\.000/);
 const threeNights = buildPaymentPolicyAnswer({ nights: 3, totalPrice: 1050000 });
@@ -410,8 +410,7 @@ const faqOne = buildPropertyFaqReply({
   mode: "early",
 });
 assert.equal(faqOne?.intent, "faq_payment_policy");
-assert.match(faqOne?.reply ?? "", /wajib lunas/i);
-assert.doesNotMatch(faqOne?.reply ?? "", /bayar langsung di tempat/i);
+assert.match(faqOne?.reply ?? "", /bayar di tempat saat check-in/i);
 assert.match(faqOne?.reply ?? "", /0095584379/);
 assert.doesNotMatch(faqOne?.reply ?? "", /tidak bisa bayar di tempat/i);
 assert.doesNotMatch(faqOne?.reply ?? "", /123/);
@@ -457,9 +456,8 @@ const invoiceOne = buildInvoicePaymentLines({
   bankDetails: "\n\nTransfer Pembayaran:\nBANK LAMA",
 });
 assert.match(invoiceOne, /tanpa DP/);
-assert.match(invoiceOne, /pemesanan 1–2 malam wajib lunas/);
+assert.match(invoiceOne, /lunas via transfer/);
 assert.match(invoiceOne, /Menunggu pembayaran/);
-assert.doesNotMatch(invoiceOne, /di tempat/);
 const invoiceTwo = buildInvoicePaymentLines({
   paymentStatus: "unpaid",
   paidAmount: 0,
@@ -482,8 +480,15 @@ assert.match(invoiceTwo, /dibatalkan/);
       baseContext({ checkOut: "2026-10-11", adults: 2, totalPrice: 350000 }),
     ),
   );
-  assert.match(ask.reply ?? "", /wajib lunas/i);
-  assert.doesNotMatch(ask.reply ?? "", /bayar langsung di tempat/i);
+  assert.match(ask.reply ?? "", /bayar di tempat saat check-in/i);
+  const onsitePick = await processBookingState(
+    ctxOf(db) as any,
+    WA,
+    "bayar di tempat ya kak",
+    record("CONFIRMING_BOOKING", baseContext({ checkOut: "2026-10-11", adults: 2, totalPrice: 350000 })),
+  );
+  assert.match(onsitePick.reply ?? "", /Pembayaran: Bayar di tempat saat check-in/);
+  assert.doesNotMatch(onsitePick.reply ?? "", /belum bisa bayar di tempat|Booking Kakak sudah berhasil/);
   assert.match(ask.reply ?? "", /0095584379/);
   assert.doesNotMatch(ask.reply ?? "", /tidak bisa bayar di tempat/i);
   assert.doesNotMatch(ask.reply ?? "", /DP dulu 50%/);
