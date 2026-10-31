@@ -23,7 +23,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider
-      className={cn("admin-theme", calendar && "h-dvh max-h-dvh overflow-hidden")}
+      className={cn("admin-theme", calendar && "h-dvh max-h-dvh overflow-hidden",
+        // Desktop WhatsApp: tinggi dikunci ke viewport agar tiap kolom scroll sendiri.
+        chat && "lg:h-dvh lg:max-h-dvh lg:overflow-hidden",
+      )}
       mobileBreakpoint={calendar ? CALENDAR_DRAWER_BREAKPOINT : undefined}
     >
       <AdminSidebar propertyName="Pomah Guesthouse" />

@@ -1069,12 +1069,12 @@ export function WhatsAppPage({
 
   return (
     <div
-      className="flex h-full min-h-0 flex-1 bg-background lg:grid"
+      className="flex h-full min-h-0 flex-1 bg-background lg:grid lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden"
       style={{ gridTemplateColumns: `300px 1fr ${rightOpen ? "320px" : "44px"}` }}
     >
       {/* THREADS LIST */}
       <aside className={cn("min-h-0 flex-col border-r border-border bg-white dark:bg-card w-full lg:w-auto lg:flex", activeId ? "hidden lg:flex" : "flex")}>
-        <div className="border-b border-border p-4">
+        <div className="shrink-0 border-b border-border p-4">
           <div className="relative">
             <SearchIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -1122,7 +1122,7 @@ export function WhatsAppPage({
           </div>
         </div>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="min-h-0 flex-1">
           <ul>
             {filteredThreads.map((t) => (
               <ThreadRow
@@ -1181,7 +1181,7 @@ export function WhatsAppPage({
           </>
         ) : current && thread?.thread ? (
           <>
-            <header className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 md:px-5 md:py-3">
+            <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 md:px-5 md:py-3">
               <div className="flex items-center gap-2 md:gap-3 min-w-0">
                 <button
                   type="button"
@@ -1355,7 +1355,7 @@ export function WhatsAppPage({
         </aside>
       ) : (
       <aside className="hidden lg:flex min-h-0 flex-col border-l border-[#E2E8F0] dark:border-border bg-[#F8FAFC] dark:bg-muted text-[#0F172A] dark:text-foreground">
-        <div className="flex items-center justify-between border-b border-[#E2E8F0] dark:border-border px-4 py-2">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#E2E8F0] dark:border-border px-4 py-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B] dark:text-muted-foreground">
             Panel Tamu
           </p>
@@ -1370,7 +1370,7 @@ export function WhatsAppPage({
           </button>
         </div>
         {current && thread?.thread ? (
-          <ScrollArea className="flex-1">
+          <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-4 p-4">
               <div className="rounded-xl border border-[#E2E8F0] dark:border-border bg-white dark:bg-card p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B] dark:text-muted-foreground">
