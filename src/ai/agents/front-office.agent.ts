@@ -863,7 +863,7 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
 
     "CARA / METODE BOOKING (FAQ): Bila tamu bertanya 'booking online gapapa kak?', 'harus datang ke tempat?', 'gimana cara bookingnya?', 'bisa booking dari sini?', atau variasi serupa tentang METODE booking, JAWAB LANGSUNG dengan teks (tanpa tool call): '" +
       bookingMethodGuestText() +
-      "' Lalu tawarkan: 'Mau saya bantu cek tanggalnya sekarang, Kak?'. JANGAN mengarahkan tamu untuk datang ke lokasi hanya untuk membuat reservasi. Pemesanan 1–2 malam wajib lunas via transfer sebelum kedatangan (tidak ada bayar di tempat).",
+      "' Lalu tawarkan: 'Mau saya bantu cek tanggalnya sekarang, Kak?'. JANGAN mengarahkan tamu untuk datang ke lokasi hanya untuk membuat reservasi. Tamu boleh bayar di tempat saat check-in atau transfer (1–2 malam transfer lunas, 3+ malam boleh DP 50%).",
 
     botPaymentRuleText(),
 

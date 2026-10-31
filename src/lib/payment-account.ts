@@ -65,16 +65,12 @@ export function toPaymentAccountFields(property?: PropertyPaymentFields | null):
   };
 }
 
-/** Aturan pembayaran pemilik, untuk prompt bot. 1–2 malam wajib lunas; DP 50% hanya 3+ malam. */
+/** Aturan pembayaran pemilik, untuk prompt bot (31 Okt 2026: bayar di tempat diperbolehkan untuk semua tamu). */
 export function botPaymentRuleText(): string {
   const transfer = formatTransferAccountLine();
   return (
-    "ATURAN PEMBAYARAN (PEMILIK): Pemesanan 1–2 malam WAJIB LUNAS (tidak ada opsi DP 50%), " +
-    `dibayar penuh via transfer ke ${transfer} sebelum kedatangan. ` +
-    "TIDAK ADA opsi bayar di tempat / saat check-in untuk booking baru; bila tamu menanyakannya, " +
-    "jelaskan dengan sopan bahwa pembayaran dilakukan via transfer sebelum kedatangan. " +
-    "DP 50% hanya untuk menginap 3 malam atau lebih (jangan ubah persentase atau nominal DP). " +
-    `Untuk DP 3 malam atau lebih, sebut juga transfer ke ${transfer}. ` +
-    "Bila tamu 1–2 malam minta DP, jelaskan dengan sopan: 'pemesanan 1–2 malam wajib lunas'."
+    "ATURAN PEMBAYARAN (PEMILIK): tamu boleh BAYAR DI TEMPAT saat check-in (semua tamu) atau " +
+    `transfer ke ${transfer}. Jangan menolak bayar di tempat. ` +
+    "Transfer 1–2 malam: lunas (tanpa DP). DP 50% hanya untuk 3 malam atau lebih."
   );
 }

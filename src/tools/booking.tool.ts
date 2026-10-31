@@ -44,8 +44,8 @@ function readExpectedSummary(value: unknown): BookingSummarySnapshot | null {
 }
 
 /**
- * Rencana pembayaran awal. 1–2 malam wajib lunas via transfer sebelum
- * kedatangan (tanpa DP, tanpa bayar di tempat); DP hanya 3+ malam. Dulu 1 malam
+ * Rencana pembayaran awal. payment_type 'onsite' = bayar di tempat (tanpa
+ * expires_at). Transfer: 1–2 malam lunas (tanpa DP); DP hanya 3+ malam. Dulu 1 malam
  * dan tidak di-expire (payment_status unpaid tetap valid). 2 malam atau lebih
  * mempertahankan hitungan DP yang sudah ada.
  */
@@ -55,9 +55,19 @@ export function planInitialBookingPayment(input: {
   paymentType?: string | null;
   dpAmount?: number | null;
   now?: number;
-}): { paidAmount: number; paymentStatus: "paid" | "partial" | "unpaid"; expiresAt: string | null } {
+}): {
+  paidAmount: number;
+  paymentStatus: "paid" | "partial" | "unpaid";
+  expiresAt: string | null;
+  paymentMethod: "transfer" | "onsite";
+} {
+  // Bayar di tempat (31 Okt 2026): belum bayar, tanpa batas waktu transfer,
+  // sehingga cron expire-bookings tidak pernah membatalkannya.
+  if ((input.paymentType ?? "").toLowerCase() === "onsite") {
+    return { paidAmount: 0, paymentStatus: "unpaid", expiresAt: null, paymentMethod: "onsite" };
+  }
   if (!(input.nights >= 1)) {
-    return { paidAmount: 0, paymentStatus: "unpaid", expiresAt: null };
+    return { paidAmount: 0, paymentStatus: "unpaid", expiresAt: null, paymentMethod: "transfer" };
   }
   // 1–2 malam wajib lunas: permintaan DP diabaikan (tanpa opsi DP 50%).
   const isDP = allowsDeposit(input.nights) && (input.paymentType ?? "").toLowerCase() === "dp";
@@ -69,6 +79,7 @@ export function planInitialBookingPayment(input: {
     paidAmount,
     paymentStatus,
     expiresAt: computeBookingExpiryIso(input.now ?? Date.now()),
+    paymentMethod: "transfer",
   };
 }
 
@@ -728,7 +739,7 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   const desiredSource: "manager_chat" | "whatsapp" = managerialDirect ? "manager_chat" : "whatsapp";
 
   // Skema pembayaran DP vs lunas.
-  // args.payment_type = 'dp' | 'full' (dikirim dari booking-machine via context)
+  // args.payment_type = 'dp' | 'full' | 'onsite' (dikirim dari booking-machine via context)
   // args.dp_amount    = nominal DP (jika payment_type='dp')
   const paymentPlan = planInitialBookingPayment({
     nights,
@@ -758,6 +769,7 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
         special_requests: finalSpecialRequests || null,
         idempotency_key: idemKey ?? null,
         expires_at: paymentPlan.expiresAt,
+        payment_method: paymentPlan.paymentMethod,
       })
       .select("id, reference_code")
       .single();

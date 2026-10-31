@@ -1,5 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-import { FULL_PAYMENT_POLICY_TEXT, requiresFullPayment } from "@/lib/deposit-policy";
+import { isOnsitePaymentMethod, requiresFullPayment } from "@/lib/deposit-policy";
 import { fmtDateID } from "@/lib/date";
 import { formatTransferAccountLine, resolveBotTransferAccount, type PropertyPaymentFields } from "@/lib/payment-account";
 import { findNotificationThreadId } from "./notification-thread-resolver";
@@ -10,7 +10,7 @@ import {
 } from "./guest-whatsapp.service";
 import { toMetaRecipient } from "./whatsapp-meta.service";
 
-/** Teks status pembayaran di pesan invoice. 1–2 malam wajib lunas via transfer; tidak ada bayar di tempat. */
+/** Teks status pembayaran di pesan invoice. Bayar di tempat: tanpa batas waktu & tanpa info transfer wajib. */
 export function buildInvoicePaymentLines(opts: {
   paymentStatus: string;
   paidAmount: number;
@@ -18,7 +18,14 @@ export function buildInvoicePaymentLines(opts: {
   nights: number;
   expiresAt?: string | null;
   bankDetails?: string;
+  paymentMethod?: string | null;
 }): string {
+  if (opts.paymentStatus !== "paid" && opts.paymentStatus !== "partial" && isOnsitePaymentMethod(opts.paymentMethod)) {
+    return (
+      `• Status Pembayaran: Bayar di tempat saat check-in 🏨\n` +
+      `• Jumlah dibayar saat check-in: Rp ${Math.max(0, opts.totalAmount).toLocaleString("id-ID")}`
+    );
+  }
   const isDP = opts.paymentStatus === "partial" && opts.paidAmount > 0;
   const remainingAmount = Math.max(0, opts.totalAmount - opts.paidAmount);
   if (isDP) {
@@ -40,7 +47,7 @@ export function buildInvoicePaymentLines(opts: {
       })} WIB). Booking otomatis dibatalkan jika belum dibayar.`
     : "";
   const fullLine = requiresFullPayment(opts.nights)
-    ? `\n• Jumlah yang harus dibayar: Rp ${Math.max(0, opts.totalAmount).toLocaleString("id-ID")} (lunas — ${FULL_PAYMENT_POLICY_TEXT}, tanpa DP)`
+    ? `\n• Jumlah yang harus dibayar: Rp ${Math.max(0, opts.totalAmount).toLocaleString("id-ID")} (lunas via transfer, tanpa DP — atau bisa bayar di tempat saat check-in)`
     : "";
   return `• Status Pembayaran: Menunggu pembayaran ⏳` + fullLine + deadlineText + (opts.bankDetails ?? "");
 }
@@ -147,6 +154,7 @@ export async function generateAndSendInvoiceNotification({
         payment_status,
         paid_amount,
         expires_at,
+        payment_method,
         guests (
           id,
           full_name,
@@ -282,6 +290,7 @@ export async function generateAndSendInvoiceNotification({
       nights: stayNights,
       expiresAt: (booking as any).expires_at as string | null | undefined,
       bankDetails,
+      paymentMethod: (booking as any).payment_method as string | null | undefined,
     });
 
     const messageBody = `Halo ${guest.full_name},

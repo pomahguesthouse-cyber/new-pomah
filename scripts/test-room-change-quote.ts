@@ -42,7 +42,7 @@ assert.match(reply, /Single → Deluxe/);
 assert.match(reply, /Total: Rp150\.000 → Rp230\.000/);
 assert.match(reply, /Tambahan biaya: Rp80\.000/);
 assert.match(reply, /Sudah dibayar: Rp0/);
-assert.match(reply, /Sisa yang perlu ditransfer: Rp230\.000/);
+assert.match(reply, /Sisa pembayaran: Rp230\.000/);
 assert.match(reply, /balas \*ya\*/);
 
 // ── Partial paid: 3 malam DP sudah masuk ──────────────────────────────────────
@@ -67,7 +67,7 @@ const twoNights = toSnapshot({
 assert.equal(twoNights.nights, 2);
 const q2 = buildRoomChangeQuote({ booking: twoNights, newRoomType: { id: "rt-gd", name: "Grand Deluxe" }, newTotal: 600000, available: 1 });
 assert.equal(q2.amountDue, 370000);
-assert.match(formatRoomChangeQuoteReply(q2), /Sisa yang perlu ditransfer: Rp370\.000 \(pemesanan 1–2 malam wajib lunas/);
+assert.match(formatRoomChangeQuoteReply(q2), /Sisa pembayaran: Rp370\.000 \(transfer lunas, atau bayar di tempat saat check-in\)/);
 
 // Downgrade with overpayment, unavailable, stop-sell, same type.
 const qd = buildRoomChangeQuote({ booking: { ...azairul, paidAmount: 230000, totalAmount: 230000, rooms: [{ ...azairul.rooms[0], roomTypeId: DELUXE.id, roomTypeName: "Deluxe" }] }, newRoomType: SINGLE, newTotal: 150000, available: 1 });
@@ -128,7 +128,7 @@ const createBookingImpl = (async (args: any) => { writes.push(args); return JSON
   const res = await processBookingState(ctxOf(db), WA, "Azairul \n085218818868", rec("COLLECTING_DATA", flowCtx), { roomChange: deps, createBookingImpl });
   assert.equal(res.handled, true);
   assert.match(res.reply ?? "", /PG-HJ5MF/);
-  assert.match(res.reply ?? "", /Sisa yang perlu ditransfer: Rp230\.000/);
+  assert.match(res.reply ?? "", /Sisa pembayaran: Rp230\.000/);
   assert.doesNotMatch(res.reply ?? "", /Rp80\.000 untuk satu malam/);
   const last = r.states.at(-1)!;
   assert.equal(last.state, "CONFIRMING_BOOKING");

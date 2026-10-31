@@ -154,7 +154,7 @@ export function formatRoomChangeQuoteReply(q: RoomChangeQuote, fmtDate: (d: stri
   if (q.refundDue > 0) {
     lines.push(`• Kelebihan bayar: ${rp(q.refundDue)} (akan dibantu staf)`);
   } else if (q.fullPaymentRequired) {
-    lines.push(`• Sisa yang perlu ditransfer: ${rp(q.amountDue)} (pemesanan 1–2 malam wajib lunas sebelum kedatangan)`);
+    lines.push(`• Sisa pembayaran: ${rp(q.amountDue)} (transfer lunas, atau bayar di tempat saat check-in)`);
   } else if (q.requiredNow > 0 && q.requiredNow < q.amountDue) {
     lines.push(`• Minimal transfer sekarang (DP 50%): ${rp(q.requiredNow)}; sisa tagihan total ${rp(q.amountDue)}`);
   } else {

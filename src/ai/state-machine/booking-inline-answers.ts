@@ -16,7 +16,7 @@ import {
   resolveBotTransferAccount,
   type PropertyPaymentFields,
 } from "@/lib/payment-account";
-import { FULL_PAYMENT_POLICY_TEXT, requiresFullPayment } from "@/lib/deposit-policy";
+import { requiresFullPayment } from "@/lib/deposit-policy";
 
 // ─── Pembayaran / DP ──────────────────────────────────────────────────────────
 
@@ -70,8 +70,8 @@ export function bookingMethodGuestText(): string {
   return (
     `Booking bisa langsung via WhatsApp ini Kak, tidak perlu datang ke tempat. ` +
     `Setelah data lengkap, kamar langsung kami amankan dan invoice otomatis dikirim ke sini juga. ` +
-    `Untuk pembayaran, ${FULL_PAYMENT_POLICY_TEXT} via transfer ke ${transfer} sebelum kedatangan (tanpa DP, tidak ada bayar di tempat). ` +
-    `DP 50% berlaku untuk menginap 3 malam atau lebih.`
+    `Untuk pembayaran, Kakak bisa pilih bayar di tempat saat check-in, atau transfer ke ${transfer} ` +
+    `(menginap 1–2 malam transfer lunas; 3 malam atau lebih bisa DP 50%).`
   );
 }
 
@@ -103,9 +103,8 @@ export function buildPaymentPolicyAnswer(opts: PaymentAnswerOpts = {}): string {
   if (requiresFullPayment(nights)) {
     const amount = opts.totalPrice && opts.totalPrice > 0 ? ` sebesar ${fmtRp(opts.totalPrice)}` : "";
     return (
-      `Mohon maaf Kak, ${FULL_PAYMENT_POLICY_TEXT} (tidak ada opsi DP). ` +
-      `Untuk menginap ${nights} malam, pembayarannya lunas${amount} via transfer ke ${transfer} sebelum kedatangan ` +
-      `(tidak ada opsi bayar di tempat).`
+      `Bisa Kak, pembayarannya bisa bayar di tempat saat check-in 🙏 ` +
+      `Kalau Kakak lebih nyaman transfer, untuk menginap ${nights} malam dibayar lunas${amount} ke ${transfer} (tanpa DP).`
     );
   }
 
@@ -115,10 +114,9 @@ export function buildPaymentPolicyAnswer(opts: PaymentAnswerOpts = {}): string {
 
   if (nights == null) {
     parts.push(
-      `Untuk menginap 1–2 malam pembayarannya wajib lunas via transfer ke ${transfer} sebelum kedatangan ` +
-        `(${FULL_PAYMENT_POLICY_TEXT}, tidak ada bayar di tempat). ` +
-        `Untuk menginap 3 malam atau lebih, Kakak bisa DP dulu ${pct}% dari total dan sisanya dilunasi saat check-in, ` +
-        `atau langsung bayar lunas — transfer ke ${transfer}.`,
+      `Pembayaran bisa bayar di tempat saat check-in, atau transfer ke ${transfer}. ` +
+        `Kalau transfer: menginap 1–2 malam dibayar lunas (tanpa DP); untuk menginap 3 malam atau lebih, Kakak bisa DP dulu ${pct}% dari total dan sisanya dilunasi saat check-in, ` +
+        `atau langsung bayar lunas.`,
     );
     return parts.join(" ");
   }
@@ -128,12 +126,12 @@ export function buildPaymentPolicyAnswer(opts: PaymentAnswerOpts = {}): string {
     parts.push(
       `Untuk pembayaran, Kakak bisa DP dulu ${pct}% (${fmtRp(dp)} dari total ${fmtRp(opts.totalPrice)}) ` +
         `dan sisanya dilunasi saat check-in, atau langsung bayar lunas — dua-duanya bisa. ` +
-        `Transfer ke ${transfer}.`,
+        `Transfer ke ${transfer}. Atau kalau lebih nyaman, bisa juga bayar di tempat saat check-in.`,
     );
   } else {
     parts.push(
       `Untuk pembayaran, Kakak bisa DP dulu ${pct}% dari total dan sisanya dilunasi saat check-in, ` +
-        `atau langsung bayar lunas — dua-duanya bisa. Transfer ke ${transfer}.`,
+        `atau langsung bayar lunas. Transfer ke ${transfer}. Atau kalau lebih nyaman, bisa juga bayar di tempat saat check-in.`,
     );
   }
 
