@@ -577,6 +577,20 @@ export function resolveRelativeDayRange(
     };
   };
 
+  // With a named month, slashes separate days, never day/month.
+  // Confirm the proposed checkout: "6/7/8" may list occupied nights.
+  const slashDays = text.match(/\b(\d{1,2}(?:\s*\/\s*\d{1,2}){1,2})\s+([a-z]+)(?:\s+(\d{4}))?\b/i);
+  if (slashDays) {
+    const month = resolveMonthName(slashDays[2]);
+    const days = slashDays[1].split(/\s*\/\s*/).map(Number);
+    if (month && days.every((day, i) => day >= 1 && day <= 31 && (i === 0 || day > days[i - 1]))) {
+      const year = resolveYear(month, slashDays[3], today);
+      const checkIn = makeIsoDate(days[0], month, year);
+      const checkOut = makeIsoDate(days[days.length - 1], month, year);
+      if (checkIn && checkOut) return done(checkIn, checkOut, "slash-day-range", { needsConfirm: true });
+    }
+  }
+
   const explicit = tryExplicitStay(text, today);
   if (explicit) {
     return done(explicit.checkIn, explicit.checkOut, "explicit", {

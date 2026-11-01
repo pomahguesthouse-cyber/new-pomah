@@ -1,3 +1,5 @@
+import { resolveRelativeDayRange, nowForStayParsing } from "@/lib/id-date";
+import { formatStayConfirmQuestion } from "@/ai/state-machine/booking-stay-guard";
 /**
  * Reliable WhatsApp autoreply: debounce wait → AI → WhatsApp gateway send.
  * Runs inside waitUntil from the webhook (not HTTP self-fetch).
@@ -248,6 +250,7 @@ const FAST_FAQ_ENABLED = process.env.WA_FAST_FAQ_ENABLED !== "false";
 // (FAQ_BLOCK_RE & COMPLAINT_SIGNAL_RE pindah ke property-faq.ts — O3.)
 
 type FastFaqResult = {
+  guests?: ParsedGuestCount;
   reply: string;
   intent: string;
   /** Tanggal yang di-parse (untuk jalur ketersediaan) — dipersist ke
@@ -568,6 +571,7 @@ async function buildGuestCountAfterAvailabilityReply(params: {
 
   const result = formatAvailabilityForGuestCount(raw, guests);
   if (result) {
+    result.guests = guests;
     result.dates = { checkIn, checkOut };
   }
   return result;
@@ -1261,10 +1265,46 @@ export async function executeAutoreplyForPhone(
   }
 
 
-  const lastMessage =
+  let lastMessage =
     [...rollingMessages].reverse().find((m: { direction: string }) => m.direction === "in")?.body ?? "";
 
   let orchResult: any = null;
+
+  const pendingSlashStay = ((bookingState as any)?.slots ?? {}).pendingSlashStay;
+  const lastSubstantiveReply = [...rollingMessages].reverse().find((m) => m.direction === "out")?.body ?? "";
+  if (!reply && !isManager && pendingSlashStay &&
+      lastSubstantiveReply.includes("Mohon pastikan tanggal check-in dan check-out") &&
+      /^(?:ya|iya|betul|benar|bener|oke|ok|setuju)(?:\s+(?:kak|ka|min|itu|betul|benar|ya))*[.!\s]*$/i.test(lastMessage.trim()) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(pendingSlashStay.checkIn ?? "") &&
+      /^\d{4}-\d{2}-\d{2}$/.test(pendingSlashStay.checkOut ?? "") &&
+      pendingSlashStay.checkIn >= todayWIB() && pendingSlashStay.checkOut > pendingSlashStay.checkIn) {
+    // Expand a yes only against the specific proposal we saved, never stale dates.
+    lastMessage += ` (check-in ${fmtDateID(pendingSlashStay.checkIn)}, check-out ${fmtDateID(pendingSlashStay.checkOut)})`;
+    const inbound = [...rollingMessages].reverse().find((m) => m.direction === "in");
+    if (inbound) inbound.body = lastMessage;
+    const patch = { checkIn: pendingSlashStay.checkIn, checkOut: pendingSlashStay.checkOut, pendingSlashStay: null };
+    const { error } = await (supabaseAdmin as any).rpc("update_conversation_topic", {
+      p_phone: phone, p_last_topic: "availability", p_last_entity: null, p_slots: patch,
+    });
+    if (error) throw new Error(`Could not save confirmed stay: ${error.message}`);
+    if (bookingState) (bookingState as any).slots = { ...(bookingState as any).slots, ...patch };
+  }
+
+  const slashStay = resolveRelativeDayRange(lastMessage, nowForStayParsing(todayWIB()));
+  if (!reply && !isManager && slashStay?.reason === "slash-day-range" && slashStay.needsConfirm) {
+    const { error } = await (supabaseAdmin as any).rpc("update_conversation_topic", {
+      p_phone: phone, p_last_topic: "availability", p_last_entity: null,
+      p_slots: { pendingSlashStay: { checkIn: slashStay.checkIn, checkOut: slashStay.checkOut } },
+    });
+    if (error) throw new Error(`Could not save date clarification: ${error.message}`);
+    adoptReply(formatStayConfirmQuestion(slashStay.checkIn, slashStay.checkOut) +
+      " Mohon pastikan tanggal check-in dan check-out agar kami cek periode yang tepat.");
+    orchResult = {
+      agentKey: "front-office", intent: "date_clarification", routingConfidence: 1,
+      escalated: false, toolsUsed: ["deterministic-date-clarification"], fastPath: true,
+    };
+  }
+
 
   // Bukti transfer (gambar / dokumen gambar-PDF) dijawab di sini, setelah
   // jendela diam staf. Jangan sampai LLM bilang bukti belum terdeteksi.
@@ -1749,6 +1789,19 @@ export async function executeAutoreplyForPhone(
       if (guestCountReply && repeatsLastBotReply(guestCountReply.reply, rollingMessages)) {
         console.info(`[Autoreply] guest-count fast-path would repeat last reply for ${phone.slice(-6)} — handing to AI`);
       } else if (guestCountReply) {
+        // This fast path bypasses the orchestrator, which normally stores party size.
+        // Await the write so a quick "book Deluxe" cannot read the old defaults.
+        if (guestCountReply.guests) {
+          const partySlots = {
+            partialAdults: guestCountReply.guests.adults,
+            partialChildren: guestCountReply.guests.children,
+          };
+          const { error } = await (supabaseAdmin as any).rpc("update_conversation_topic", {
+            p_phone: phone, p_last_topic: "availability", p_last_entity: null, p_slots: partySlots,
+          });
+          if (error) throw new Error(`Could not preserve guest count: ${error.message}`);
+          if (bookingState) (bookingState as any).slots = { ...activeSlots, ...partySlots };
+        }
         adoptReply(guestCountReply.reply);
         orchResult = {
           agentKey: "front-office",

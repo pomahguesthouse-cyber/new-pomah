@@ -105,6 +105,7 @@ export interface OrchestrationResult {
 
 export interface LlmResponse {
   choices?: Array<{
+    finish_reason?: string | null;
     message?: {
       content?:     string | null;
       tool_calls?:  AiToolCall[];

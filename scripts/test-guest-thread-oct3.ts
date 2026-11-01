@@ -270,8 +270,9 @@ const availability = [
       }),
     ),
   );
-  assert.match(booked.reply ?? "", /sesuaikan/);
-  assert.match(booked.reply ?? "", /3 dewasa/);
+  assert.match(booked.reply ?? "", /Jumlah tamu tetap 4 dewasa/);
+  assert.match(booked.reply ?? "", /tambah kamar/);
+  assert.equal(rec.states.at(-1)!.context.adults, 4);
   assert.equal(rec.states.at(-1)!.context.rooms?.[0]?.quantity, 1);
 }
 

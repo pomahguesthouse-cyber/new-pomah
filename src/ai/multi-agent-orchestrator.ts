@@ -1,3 +1,4 @@
+import { parseCompleteReply } from "./reply-integrity";
 import { formatRoomQuoteText } from "@/services/pricing/price-quote";
 /**
  * Multi-Agent Orchestrator.
@@ -269,10 +270,8 @@ async function callLlmOnce(
       body: JSON.stringify({
         model: config.model,
         temperature: 0.6,
-        // Balasan WhatsApp pendek; 800 token (~3000 karakter) cukup bahkan
-        // untuk daftar booking manager. Nilai lama 2000 memperpanjang tail
-        // latency saat model "kebablasan" menulis panjang.
-        max_tokens: 800,
+        // Allow complete quotes and JSON; reject truncated completions below.
+        max_tokens: 2000,
         messages,
         tools: tools.length > 0 ? tools : undefined,
         tool_choice: tools.length > 0 ? "auto" : undefined,
@@ -627,7 +626,7 @@ async function runAgent(
       llmConfig,
       messages,
       agent,
-      agentTools,
+      emptyCompletionRetried ? [] : agentTools,
       signal,
       deadlineAt,
     );
@@ -646,38 +645,12 @@ async function runAgent(
     }
 
     const assistantMsg = json.choices?.[0]?.message;
-    const toolCalls = assistantMsg?.tool_calls ?? [];
+    const toolCalls = json.choices?.[0]?.finish_reason === "length" || json.choices?.[0]?.finish_reason === "content_filter"
+      ? [] : assistantMsg?.tool_calls ?? [];
 
     // ── Text reply — done ────────────────────────────────────────────────────
     if (toolCalls.length === 0) {
-      let reply = assistantMsg?.content?.trim() ?? null;
-      
-      // Parse JSON if present
-      if (reply) {
-        const raw = reply;
-        try {
-          const clean = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-          const parsed = JSON.parse(clean);
-          if (typeof parsed.reply === "string") {
-            reply = parsed.reply;
-          }
-        } catch (e) {
-          // JSON.parse gagal (mis. JSON terpotong oleh max_tokens atau ada
-          // teks di sekitar objek). Jangan kirim raw JSON ke tamu — coba
-          // ekstrak nilai "reply" dengan regex dulu.
-          const m = raw.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)/);
-          if (m) {
-            reply = m[1]
-              .replace(/\\n/g, "\n")
-              .replace(/\\"/g, '"')
-              .replace(/\\\\/g, "\\")
-              .trim();
-            console.warn(`[MultiAgent][${agent.key}] JSON reply malformed — extracted via regex`);
-          } else {
-            console.warn(`[MultiAgent][${agent.key}] Failed to parse JSON reply, using raw output:`, reply);
-          }
-        }
-      }
+      const reply = parseCompleteReply(assistantMsg?.content, json.choices?.[0]?.finish_reason);
 
       if (!reply) {
         if (!emptyCompletionRetried) {
@@ -686,7 +659,7 @@ async function runAgent(
           messages.push({
             role: "user",
             content:
-              "Balasan sebelumnya kosong. Jawab pesan tamu terakhir sekarang dalam Bahasa Indonesia yang singkat, ramah, dan langsung membantu. Jangan kosong.",
+              "Balasan sebelumnya kosong atau terpotong. Tulis ulang jawaban lengkap dan ringkas (maksimal 120 kata), dengan JSON valid {\"reply\":\"...\"}. Jangan memanggil ulang tool atau membuat booking baru. Jawab pertanyaan terakhir berdasarkan hasil tool yang sudah ada.",
           });
           continue;
         }

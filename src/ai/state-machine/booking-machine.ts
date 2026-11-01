@@ -1641,6 +1641,16 @@ async function respondToOverCapacity(
   if (followup === "book_one" && selected) {
     const max = maxGuestsPerRoom(selected);
     const fitted = fitPartyToOneRoom(context.adults ?? 0, context.children ?? 0, max);
+    if (fitted.adjusted) {
+      // Choosing one room is not consent to remove guests from the booking.
+      await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+      return {
+        handled: true,
+        reply: `Jumlah tamu tetap ${context.adults ?? 0} dewasa dan ${context.children ?? 0} anak ya Kak. ` +
+          `Satu kamar ${selected.name} maksimal ${max} tamu. Mau tambah kamar atau pilih tipe yang kapasitasnya cukup? ` +
+          `Jika jumlah tamu berubah, sebutkan jumlah dewasa dan anak yang sebenarnya.`,
+      };
+    }
     context.adults = fitted.adults;
     context.children = fitted.children;
     context.rooms = [
