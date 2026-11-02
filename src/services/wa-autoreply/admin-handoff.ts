@@ -21,7 +21,8 @@ export type AdminHandoffKind =
   | "complaint"
   | "unknown_answer"
   | "facility_unknown"
-  | "booking_change_request";
+  | "booking_change_request"
+  | "ai_unavailable";
 
 /** Jeda bot setelah handoff. Staf bisa mengembalikan ke AI lebih cepat. */
 export const ADMIN_HANDOFF_PAUSE_MS = 6 * 60 * 60 * 1000;
@@ -138,6 +139,7 @@ export const ADMIN_HANDOFF_KIND_LABEL: Record<AdminHandoffKind, string> = {
   unknown_answer: "Bot tidak tahu jawabannya",
   facility_unknown: "Data fasilitas kamar belum diisi",
   booking_change_request: "Tamu minta ubah tanggal booking (BELUM diubah)",
+  ai_unavailable: "Bot gagal menjawab (AI error) — mohon balas manual",
 };
 
 export interface AdminHandoffNoticeInput {

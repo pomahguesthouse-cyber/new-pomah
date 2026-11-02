@@ -504,6 +504,14 @@ export function extractAllSlots(
     }
   }
 
+  // Tanggal survei/kunjungan BUKAN tanggal menginap (insiden Andika 2 Nov 2026:
+  // "soalnya pengen survey dulu besok kak" menimpa 9–10 Nov jadi 3–4 Nov).
+  if ((result.check_in || result.check_out) && isVisitOnlyDateMention(text)) {
+    delete result.check_in;
+    delete result.check_out;
+    delete result.checkout_assumed;
+  }
+
   // ── 6. Tipe kamar ─────────────────────────────────────────────────────────
   if (rooms.length > 0) {
     const matched = findMentionedRoomType(text, rooms);
@@ -592,4 +600,21 @@ export function formatPartialBookingSummary(context: {
   if (context.children) lines.push(`Anak: ${context.children}`);
   if (context.childAges?.length) lines.push(`Usia anak: ${context.childAges.join(" dan ")} th`);
   return lines.length > 0 ? lines.join(", ") : "(belum ada data)";
+}
+
+const VISIT_INTENT_RE =
+  /\b(survei|survey|survai|suvey|surve|lihat\s+lokasi|liat\s+lokasi|cek\s+lokasi|lihat\s+tempat(?:nya)?|liat\s+tempat(?:nya)?|lihat\s+kamar(?:nya)?\s+langsung|mampir|berkunjung|kunjungan|visit)\b|\b(?:besok|lusa|nanti)\s+(?:saya\s+|aku\s+|kami\s+)?(?:datang|ke\s+sana|kesana|ke\s+lokasi)\b/i;
+const STAY_INTENT_RE =
+  /\b(nginep|menginap|nginap|inap|check[\s-]?in|checkin|check[\s-]?out|checkout|ci|co|booking|book|booked|pesan\s+kamar|reservasi|keep|malam|tanggal\s+(?:menginap|nginep|inap))(?:nya)?\b/i;
+
+/**
+ * Pesan yang hanya menyebut tanggal kunjungan/survei lokasi, bukan tanggal
+ * menginap. Bila tamu menyebut keduanya ("survei besok, nginep 9-10"), pesan
+ * TIDAK dianggap visit-only sehingga tanggal menginap tetap diambil.
+ */
+export function isVisitOnlyDateMention(message: string): boolean {
+  const t = String(message ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (!t) return false;
+  if (!VISIT_INTENT_RE.test(t)) return false;
+  return !STAY_INTENT_RE.test(t);
 }
