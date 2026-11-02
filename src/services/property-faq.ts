@@ -419,7 +419,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   // — Alamat / lokasi —
   if (
     /\b(alamat|lokasi|dimana|di mana|dmn|maps?|map|lokasinya|rute|arah|arahan|posisi|google maps)\b/i.test(raw) &&
-    !/\b(kode|booking(?:nya)?|reservasi(?:nya)?|invoice(?:nya)?|rekening|norek|pembayaran|bukti|kwitansi|voucher)\b/i.test(raw)) {
+    !/\b(kode|booking(?:nya)?|reservasi(?:nya)?|pesanan(?:nya)?|invoice(?:nya)?|rekening|norek|no\.?\s*rek|pembayaran|bayar(?:nya)?|transfer(?:nya)?|tf|dp|lunas|pelunasan|tagihan(?:nya)?|nota|bukti|kwitansi|kuitansi|voucher|qris)\b/i.test(raw)) {
     const mapsLink =
       mapUrl ||
       (placeId

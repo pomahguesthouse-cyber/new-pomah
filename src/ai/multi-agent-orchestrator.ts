@@ -1,4 +1,7 @@
-import { parseCompleteReply } from "./reply-integrity";
+import { parseCompleteReply, isTruncatedFinish } from "./reply-integrity";
+import { findAcceptedOffer } from "./state-machine/offer-acceptance";
+import { todayWIB } from "@/lib/date";
+import { startBookingDetails } from "@/tools/start-booking.tool";
 import { formatRoomQuoteText } from "@/services/pricing/price-quote";
 /**
  * Multi-Agent Orchestrator.
@@ -645,7 +648,7 @@ async function runAgent(
     }
 
     const assistantMsg = json.choices?.[0]?.message;
-    const toolCalls = json.choices?.[0]?.finish_reason === "length" || json.choices?.[0]?.finish_reason === "content_filter"
+    const toolCalls = isTruncatedFinish(json.choices?.[0]?.finish_reason)
       ? [] : assistantMsg?.tool_calls ?? [];
 
     // ── Text reply — done ────────────────────────────────────────────────────
@@ -1060,6 +1063,40 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
     if (isDataEntryState(stateRecord.state)) {
       input.agentCtx.bookingInProgress = true;
       input.agentCtx.pendingBookingSlots = getMissingSlots(stateRecord.context);
+    }
+  }
+
+  // 3b. Tamu menyetujui tawaran booking terakhir ("iya", "oke bayar lunas
+  //     Sabtu", "saya ingin bayar hari ini") → mulai booking dari kamar +
+  //     tanggal di tawaran itu, bukan dari slot lama (insiden Azzra 1 Nov).
+  if (stateRecord.state === "IDLE" && !input.agentCtx.activeBooking?.referenceCode) {
+    const offer = findAcceptedOffer(input.messages, input.toolCtx.rooms ?? [], input.toolCtx.today || todayWIB());
+    if (offer) {
+      try {
+        const raw = await startBookingDetails(
+          {
+            check_in: offer.checkIn,
+            check_out: offer.checkOut,
+            rooms: [{ room_type: offer.roomName, quantity: offer.quantity }],
+          },
+          input.toolCtx,
+        );
+        const parsed = JSON.parse(raw) as { ok?: boolean; message?: string };
+        if (parsed.ok && parsed.message) {
+          console.info(`[MultiAgent] Offer accepted → start_booking ${offer.roomName} ${offer.checkIn}..${offer.checkOut}`);
+          return {
+            status: "reply",
+            reply: parsed.message,
+            toolsUsed: ["offer_acceptance", "start_booking_details"],
+            agentKey: "front-office",
+            intent: "booking_inquiry",
+            routingConfidence: 1.0,
+            escalated: false,
+          };
+        }
+      } catch (e) {
+        console.warn("[MultiAgent] offer acceptance start_booking gagal (lanjut ke AI):", e);
+      }
     }
   }
 

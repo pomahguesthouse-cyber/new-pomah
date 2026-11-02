@@ -1,6 +1,6 @@
 /** Never salvage a partial JSON string: it may omit prices or booking terms. */
 export function parseCompleteReply(content: string | null | undefined, finishReason?: string | null): string | null {
-  if (finishReason === "length" || finishReason === "content_filter") return null;
+  if (isTruncatedFinish(finishReason)) return null;
   const raw = content?.trim();
   if (!raw) return null;
   const clean = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
@@ -13,4 +13,10 @@ export function parseCompleteReply(content: string | null | undefined, finishRea
     }
   }
   return clean;
+}
+
+/** OpenAI: "length"; Gemini via gateway: "MAX_TOKENS"/"max_tokens"; filters too. */
+export function isTruncatedFinish(finishReason?: string | null): boolean {
+  const f = (finishReason ?? "").toLowerCase();
+  return f === "length" || f === "max_tokens" || f === "content_filter" || f === "safety" || f === "recitation";
 }
