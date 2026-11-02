@@ -2667,6 +2667,10 @@ export async function processBookingState(
         context.pendingOverride = undefined;
       } else {
         context.pendingOverride = undefined;
+        // BUGFIX 2 Nov 2026 (Andika): penolakan dulu tidak disimpan, sehingga
+        // pendingOverride (tanggal survei 3–4 Nov) tetap ada di DB dan "Ya"
+        // berikutnya menerapkannya. Simpan penghapusannya sekarang.
+        await updateBookingState(supabase, phone, state, context);
         // Ignore overrides if not confirmed
         extracted.guest_name = undefined;
         extracted.check_in = undefined;

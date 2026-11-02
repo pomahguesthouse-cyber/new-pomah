@@ -58,6 +58,7 @@ import {
   AI_TIMEOUT_MS,
   FALLBACK_MESSAGE,
   MANAGER_FALLBACK_MESSAGE,
+  TERMINAL_FALLBACK_MESSAGE,
   QUICK_ACK_MESSAGE,
   buildStateAwareFallback,
   pickAiBudgetMs,
@@ -1221,7 +1222,7 @@ export async function executeAutoreplyForPhone(
     if (m.direction !== "out") return true;
     const body = (m.body ?? "").trim();
     if (!body) return false;
-    if (body === FALLBACK_MESSAGE || body === MANAGER_FALLBACK_MESSAGE) return false;
+    if (body === FALLBACK_MESSAGE || body === MANAGER_FALLBACK_MESSAGE || body === TERMINAL_FALLBACK_MESSAGE) return false;
     if (body === QUICK_ACK_MESSAGE) return false;
     return true;
   });
@@ -2457,6 +2458,10 @@ export async function executeAutoreplyForPhone(
   }
 
 
+  // Semua percobaan habis dan fallback hanya generik → jangan berjanji
+  // "segera kami kirim" tanpa ada yang mengirim. Serahkan ke admin.
+  const terminalAiFailure = !reply && isGenericFallback && !isManager;
+  if (terminalAiFailure) finalFallback = TERMINAL_FALLBACK_MESSAGE;
   const rawReply = reply ?? finalFallback;
   const isFallback = !reply;
   // Saat fallback dikirim, catat ALASAN-nya supaya dashboard/Activity Log bisa
@@ -2896,6 +2901,13 @@ export async function executeAutoreplyForPhone(
 
   // Bot bilang "konfirmasi ke tim" = bot tidak tahu. Jangan biarkan tamu
   // menunggu tanpa ada yang diberi tahu (kasus Ika PG-GDWES, 17 Okt).
+  if (terminalAiFailure && sent && !adminHandoffDone) {
+    try {
+      await startAdminHandoff("ai_unavailable", `${lastMessage}\n\n[AI gagal: ${fallbackReason ?? "unknown"}]`);
+    } catch (e) {
+      console.warn("[Autoreply] ai_unavailable handoff failed (non-fatal):", e);
+    }
+  }
   if (!isManager && sent && !adminHandoffDone) {
     try {
       const { replyDefersToStaff } = await import("@/services/wa-autoreply/admin-handoff");
@@ -3398,7 +3410,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
   const graceCutoffIso = new Date(Date.now() - 90_000).toISOString();
   const { data: failedEntries } = await (supabaseAdmin as any)
     .from("wa_conversation_queue")
-    .select("id, phone, thread_id, created_at, completed_at, last_error, last_message_id")
+    .select("id, phone, thread_id, created_at, completed_at, last_error, last_message_id, last_message_body")
     .eq("status", "failed")
     .gte("completed_at", sinceIso)
     .lte("completed_at", graceCutoffIso)
@@ -3418,7 +3430,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
     const entryViaOfficial = true;
     const isManagerEntry =
       !entryViaOfficial && (!!(await resolveManagerByPhone(entry.phone)) || isConfiguredAdminPhone(entry.phone));
-    const fallbackBody = isManagerEntry ? MANAGER_FALLBACK_MESSAGE : FALLBACK_MESSAGE;
+    const fallbackBody = isManagerEntry ? MANAGER_FALLBACK_MESSAGE : TERMINAL_FALLBACK_MESSAGE;
 
     // Lewati kalau worker sebenarnya sudah mengirim balasan sebelum di-mark zombie/failed,
     // atau ada queue lain yang sudah membalas thread ini.
@@ -3613,6 +3625,19 @@ export async function sendFailureFallbackToGuests(): Promise<{
       .from("wa_conversation_queue")
       .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent]") })
       .eq("id", entry.id);
+    if (!isManagerEntry) {
+      try {
+        const { triggerAdminHandoff } = await import("@/services/wa-autoreply/admin-handoff");
+        await triggerAdminHandoff(supabaseAdmin as any, {
+          phone: entry.phone,
+          threadId: entry.thread_id ?? null,
+          kind: "ai_unavailable",
+          triggerMessage: `${entry.last_message_body ?? ""}\n\n[Antrian gagal: ${entry.last_error ?? "unknown"}]`,
+        });
+      } catch (e) {
+        console.warn("[Fallback] ai_unavailable handoff failed:", e);
+      }
+    }
 
     // Eskalasi ke admin: buat handoff ticket supaya percakapan mati tidak
     // hilang dari radar. `createHandoffTicket` idempotent per (phone, open),

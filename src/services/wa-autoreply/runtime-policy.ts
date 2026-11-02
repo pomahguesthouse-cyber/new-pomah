@@ -15,6 +15,17 @@ import { isMediaRequest, looksLikeBookingInquiry } from "@/services/wa-autoreply
 export const FALLBACK_MESSAGE =
   "Mohon maaf menunggu, Kak 🙏 Pesan Kakak sudah kami terima, jawabannya sedang kami siapkan dan segera kami kirim.";
 
+/**
+ * Fallback TERAKHIR (semua percobaan AI habis). Insiden Andika 2 Nov 2026:
+ * FALLBACK_MESSAGE berjanji "segera kami kirim" padahal tidak ada proses yang
+ * akan mengirim jawaban lanjutan — tamu menunggu ±3 jam. Sekarang pesan
+ * terminal jujur menyerahkan ke admin, dan service memicu handoff (tiket +
+ * notifikasi admin) sehingga ada manusia yang menindaklanjuti.
+ */
+export const TERMINAL_FALLBACK_MESSAGE =
+  "Mohon maaf Kak 🙏 Sistem kami sedang terkendala untuk menjawab pesan ini. " +
+  "Pesan Kakak sudah kami teruskan ke admin Pomah Guesthouse, dan admin akan membalas langsung di chat ini.";
+
 export const MANAGER_FALLBACK_MESSAGE =
   "Maaf Admin, sistem AI sedang lambat dan belum berhasil memproses perintah ini. Silakan coba lagi sebentar lagi.";
 
