@@ -6,7 +6,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { buildStorageImageUrl, buildStorageImageSrcSet, heroPreloadLinks } from "@/lib/storage-image";
+import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
 import { mountCustomHead } from "@/public/lib/defer-analytics";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -141,7 +141,9 @@ export const Route = createFileRoute("/")({
         ...(useShareImage ? shareOgImageTags() : []),
         ...canonical.meta,
       ],
-      links: [...canonical.links, ...heroPreloadLinks(heroImageRaw)],
+      // Hero preload is registered once in PublicShell (preloadHeroLcp);
+      // a second head copy only duplicated the <link rel=preload> tags.
+      links: [...canonical.links],
     };
   },
   component: PomahHome,
@@ -677,6 +679,7 @@ export function PomahHomeView({
                       emptyValue={1}
                       value={guests}
                       onValueChange={setGuests}
+                      aria-label="Jumlah tamu"
                       className="h-11 w-full rounded-md border border-stone-200 bg-background py-0 pl-8 pr-3 text-xs shadow-none outline-none focus-visible:ring-amber-500 md:h-10 md:pl-9 md:pr-4 md:text-sm"
                     />
                   </div>
@@ -1528,6 +1531,11 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
               key={`${n.title}-${n.date}-${idx}`}
               className="shrink-0 px-2"
               style={{ width: `${100 / cardsPerView}%` }}
+              // Edge clones exist only for the seamless loop: hide them from
+              // crawlers' outline and screen readers so headings aren't duplicated.
+              {...(isLoopable && (idx < cardsPerView || idx >= cardsPerView + items.length)
+                ? { "aria-hidden": true as const, inert: true }
+                : {})}
             >
               <a
                 href={n.href || "/explore"}
