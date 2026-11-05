@@ -29,7 +29,7 @@ const SHORT_YES_RE =
   /^(?:iya|iyaa+|ya|yaa+|yap|yup|oke|okee*|ok|okay|baik|boleh|bisa|siap|sip|jadi|mau|lanjut|setuju|gas|deal)(?:[\s,!.]+(?:kak|ka|kk|min|mbak|mas|ya|deh|dong|aja|saja|boleh|jadi|lanjut|proses|silakan|silahkan|kak\s*ya))*[\s!.🙏👍]*$/iu;
 
 const EXPLICIT_RE =
-  /\b(?:(?:mau|ingin|pengen|pengin|bisa|tolong|silakan|silahkan)\s+(?:di\s*)?(?:proses|pesan|booking|book|ambil|bayar)|jadi\s+(?:ambil|pesan|booking|book)|(?:saya|kami|kita)\s+(?:ambil|pesan|booking)|bayar\s+(?:hari\s+ini|sekarang|lunas|dp|besok|nanti\s+(?:sabtu|minggu)|sabtu|minggu)|bayar\s+di\s+tempat|transfer\s+(?:hari\s+ini|sekarang|besok))\b/i;
+  /\b(?:(?:mau|ingin|pengen|pengin|bisa|tolong|silakan|silahkan)\s+(?:di\s*)?(?:proses|pesan|booking|book|ambil|bayar)|jadi\s+(?:ambil|pesan|booking|book)|(?:saya|kami|kita)\s+(?:ambil|pesan|booking|pilih)|ambil\s+(?:yg|yang)\s+\w+|bayar\s+(?:hari\s+ini|sekarang|lunas|dp|besok|nanti\s+(?:sabtu|minggu)|sabtu|minggu)|bayar\s+di\s+tempat|transfer\s+(?:hari\s+ini|sekarang|besok)|dibantu\s+(?:untuk\s+)?pembayaran)\b/i;
 
 /** Pesan tamu menyetujui tawaran booking / menyatakan mau bayar. */
 export function isOfferAcceptance(guestText: string): boolean {

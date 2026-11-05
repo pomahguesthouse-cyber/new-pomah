@@ -25,7 +25,7 @@ assert.equal(
 );
 assert.equal(
   buildStateAwareFallback("CONFIRMING_BOOKING"),
-  "Apakah data booking sudah sesuai? Kakak bisa balas Ya, Lanjut, atau Batal.",
+  "Apakah data booking sudah sesuai? Kakak bisa balas Ya, sudah sesuai, Lanjut, atau Batal.",
 );
 
 assert.equal(pickAiBudgetMs("halo kak"), AI_TIMEOUT_LIGHT_MS);

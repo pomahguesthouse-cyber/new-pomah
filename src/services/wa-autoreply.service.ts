@@ -44,7 +44,7 @@ import { shouldSkipSopRetrieval } from "@/ai/router/message-gates";
 import { runDeferred } from "@/lib/cf-context";
 import { checkRoomAvailability } from "@/tools/availability.tool";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
-import { getBookingState } from "@/ai/state-machine/booking-machine";
+import { getBookingState, isBookingConfirmationMessage } from "@/ai/state-machine/booking-machine";
 import { STAFF_REPLY_SILENCE_MS, staffSilenceUntil } from "@/services/wa-autoreply/staff-silence";
 import { planPaymentProofGuestReply } from "@/services/wa-inbound-media";
 import { buildPropertyFaqReply, ensureLocationCorrection } from "@/services/property-faq";
@@ -770,12 +770,41 @@ export async function executeAutoreplyForPhone(
         (recentOut ?? []) as Array<{ direction?: string; sent_at?: string; metadata?: unknown }>,
       );
       if (silenceUntil) {
-        await (supabaseAdmin as any)
-          .from("whatsapp_threads")
-          .update({ ai_paused_until: silenceUntil })
-          .eq("id", c.thread_id);
-        console.info(`[Autoreply] Staff replied recently — staying quiet for ${phone.slice(-6)}`);
-        return "skipped_config";
+        // Insiden Syahrul Alwi 5 Nov 2026: admin kirim "sudah terima pembayaran"
+        // SEBELUM ada row bookings → staff silence 1 jam. Tamu balas "sudah sesuai"
+        // tidak pernah sampai state machine. Konfirmasi aktif di CONFIRMING_BOOKING
+        // harus tetap dilayani agar booking + invoice bisa dibuat.
+        let bypassStaffSilence = false;
+        try {
+          const active = await getBookingState(supabaseAdmin as any, phone);
+          if (active.state === "CONFIRMING_BOOKING") {
+            const { data: lastIn } = await (supabaseAdmin as any)
+              .from("whatsapp_messages")
+              .select("body")
+              .eq("thread_id", c.thread_id)
+              .eq("direction", "in")
+              .order("sent_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const body = String((lastIn as { body?: string } | null)?.body ?? "");
+            if (isBookingConfirmationMessage(body)) {
+              bypassStaffSilence = true;
+              console.info(
+                `[Autoreply] Staff silence bypass — CONFIRMING_BOOKING confirmation for ${phone.slice(-6)}`,
+              );
+            }
+          }
+        } catch (bypassErr) {
+          console.warn("[Autoreply] staff silence bypass check failed (non-fatal):", bypassErr);
+        }
+        if (!bypassStaffSilence) {
+          await (supabaseAdmin as any)
+            .from("whatsapp_threads")
+            .update({ ai_paused_until: silenceUntil })
+            .eq("id", c.thread_id);
+          console.info(`[Autoreply] Staff replied recently — staying quiet for ${phone.slice(-6)}`);
+          return "skipped_config";
+        }
       }
     } catch (e) {
       console.warn("[Autoreply] staff silence check failed (non-fatal):", e);

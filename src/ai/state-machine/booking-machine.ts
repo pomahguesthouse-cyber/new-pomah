@@ -93,6 +93,11 @@ export interface BookingContext {
   pendingRoomChange?: RoomChangeQuote;
   checkIn?: string;
   checkOut?: string;
+  /**
+   * ID tipe kamar (`room_types.id`), BUKAN id unit fisik di tabel `rooms`.
+   * Nama historis; create_booking memilih unit lewat pickAvailableRooms(roomTypeId).
+   * Verified Syahrul Alwi 5 Nov 2026: nilai 10000000-…0002 = Single (room_type).
+   */
   roomId?: string;
   roomName?: string;
   pricePerNight?: number;
@@ -220,19 +225,42 @@ const USE_THIS_PHONE_PATTERN =
 // "gas", "fix", "cocok") — tanpa ini balasan tamu seperti "bener ka" tidak
 // dikenali dan flow booking terasa macet.
 const CONFIRM_PATTERN =
-  /\b(ya|iya|iyaa+|yes|yess+|yup|yoi|lanjut|lanjutkan|benar|bener|bnr|bner|betul|btul|setuju|oke|okey|okay|ok+|sip|siap|mantap|gas|fix|deal|cocok|boleh|monggo|correct)\b/i;
+  /\b(ya|iya|iyaa+|yes|yess+|yup|yoi|lanjut|lanjutkan|benar|bener|bnr|bner|betul|btul|setuju|oke|okey|okay|ok+|sip|siap|mantap|gas|fix|deal|cocok|boleh|monggo|correct|sesuai)\b/i;
+
+/**
+ * Konfirmasi ringkasan booking (insiden Syahrul Alwi 5 Nov 2026).
+ * Bot sendiri bilang "Kalau datanya sudah sesuai…", tapi pola lama tidak
+ * mengenali "sudah sesuai" / "sesuai" — jadi write tidak pernah jalan.
+ * Diekspor agar staff-silence bisa melewatkan konfirmasi aktif.
+ */
+export function isBookingConfirmationMessage(message: string): boolean {
+  const text = (message ?? "").trim();
+  if (!text || text.includes("?")) return false;
+  // Frasa "sudah/udah sesuai|benar|bener|betul|oke" (opsional sapaan).
+  if (
+    /^(?:(?:ya|iya|oke|ok|baik)\s+)*(?:sudah|udah)\s+(?:sesuai|benar|bener|betul|oke|ok|setuju)(?:\s+(?:kak|ka|kk|min|ya|deh|dong|aja|saja|banget))*[\s.!,🙏]*$/i.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+  if (/^sesuai(?:\s+(?:kak|ka|kk|min|ya|deh|dong|aja|saja))*[\s.!,🙏]*$/i.test(text)) {
+    return true;
+  }
+  return CONFIRM_PATTERN.test(text);
+}
 
 /** Persetujuan singkat, bukan pertanyaan yang kebetulan memuat kata "ya". */
 function affirmsRecordedStay(message: string): boolean {
   const text = message.trim();
   if (!text || text.includes("?")) return false;
   if (
-    /^(oke|ok|ya|iya|iyaa+|yes)\s+kak\s+sudah\s+(benar|bener)[\s.!,]*$/i.test(text) ||
-    /^sudah\s+(benar|bener)[\s.!,]*$/i.test(text)
+    /^(oke|ok|ya|iya|iyaa+|yes)\s+kak\s+sudah\s+(benar|bener|sesuai)[\s.!,]*$/i.test(text) ||
+    /^sudah\s+(benar|bener|sesuai)[\s.!,]*$/i.test(text)
   ) {
     return true;
   }
-  return /^(ya|iya|iyaa+|yes|yess+|yup|yoi|oke|ok+|okey|okay|betul|benar|bener|bnr|bner|sip|siap|lanjut|lanjutkan|setuju)(\s+(kak|ka|ya|betul|benar|bener|sudah|aja|saja|dong|deh))*[\s.!,]*$/i.test(
+  return /^(ya|iya|iyaa+|yes|yess+|yup|yoi|oke|ok+|okey|okay|betul|benar|bener|bnr|bner|sip|siap|lanjut|lanjutkan|setuju|sesuai)(\s+(kak|ka|ya|betul|benar|bener|sudah|aja|saja|dong|deh|sesuai))*[\s.!,]*$/i.test(
     text,
   );
 }
@@ -3046,8 +3074,9 @@ export async function processBookingState(
     // Konfirmasi murni: satu/dua kata afirmasi, boleh diikuti partikel sapaan
     // informal ("bener ka", "oke kak", "sip deh", "iya dong").
     const PURE_CONFIRM_RE =
-      /^(ya|iya|iyaa+|yes|yess+|yup|yoi|lanjut|lanjutkan|ok+|oke|okey|okay|setuju|betul|btul|benar|bener|bnr|bner|sip|siap|mantap|gas|fix|deal|cocok|boleh)(\s+(ya|iya|betul|benar|bener|kak?|mba?k|bang|pak|bu|deh|aja|saja|dong|sih|banget))*[\s.!,]*$/i;
-    const isPureConfirm = PURE_CONFIRM_RE.test(message.trim());
+      /^(?:(?:ya|iya|oke|ok|baik)\s+)*(?:sudah\s+|udah\s+)?(ya|iya|iyaa+|yes|yess+|yup|yoi|lanjut|lanjutkan|ok+|oke|okey|okay|setuju|betul|btul|benar|bener|bnr|bner|sip|siap|mantap|gas|fix|deal|cocok|boleh|sesuai)(\s+(ya|iya|betul|benar|bener|kak?|mba?k|bang|pak|bu|deh|aja|saja|dong|sih|banget|sesuai))*[\s.!,🙏]*$/i;
+    const isPureConfirm =
+      PURE_CONFIRM_RE.test(message.trim()) || isBookingConfirmationMessage(message);
     const isPureCancel = /^(batal|batalkan|cancel|tidak|gak jadi|ga jadi|nggak jadi)(\s+(kak?|dulu|aja|saja))*[\s.!,]*$/i.test(
       message.trim(),
     );
@@ -3182,7 +3211,7 @@ export async function processBookingState(
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
     }
 
-    if (CONFIRM_PATTERN.test(message)) {
+    if (isBookingConfirmationMessage(message)) {
       const shown = context.lastSummary;
       const latest = snapshotFromStay({
         checkIn: context.checkIn,
@@ -3435,10 +3464,19 @@ export async function processBookingState(
       const resolvedRates = await applyResolvedRatesToContext(ctx, context);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
       return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
+    } else if (/^(terima\s*kasih|makasih|trims?|thanks?|thank\s*you|thx|tq)([\s.!,🙏]*)$/i.test(message.trim())) {
+      // Insiden Syahrul: "terima kasih" setelah konfirmasi jangan membatalkan
+      // maupun menggeser state. Tetap di CONFIRMING_BOOKING bila write belum jalan.
+      return {
+        handled: true,
+        reply:
+          'Sama-sama Kak 🙏 Kalau data pemesanannya sudah sesuai, balas "Ya" atau "sudah sesuai" supaya saya lanjutkan dan kirim info pembayarannya.',
+      };
     } else {
       return {
         handled: true,
-        reply: 'Baik Kak, saya tunggu kabarnya. Kalau datanya sudah sesuai, balas "Ya" ya.',
+        reply:
+          'Baik Kak, saya tunggu kabarnya. Kalau datanya sudah sesuai, balas "Ya" atau "sudah sesuai" ya.',
       };
     }
   }
