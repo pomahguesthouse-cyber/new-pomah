@@ -149,7 +149,7 @@ export const RULES: IntentRule[] = [
     weight:   8,
     patterns: [
       GUEST_PHOTO_WORD_RE,
-      /\b(brosur|brochure|katalog|catalog|pricelist|price list|daftar harga bergambar)\b/i,
+      /\b(brosur|brochure|katalog|catalog|daftar harga bergambar)\b/i,
       /\b(video|videonya|reels?|penampakan|nampakan|visual)\b/i,
       /\b(virtual tour|tour 360|tur 360|360|walkthrough|walk through|lihat kamar(?:nya)? langsung)\b/i,
       /\b(liat|lihat|minta|ada|punya|boleh)\b.{0,20}\b(foto|gambar|video|brosur|katalog|pict|pic)\b/i,

@@ -38,11 +38,11 @@ export const GUEST_PHOTO_WORD_RE =
   /\b(?:di)?(?:foto|poto|photo)(?:in|kan|kin|2|nya|s)?\b|\bfoto[- ]foto\b|\bpoto[- ]poto\b|\bfoto2\b|\bpap\b|\b(?:gambar|pict?ures?|picts?|pics?|images?|penampakan|nampakan)(?:nya|2)?\b/i;
 
 export const GUEST_BROCHURE_WORD_RE =
-  /\b(?:(?:brosur|brochure|katalog|catalog|catalogue)(?:nya)?|pricelist|price list|daftar harga bergambar)\b/i;
+  /\b(?:(?:brosur|brochure|katalog|catalog|catalogue)(?:nya)?|daftar harga bergambar)\b/i;
 
 /** Foto, brosur, atau video/tour — untuk router dan `isMediaRequest`. */
 export const GUEST_MEDIA_WORD_RE =
-  /\b(?:di)?(?:foto|poto|photo)(?:in|kan|kin|2|nya|s)?\b|\bfoto[- ]foto\b|\bpoto[- ]poto\b|\bfoto2\b|\bpap\b|\b(?:gambar|pict?ures?|picts?|pics?|images?|penampakan|nampakan)(?:nya|2)?\b|\b(?:brosur|brochure|katalog|catalog|catalogue|pricelist)(?:nya)?\b|\b(?:video|videonya|reels?)\b|\b(?:virtual\s+tour|tour\s+360|tur\s+360|walkthrough)\b/i;
+  /\b(?:di)?(?:foto|poto|photo)(?:in|kan|kin|2|nya|s)?\b|\bfoto[- ]foto\b|\bpoto[- ]poto\b|\bfoto2\b|\bpap\b|\b(?:gambar|pict?ures?|picts?|pics?|images?|penampakan|nampakan)(?:nya|2)?\b|\b(?:brosur|brochure|katalog|catalog|catalogue)(?:nya)?\b|\b(?:video|videonya|reels?)\b|\b(?:virtual\s+tour|tour\s+360|tur\s+360|walkthrough)\b/i;
 
 /** "kaya/kayak apa", "kayak gimana", "seperti apa" — hanya bila kamar/tipe/harga disebut. */
 const ROOM_LOOK_RE =

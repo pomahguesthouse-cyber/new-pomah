@@ -1,3 +1,4 @@
+import { isPricelistAsk } from "./pricelist-ask";
 /**
  * Rencana balasan foto/brosur tanpa giliran LLM.
  *
@@ -236,6 +237,8 @@ export function planMediaFastPath(
   const text = normalizeGuestMediaText(raw);
   if (!text || raw.length > 280) return null;
   if (isGuestMediaExcluded(text)) return null;
+  // "lihat pricelist" tanpa brosur/foto → tanya tanggal (pricelist-ask), bukan PDF.
+  if (isPricelistAsk(raw)) return null;
 
   const wantsPhoto = PHOTO_RE(text);
   const wantsBrochure = BROCHURE_RE.test(text);
