@@ -1,3 +1,4 @@
+import { buildPricelistAskDatesReply, isPricelistAsk } from "@/services/wa-autoreply/pricelist-ask";
 import { resolveRelativeDayRange, nowForStayParsing } from "@/lib/id-date";
 import { formatStayConfirmQuestion } from "@/ai/state-machine/booking-stay-guard";
 /**
@@ -418,7 +419,7 @@ async function buildContextualBookingInquiryReply(params: {
   bookingSlots?: Record<string, unknown> | null;
   chatSummary?: { check_in?: unknown; check_out?: unknown; guest_count?: unknown } | null;
 }): Promise<FastFaqResult | null> {
-  if (!looksLikeBookingInquiry(params.message)) return null;
+  if (!looksLikeBookingInquiry(params.message) && !isPricelistAsk(params.message)) return null;
   // Perintah booking eksplisit → serahkan ke alur booking, jangan balas daftar.
   if (isExplicitBookingOrder(params.message, params.rooms ?? [])) return null;
 
@@ -1941,6 +1942,33 @@ export async function executeAutoreplyForPhone(
       }
     } catch (e) {
       console.warn("[Autoreply] contextual booking_inquiry fast-path failed (falling back to AI):", e);
+    }
+  }
+
+
+  // "lihat pricelist" tanpa tanggal → tanya tanggal & jumlah tamu (harga ikut kalender).
+  if (!reply && !isManager && !availabilityBlocked && !multiPendingInbound && !wantsMedia && lastMessage) {
+    const slots = ((bookingState as any)?.slots ?? null) as Record<string, unknown> | null;
+    const summary = (chatSummaryJson ?? null) as { check_in?: unknown; check_out?: unknown } | null;
+    const hasKnownDates =
+      (typeof slots?.checkIn === "string" && typeof slots?.checkOut === "string") ||
+      (typeof summary?.check_in === "string" && typeof summary?.check_out === "string");
+    const askDates = buildPricelistAskDatesReply({
+      message: lastMessage,
+      hasKnownDates,
+      mentionsDate: !!parseAvailabilityDateRange(lastMessage, todayWIB()) || mentionsExplicitDateSignal(lastMessage),
+    });
+    if (askDates && !repeatsLastBotReply(askDates, rollingMessages)) {
+      adoptReply(askDates);
+      orchResult = {
+        agentKey: "front-office",
+        intent: "pricelist_ask_dates",
+        routingConfidence: 1,
+        escalated: false,
+        toolsUsed: ["pricelist-ask-dates"],
+        fastPath: true,
+      };
+      console.info(`[Autoreply] Pricelist ask-dates for ${phone.slice(-6)}`);
     }
   }
 
