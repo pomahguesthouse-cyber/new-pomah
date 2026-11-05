@@ -112,7 +112,7 @@ export function buildStateAwareFallback(state?: string): string {
     return "Baik Kak, boleh dibantu nomor WhatsApp yang bisa kami hubungi?";
   }
   if (state === "CONFIRMING_BOOKING") {
-    return "Apakah data booking sudah sesuai? Kakak bisa balas Ya, Lanjut, atau Batal.";
+    return "Apakah data booking sudah sesuai? Kakak bisa balas Ya, sudah sesuai, Lanjut, atau Batal.";
   }
   return FALLBACK_MESSAGE;
 }
