@@ -18,24 +18,36 @@ type Alias = { alias: string; room: GuardRoom };
 
 const GENERIC_WORDS = new Set(["room", "kamar", "suite", "tipe", "type"]);
 
+function sameCapacity(a: GuardRoom, b: GuardRoom): boolean {
+  return a.capacity === b.capacity && a.extraBedCapacity === b.extraBedCapacity;
+}
+
 function buildAliases(rooms: GuardRoom[]): Alias[] {
-  const aliases: Alias[] = [];
-  const firstWordCount = new Map<string, number>();
-  for (const room of rooms) {
-    const first = room.name.toLowerCase().split(/\s+/)[0] ?? "";
-    firstWordCount.set(first, (firstWordCount.get(first) ?? 0) + 1);
-  }
+  // Kandidat alias per tipe: nama lengkap, tanpa "room", tanpa nomor, kata pertama.
+  const candidates = new Map<string, GuardRoom[]>();
+  const add = (alias: string, room: GuardRoom) => {
+    const key = alias.replace(/\s+/g, " ").trim();
+    if (!key || GENERIC_WORDS.has(key)) return;
+    const list = candidates.get(key) ?? [];
+    if (!list.includes(room)) list.push(room);
+    candidates.set(key, list);
+  };
   for (const room of rooms) {
     const lower = room.name.toLowerCase().trim();
-    aliases.push({ alias: lower, room });
-    const withoutRoom = lower.replace(/\broom\b/g, "").replace(/\s+/g, " ").trim();
-    if (withoutRoom && withoutRoom !== lower) aliases.push({ alias: withoutRoom, room });
-    const first = lower.split(/\s+/)[0] ?? "";
-    if (first && !GENERIC_WORDS.has(first) && firstWordCount.get(first) === 1) {
-      aliases.push({ alias: first, room });
-    }
+    const noRoom = lower.replace(/\broom\b/g, " ");
+    add(lower, room);
+    add(noRoom, room);
+    add(lower.replace(/\b\d+\b/g, " "), room);
+    add(noRoom.replace(/\b\d+\b/g, " "), room);
+    add(lower.split(/\s+/)[0] ?? "", room);
   }
-  // Alias terpanjang dicocokkan lebih dulu supaya "family room 222" menang atas "family".
+  // Alias ambigu (mis. "family" → Family Room 222 & Family Suite 100) tetap
+  // dipakai bila semua tipe yang cocok punya kapasitas identik.
+  const aliases: Alias[] = [];
+  for (const [alias, list] of candidates) {
+    if (list.every((room) => sameCapacity(room, list[0]!))) aliases.push({ alias, room: list[0]! });
+  }
+  // Alias terpanjang dicocokkan lebih dulu ("grand deluxe" menang atas "deluxe").
   return aliases.sort((a, b) => b.alias.length - a.alias.length);
 }
 

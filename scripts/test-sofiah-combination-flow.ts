@@ -32,6 +32,24 @@ if (threeDeluxe) {
   assert.equal(threeDeluxe.kamar[0]!.kapasitas_ditawarkan, 7, "3 Deluxe + 1 extra bed = 7, bukan 9");
 }
 
+// Alternatif: 2 Deluxe + 1 Single dengan 2 extra bed (1 di Single, 1 di Deluxe) = 7, bukan 8.
+const mixed = combos.find(
+  (c) => c.kamar.some((k) => k.room_type_id === "deluxe" && k.jumlah_kamar === 2) && c.kamar.some((k) => k.room_type_id === "single"),
+);
+assert.ok(mixed, "alternatif 2 Deluxe + Single harus ada");
+assert.equal(mixed.total_kapasitas_ditawarkan, 7, "2 Deluxe + Single + extra bed = 7, bukan 8");
+assert.equal(mixed.total_extra_bed, 2);
+assert.equal(
+  mixed.kamar.reduce((sum, k) => sum + k.kapasitas_ditawarkan, 0),
+  7,
+  "jumlah kapasitas per baris = 7",
+);
+// Harga extra bed mengikuti tarif input (dari DB/kalender), bukan angka tetap.
+assert.equal(
+  mixed.total_per_malam,
+  2 * 225000 + 150000 + 2 * 100000,
+);
+
 // ── B: formatter tidak mengutip kapasitas teoretis ──────────────────────────
 const raw = JSON.stringify({
   periode: "11–12 Des 2026",
@@ -61,6 +79,22 @@ const guarded = guardCombinationCapacity(
 assert.equal(guarded.removed, 1);
 assert.doesNotMatch(guarded.text, /Deluxe Room\n/);
 assert.match(guarded.text, /\+ 1 extra bed/);
+
+// Nama tipe kamar sesuai database produksi + penulisan bebas LLM.
+const dbRooms = [
+  { name: "Deluxe", capacity: 2, extraBedCapacity: 1 },
+  { name: "Family Room 222", capacity: 4, extraBedCapacity: 2 },
+  { name: "Family Suite 100", capacity: 4, extraBedCapacity: 2 },
+  { name: "Grand Deluxe", capacity: 2, extraBedCapacity: 1 },
+  { name: "Single", capacity: 1, extraBedCapacity: 1 },
+];
+assert.equal(isInvalidCombinationLine("Bisa pakai Family+Single+1 extra bed", dbRooms, 7), true, "Family+Single+1 EB = 6");
+assert.equal(isInvalidCombinationLine("atau Family Room + Deluxe", dbRooms, 7), true, "Family+Deluxe = 6");
+assert.equal(isInvalidCombinationLine("- 1 Family Suite 100 + 1 Grand Deluxe", dbRooms, 7), true);
+assert.equal(isInvalidCombinationLine("- 3 Deluxe + 1 extra bed (cukup untuk 7 orang)", dbRooms, 7), false);
+assert.equal(isInvalidCombinationLine("- 3 Deluxe + 1 extra bed, kapasitas 9", dbRooms, 7), true);
+assert.equal(isInvalidCombinationLine("Family + 2 extra bed + Single", dbRooms, 7), false, "4+1+2 = 7");
+assert.equal(isInvalidCombinationLine("Family Room 222 untuk 4 orang", dbRooms, 7), false, "bukan baris kombinasi");
 
 // ── D: "boleh kak" atas tawaran foto → kirim foto ───────────────────────────
 const offer = "Family Room 222 cocok untuk 4 orang. Mau saya kirimkan foto Family Room 222, Kak?";
