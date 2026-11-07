@@ -51,12 +51,11 @@ import { planPaymentProofGuestReply } from "@/services/wa-inbound-media";
 import { buildPropertyFaqReply, ensureLocationCorrection } from "@/services/property-faq";
 import {
   buildRoomComparisonReply,
-  isBrochureOfferAcceptance,
-  photoOfferAcceptanceText,
   isRoomComparisonQuestion,
 } from "@/services/room-comparison";
 import { buildRoomSharingReply } from "@/services/room-sharing-policy";
-import { guardCombinationCapacity } from "@/services/wa-autoreply/combination-capacity-guard";
+import { applyCombinationGuardToReply } from "@/services/wa-autoreply/combination-capacity-guard";
+import { dispatchBrochureDocument, isMediaOfferAcceptance } from "@/services/wa-autoreply/offer-acceptance";
 import {
   AI_TIMEOUT_MS,
   FALLBACK_MESSAGE,
@@ -400,6 +399,8 @@ async function buildDeterministicAvailabilityReply(params: {
       checkOut: range.checkOut,
       checkoutAssumed: availabilityCheckoutWasAssumed(params.message, today),
     };
+    // Checkout belum disebut → ungkapkan asumsi sejak jawaban availability pertama.
+    if (result.dates.checkoutAssumed) result.reply = appendCheckoutAssumedNote(result.reply, range.checkOut);
     if (guests) result.guests = guests;
   }
   return result;
@@ -499,6 +500,7 @@ async function buildContextualBookingInquiryReply(params: {
         ? { checkoutAssumed: availabilityCheckoutWasAssumed(params.message, today) }
         : {}),
     };
+    if (result.dates.checkoutAssumed) result.reply = appendCheckoutAssumedNote(result.reply, checkOut);
     result.intent = `${result.intent}_contextual`;
     if (guests) result.guests = guests;
   }
@@ -652,20 +654,20 @@ async function sendBrochureFastPath(
   phone: string,
   threadId?: string | null,
 ): Promise<BrochureSendOutcome> {
-  const file = await loadPublicBrochure();
-  if (!file) {
+  const { sendGuestWhatsApp } = await import("@/services/guest-whatsapp.service");
+  const dispatched = await dispatchBrochureDocument(phone || target, {
+    loadBrochure: loadPublicBrochure,
+    sendDocument: (to, caption, opts) => sendGuestWhatsApp(to, caption, opts),
+  });
+  if (dispatched.status === "unavailable") {
     console.warn("[Autoreply] brosur PDF tidak ditemukan (env/sop_documents/bucket brosur)");
     return { status: "unavailable" };
   }
-  const { sendGuestWhatsApp } = await import("@/services/guest-whatsapp.service");
-  const result = await sendGuestWhatsApp(phone || target, BROCHURE_CAPTION, {
-    fileUrl: file.url,
-    filename: file.name,
-  });
-  if (!result.ok) {
-    console.warn(`[Autoreply] brosur document send failed (${result.channel}): ${result.error}`);
-    return { status: "failed", file, error: result.error };
+  if (dispatched.status === "failed") {
+    console.warn(`[Autoreply] brosur document send failed: ${dispatched.error}`);
+    return { status: "failed", file: dispatched.file, error: dispatched.error };
   }
+  const file = dispatched.file;
   // Catat dokumen di `whatsapp_messages` supaya muncul di inbox admin. Tanpa
   // baris ini brosur hanya ada di `whatsapp_meta_outbound` dan admin melihat
   // "Ini brosurnya ya Kak" tanpa file (laporan 1 Okt 2026). Jangan beri
@@ -1436,11 +1438,10 @@ export async function executeAutoreplyForPhone(
   // pesan terakhir (insiden 9 Agu 2026 — "apakah ada gambarnya kak?" disusul
   // "harganya berapa ya ka" membuat permintaan foto tak terlihat).
   // Tamu menjawab "ya/mau/boleh" atas tawaran brosur dari jawaban perbandingan kamar.
-  const brochureOfferAccepted = isBrochureOfferAcceptance(rollingMessages);
-  // Tamu menjawab "boleh/ya" atas tawaran FOTO kamar → kirim foto sungguhan,
-  // bukan janji "diteruskan ke admin" (kasus Sofiah, 8 Nov 2026).
-  const photoOfferText = brochureOfferAccepted ? null : photoOfferAcceptanceText(rollingMessages);
-  const wantsMedia = burstWantsMedia(rollingMessages) || brochureOfferAccepted || photoOfferText != null;
+  // Juga "boleh kak" atas tawaran FOTO kamar: kebijakan properti membalas
+  // foto/lihat kamar dengan PDF brosur (kasus Sofiah, 8 Nov 2026).
+  const brochureOfferAccepted = isMediaOfferAcceptance(rollingMessages);
+  const wantsMedia = burstWantsMedia(rollingMessages) || brochureOfferAccepted;
   const mediaBurstText = inboundBurstText(rollingMessages);
   const facilityAsk = isGeneralFacilityQuestion(mediaBurstText);
   const deferMediaToAi = shouldAnswerMediaWithAi(mediaBurstText);
@@ -1458,9 +1459,7 @@ export async function executeAutoreplyForPhone(
       const cannedPlan =
         brochureOfferAccepted
           ? ({ kind: "brochure", reply: MEDIA_FAST_PATH_BROCHURE_REPLY, photoFallback: planRoomPhotos("", gallery) } as const)
-          : photoOfferText != null
-            ? planRoomPhotos(photoOfferText, gallery)
-            : !facilityAsk && !deferMediaToAi
+          : !facilityAsk && !deferMediaToAi
             ? planMediaFastPath(rollingMessages, gallery, { roomType: contextRoom })
             : null;
       const threadSends = await loadThreadBrochureSendTimes(c.thread_id);
@@ -2659,24 +2658,19 @@ export async function executeAutoreplyForPhone(
   // cukup untuk jumlah tamu atau mengklaim kapasitas salah (kasus Sofiah).
   if (!isManager && orchResult?.fastPath !== true) {
     try {
-      const slots = ((bookingState as any)?.slots ?? {}) as Record<string, unknown>;
-      const slotAdults = Number(slots.adults ?? slots.guestCount ?? 0);
-      const slotTotal = slotAdults > 0 ? slotAdults + Number(slots.children ?? 0) : 0;
-      const parsedTotal = rollingMessages
-        .filter((m) => m.direction === "in")
-        .map((m) => parseGuestCountFollowup(m.body ?? "")?.total ?? 0)
-        .filter((n) => n > 0)
-        .pop() ?? 0;
-      const guestTotal = slotTotal || parsedTotal;
-      const guardRooms = ((rooms ?? []) as Array<Record<string, unknown>>).map((r) => ({
-        name: String(r.name ?? ""),
-        capacity: Math.max(1, Number(r.capacity ?? 1) || 1),
-        extraBedCapacity: Math.max(0, Number(r.extrabed_capacity ?? 0) || 0),
-      })).filter((r) => r.name);
-      const guarded = guardCombinationCapacity(finalReply, guardRooms, guestTotal);
-      if (guarded.removed > 0 && guarded.text) {
+      const guarded = applyCombinationGuardToReply({
+        reply: finalReply,
+        rooms: (rooms ?? []) as Array<Record<string, unknown>>,
+        slots: ((bookingState as any)?.slots ?? {}) as Record<string, unknown>,
+        inboundBodies: rollingMessages.filter((m) => m.direction === "in").map((m) => m.body ?? ""),
+      });
+      // Fail-closed: teks hasil guard SELALU dipakai bila ada baris dibuang
+      // (termasuk fallback aman saat semua opsi invalid).
+      if (guarded.removed > 0) {
         finalReply = guarded.text;
-        console.warn(`[Autoreply] removed ${guarded.removed} under-capacity combination line(s) for ${phone.slice(-6)}`);
+        console.warn(
+          `[Autoreply] removed ${guarded.removed} under-capacity combination line(s) for ${phone.slice(-6)} fallback=${guarded.fallback}`,
+        );
       }
     } catch (e) {
       console.warn("[Autoreply] combination capacity guard failed (non-fatal):", e);

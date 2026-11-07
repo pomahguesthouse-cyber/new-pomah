@@ -126,3 +126,100 @@ assert.match(noted, /checkout 12\/12\/2026/);
 assert.equal(appendCheckoutAssumedNote(noted, "2026-12-12"), noted, "tidak dobel");
 
 console.log("✓ Sofiah combination/photo/checkout regressions passed");
+
+// ═══ Integrasi finalReply: applyCombinationGuardToReply (dipanggil service) ═══
+import {
+  applyCombinationGuardToReply,
+  capacityGuardFallbackReply,
+} from "../src/services/wa-autoreply/combination-capacity-guard";
+import { dispatchOfferAcceptance } from "../src/services/wa-autoreply/offer-acceptance";
+
+const dbRoomRows = [
+  { name: "Deluxe", capacity: 2, extrabed_capacity: 1 },
+  { name: "Family Room 222", capacity: 4, extrabed_capacity: 2 },
+  { name: "Family Suite 100", capacity: 4, extrabed_capacity: 2 },
+  { name: "Grand Deluxe", capacity: 2, extrabed_capacity: 1 },
+  { name: "Single", capacity: 1, extrabed_capacity: 1 },
+];
+const stateSlots = { checkIn: "2026-12-11", checkOut: "2026-12-12", checkoutAssumed: true, partialAdults: 7 };
+const guardFinal = (reply: string, slots: Record<string, unknown> = stateSlots, inbound: string[] = []) =>
+  applyCombinationGuardToReply({ reply, rooms: dbRoomRows, slots, inboundBodies: inbound });
+
+// 1) Satu baris invalid saja → fallback aman (bukan teks asli invalid).
+const single = guardFinal("Bisa pakai Family + Deluxe ya Kak.");
+assert.equal(single.fallback, true);
+assert.equal(single.text, capacityGuardFallbackReply(7));
+assert.doesNotMatch(single.text, /Rp|booking|Family/i, "fallback tanpa harga/booking/opsi");
+
+// 2) Paragraf dua opsi invalid dalam satu baris → fallback.
+const twoOpts = guardFinal(
+  "Untuk 7 orang bisa Family Room 222 + Single + 1 extra bed atau Family Room 222 + Deluxe, mau yang mana Kak?",
+);
+assert.equal(twoOpts.fallback, true);
+assert.equal(twoOpts.text, capacityGuardFallbackReply(7));
+
+// 3) Campuran valid + invalid → hanya invalid yang dibuang, tidak fallback.
+const mixedReply = guardFinal(
+  "Pilihan untuk 7 orang:\n- 3 Deluxe + 1 extra bed\n- Family + Deluxe\n- Family + 1 extra bed + Single + 1 extra bed\nMau yang mana, Kak?",
+);
+assert.equal(mixedReply.removed, 1);
+assert.equal(mixedReply.fallback, false);
+assert.match(mixedReply.text, /3 Deluxe \+ 1 extra bed/);
+assert.match(mixedReply.text, /Family \+ 1 extra bed \+ Single \+ 1 extra bed/, "2 klausa EB: 4+1+2 = 7");
+assert.doesNotMatch(mixedReply.text, /- Family \+ Deluxe\n/);
+
+// 4) Beberapa klausa extra bed & angka berulang tidak salah parse.
+assert.equal(guardFinal("- 3 Deluxe + 1 extra bed, kapasitas 7\n- lainnya").removed, 0, "3 Deluxe + 1 EB = 7");
+assert.equal(guardFinal("- 3 Deluxe + 1 extra bed: kapasitas 9 tamu").fallback, true, "klaim 9 untuk 3 Deluxe + 1 EB ditolak");
+assert.equal(guardFinal("- 3 Deluxe + 3 extra bed: kapasitas 9 tamu").removed, 0, "3 EB berulang = 9, klaim cocok");
+assert.equal(guardFinal("- 2 Deluxe + 1 extra bed + Single + 1 extra bed (kapasitas 7)").removed, 0, "2 EB berulang = 7");
+assert.equal(guardFinal("- 2 Deluxe + 1 extra bed + Single + 1 extra bed (kapasitas 8)").fallback, true, "bukan 8");
+
+// 5) Ejaan bebas vs DB: "family room", "FAMILY", "grand deluxe".
+assert.equal(guardFinal("Bisa FAMILY ROOM + single + 1 extra bed").fallback, true);
+assert.equal(guardFinal("Bisa 1 Family Suite 100 + 1 Grand Deluxe").fallback, true, "4+2 = 6");
+
+// 6) Jumlah tamu dari slot partialAdults=7; tanpa slot → dari pesan "untuk 7 orang kk".
+assert.equal(guardFinal("Family + Deluxe", {}, ["untuk 7 orang kk"]).fallback, true);
+assert.equal(guardFinal("Family + Deluxe", {}, []).removed, 0, "tanpa jumlah tamu guard tidak menebak");
+assert.equal(guardFinal("Family + Deluxe", { partialAdults: 6 }).removed, 0, "6 tamu: Family + Deluxe cukup");
+
+// ═══ Media: "boleh kak" setelah tawaran foto Family → dispatch dokumen brosur PDF (mock transport) ═══
+const sent: Array<{ phone: string; caption: string; fileUrl: string; filename: string }> = [];
+const mockDeps = {
+  loadBrochure: async () => ({ name: "brosur-pomah.pdf", url: "https://example.test/brosur-pomah.pdf" }),
+  sendDocument: async (phone: string, caption: string, opts: { fileUrl: string; filename: string }) => {
+    sent.push({ phone, caption, ...opts });
+    return { ok: true };
+  },
+};
+const photoOfferHistory = [
+  { direction: "in", body: "kalau family gimana kak" },
+  { direction: "out", body: "Family Room 222 muat 4 orang + 2 extra bed. Mau saya kirimkan foto Family Room 222, Kak?" },
+];
+const accepted = await dispatchOfferAcceptance([...photoOfferHistory, { direction: "in", body: "boleh kak" }], "6281200000000", mockDeps);
+assert.equal(accepted?.status, "sent");
+assert.equal(sent.length, 1, "tepat satu dokumen dikirim");
+assert.match(sent[0]!.fileUrl, /\.pdf$/);
+assert.equal(sent[0]!.filename, "brosur-pomah.pdf");
+
+const declined = await dispatchOfferAcceptance([...photoOfferHistory, { direction: "in", body: "nggak usah kak" }], "6281200000000", mockDeps);
+assert.equal(declined, null);
+assert.equal(sent.length, 1, "'nggak usah' tidak dispatch");
+
+const notOffer = await dispatchOfferAcceptance(
+  [{ direction: "out", body: "Untuk berapa orang, Kak?" }, { direction: "in", body: "boleh kak" }],
+  "6281200000000",
+  mockDeps,
+);
+assert.equal(notOffer, null);
+assert.equal(sent.length, 1, "tanpa tawaran media tidak dispatch");
+
+const failed = await dispatchOfferAcceptance(
+  [...photoOfferHistory, { direction: "in", body: "boleh" }],
+  "6281200000000",
+  { ...mockDeps, sendDocument: async () => ({ ok: false, error: "mock gagal" }) },
+);
+assert.equal(failed?.status, "failed", "kegagalan kirim dilaporkan, bukan dianggap terkirim");
+
+console.log("✓ Sofiah integration (finalReply guard + brochure dispatch) passed");

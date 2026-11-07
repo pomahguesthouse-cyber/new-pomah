@@ -81,12 +81,9 @@ function buildCombinationOptions(
       const capacity = Math.max(
         0,
         Math.floor(
-          Number(
-            room.kapasitas_per_kamar ??
-              room.kapasitas_maksimal_dengan_extra_bed ??
-              room.kapasitas_tamu ??
-              0,
-          ),
+          // Jalur fallback tidak mengalokasikan/menagih extra bed → hanya
+          // kapasitas standar yang boleh diklaim cukup.
+          Number(room.kapasitas_standar_per_kamar ?? room.kapasitas_tamu ?? 0),
         ),
       );
       // Kalender harga bisa beda per malam → bandingkan rata-rata menginap.
