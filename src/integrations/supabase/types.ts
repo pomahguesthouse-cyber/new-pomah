@@ -14,6 +14,1428 @@ export type Database = {
   }
   public: {
     Tables: {
+      _bak_ailab_20261014_properties: {
+        Row: {
+          ai_lab_config: Json | null
+          backed_up_at: string | null
+          id: string | null
+        }
+        Insert: {
+          ai_lab_config?: Json | null
+          backed_up_at?: string | null
+          id?: string | null
+        }
+        Update: {
+          ai_lab_config?: Json | null
+          backed_up_at?: string | null
+          id?: string | null
+        }
+        Relationships: []
+      }
+      _bak_azairul_20261016_booking_rooms: {
+        Row: {
+          booking_id: string | null
+          booking_status: string | null
+          check_in: string | null
+          check_out: string | null
+          created_at: string | null
+          extra_bed_count: number | null
+          extra_bed_rate: number | null
+          id: string | null
+          nightly_rate: number | null
+          room_id: string | null
+          room_type_id: string | null
+        }
+        Insert: {
+          booking_id?: string | null
+          booking_status?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string | null
+          extra_bed_count?: number | null
+          extra_bed_rate?: number | null
+          id?: string | null
+          nightly_rate?: number | null
+          room_id?: string | null
+          room_type_id?: string | null
+        }
+        Update: {
+          booking_id?: string | null
+          booking_status?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string | null
+          extra_bed_count?: number | null
+          extra_bed_rate?: number | null
+          id?: string | null
+          nightly_rate?: number | null
+          room_id?: string | null
+          room_type_id?: string | null
+        }
+        Relationships: []
+      }
+      _bak_azairul_20261016_bookings: {
+        Row: {
+          adults: number | null
+          check_in: string | null
+          check_in_time: string | null
+          check_out: string | null
+          check_out_time: string | null
+          children: number | null
+          created_at: string | null
+          expires_at: string | null
+          guest_id: string | null
+          id: string | null
+          idempotency_key: string | null
+          internal_notes: string | null
+          nightly_rate: number | null
+          nights: number | null
+          paid_amount: number | null
+          payment_method: string | null
+          payment_status: Database["public"]["Enums"]["payment_status"] | null
+          property_id: string | null
+          reference_code: string | null
+          room_id: string | null
+          room_type_id: string | null
+          source: Database["public"]["Enums"]["booking_source"] | null
+          special_requests: string | null
+          status: Database["public"]["Enums"]["booking_status"] | null
+          total_amount: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          adults?: number | null
+          check_in?: string | null
+          check_in_time?: string | null
+          check_out?: string | null
+          check_out_time?: string | null
+          children?: number | null
+          created_at?: string | null
+          expires_at?: string | null
+          guest_id?: string | null
+          id?: string | null
+          idempotency_key?: string | null
+          internal_notes?: string | null
+          nightly_rate?: number | null
+          nights?: number | null
+          paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          property_id?: string | null
+          reference_code?: string | null
+          room_id?: string | null
+          room_type_id?: string | null
+          source?: Database["public"]["Enums"]["booking_source"] | null
+          special_requests?: string | null
+          status?: Database["public"]["Enums"]["booking_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          adults?: number | null
+          check_in?: string | null
+          check_in_time?: string | null
+          check_out?: string | null
+          check_out_time?: string | null
+          children?: number | null
+          created_at?: string | null
+          expires_at?: string | null
+          guest_id?: string | null
+          id?: string | null
+          idempotency_key?: string | null
+          internal_notes?: string | null
+          nightly_rate?: number | null
+          nights?: number | null
+          paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          property_id?: string | null
+          reference_code?: string | null
+          room_id?: string | null
+          room_type_id?: string | null
+          source?: Database["public"]["Enums"]["booking_source"] | null
+          special_requests?: string | null
+          status?: Database["public"]["Enums"]["booking_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_azairul_20261016_wa_booking_states: {
+        Row: {
+          context: Json | null
+          last_entity: Json | null
+          last_topic: string | null
+          phone: string | null
+          slots: Json | null
+          state: string | null
+          topic_updated_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          context?: Json | null
+          last_entity?: Json | null
+          last_topic?: string | null
+          phone?: string | null
+          slots?: Json | null
+          state?: string | null
+          topic_updated_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          context?: Json | null
+          last_entity?: Json | null
+          last_topic?: string | null
+          phone?: string | null
+          slots?: Json | null
+          state?: string | null
+          topic_updated_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_bayartempat_20261031_sop_chunks: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          document_id: string | null
+          embedding: string | null
+          id: string | null
+          source_url: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          document_id?: string | null
+          embedding?: string | null
+          id?: string | null
+          source_url?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          document_id?: string | null
+          embedding?: string | null
+          id?: string | null
+          source_url?: string | null
+        }
+        Relationships: []
+      }
+      _bak_bayartempat_20261031_sop_documents: {
+        Row: {
+          agent_key: string | null
+          content: string | null
+          created_at: string | null
+          doc_category: string | null
+          file_path: string | null
+          file_type: string | null
+          folder: string | null
+          folder_id: string | null
+          id: string | null
+          name: string | null
+          property_id: string | null
+          source_url: string | null
+          storage_bucket: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_key?: string | null
+          content?: string | null
+          created_at?: string | null
+          doc_category?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
+          id?: string | null
+          name?: string | null
+          property_id?: string | null
+          source_url?: string | null
+          storage_bucket?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_key?: string | null
+          content?: string | null
+          created_at?: string | null
+          doc_category?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
+          id?: string | null
+          name?: string | null
+          property_id?: string | null
+          source_url?: string | null
+          storage_bucket?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_bayartempat_20261031_training: {
+        Row: {
+          created_at: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
+          id: string | null
+          ideal_assistant_response: string | null
+          intent: string | null
+          is_active: boolean | null
+          language: string | null
+          promoted_from_log_id: string | null
+          slot_updates: Json | null
+          source_file: string | null
+          stage: string | null
+          state_before: string | null
+          training_type: string | null
+          updated_at: string | null
+          user_message: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          ideal_assistant_response?: string | null
+          intent?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          promoted_from_log_id?: string | null
+          slot_updates?: Json | null
+          source_file?: string | null
+          stage?: string | null
+          state_before?: string | null
+          training_type?: string | null
+          updated_at?: string | null
+          user_message?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          ideal_assistant_response?: string | null
+          intent?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          promoted_from_log_id?: string | null
+          slot_updates?: Json | null
+          source_file?: string | null
+          stage?: string | null
+          state_before?: string | null
+          training_type?: string | null
+          updated_at?: string | null
+          user_message?: string | null
+        }
+        Relationships: []
+      }
+      _bak_facility_kb_20261020: {
+        Row: {
+          checkin_point: string | null
+          cooking_tools: string | null
+          hairdryer: string | null
+          id: string | null
+          kitchen: string | null
+          maps_url: string | null
+          notes: string | null
+          room_type_id: string | null
+          towels: string | null
+          updated_at: string | null
+          updated_by: string | null
+          wifi_password: string | null
+          wifi_password_location: string | null
+        }
+        Insert: {
+          checkin_point?: string | null
+          cooking_tools?: string | null
+          hairdryer?: string | null
+          id?: string | null
+          kitchen?: string | null
+          maps_url?: string | null
+          notes?: string | null
+          room_type_id?: string | null
+          towels?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          wifi_password?: string | null
+          wifi_password_location?: string | null
+        }
+        Update: {
+          checkin_point?: string | null
+          cooking_tools?: string | null
+          hairdryer?: string | null
+          id?: string | null
+          kitchen?: string | null
+          maps_url?: string | null
+          notes?: string | null
+          room_type_id?: string | null
+          towels?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          wifi_password?: string | null
+          wifi_password_location?: string | null
+        }
+        Relationships: []
+      }
+      _bak_facility_kb_20261020b: {
+        Row: {
+          checkin_point: string | null
+          cooking_tools: string | null
+          hairdryer: string | null
+          id: string | null
+          kitchen: string | null
+          maps_url: string | null
+          notes: string | null
+          room_type_id: string | null
+          towels: string | null
+          updated_at: string | null
+          updated_by: string | null
+          wifi_password: string | null
+          wifi_password_location: string | null
+        }
+        Insert: {
+          checkin_point?: string | null
+          cooking_tools?: string | null
+          hairdryer?: string | null
+          id?: string | null
+          kitchen?: string | null
+          maps_url?: string | null
+          notes?: string | null
+          room_type_id?: string | null
+          towels?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          wifi_password?: string | null
+          wifi_password_location?: string | null
+        }
+        Update: {
+          checkin_point?: string | null
+          cooking_tools?: string | null
+          hairdryer?: string | null
+          id?: string | null
+          kitchen?: string | null
+          maps_url?: string | null
+          notes?: string | null
+          room_type_id?: string | null
+          towels?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          wifi_password?: string | null
+          wifi_password_location?: string | null
+        }
+        Relationships: []
+      }
+      _bak_frome_20261019_whatsapp_messages: {
+        Row: {
+          from_me: boolean | null
+          id: string | null
+        }
+        Insert: {
+          from_me?: boolean | null
+          id?: string | null
+        }
+        Update: {
+          from_me?: boolean | null
+          id?: string | null
+        }
+        Relationships: []
+      }
+      _bak_frome_20261019_whatsapp_threads: {
+        Row: {
+          id: string | null
+          last_message_at: string | null
+        }
+        Insert: {
+          id?: string | null
+          last_message_at?: string | null
+        }
+        Update: {
+          id?: string | null
+          last_message_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_lunas_20261016_sop_chunks: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          document_id: string | null
+          embedding: string | null
+          id: string | null
+          source_url: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          document_id?: string | null
+          embedding?: string | null
+          id?: string | null
+          source_url?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          document_id?: string | null
+          embedding?: string | null
+          id?: string | null
+          source_url?: string | null
+        }
+        Relationships: []
+      }
+      _bak_lunas_20261016_sop_documents: {
+        Row: {
+          agent_key: string | null
+          content: string | null
+          created_at: string | null
+          doc_category: string | null
+          file_path: string | null
+          file_type: string | null
+          folder: string | null
+          folder_id: string | null
+          id: string | null
+          name: string | null
+          property_id: string | null
+          source_url: string | null
+          storage_bucket: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_key?: string | null
+          content?: string | null
+          created_at?: string | null
+          doc_category?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
+          id?: string | null
+          name?: string | null
+          property_id?: string | null
+          source_url?: string | null
+          storage_bucket?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_key?: string | null
+          content?: string | null
+          created_at?: string | null
+          doc_category?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
+          id?: string | null
+          name?: string | null
+          property_id?: string | null
+          source_url?: string | null
+          storage_bucket?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_lunas_20261016_training: {
+        Row: {
+          created_at: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
+          id: string | null
+          ideal_assistant_response: string | null
+          intent: string | null
+          is_active: boolean | null
+          language: string | null
+          promoted_from_log_id: string | null
+          slot_updates: Json | null
+          source_file: string | null
+          stage: string | null
+          state_before: string | null
+          training_type: string | null
+          updated_at: string | null
+          user_message: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          ideal_assistant_response?: string | null
+          intent?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          promoted_from_log_id?: string | null
+          slot_updates?: Json | null
+          source_file?: string | null
+          stage?: string | null
+          state_before?: string | null
+          training_type?: string | null
+          updated_at?: string | null
+          user_message?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          ideal_assistant_response?: string | null
+          intent?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          promoted_from_log_id?: string | null
+          slot_updates?: Json | null
+          source_file?: string | null
+          stage?: string | null
+          state_before?: string | null
+          training_type?: string | null
+          updated_at?: string | null
+          user_message?: string | null
+        }
+        Relationships: []
+      }
+      _bak_persona_20261019_properties: {
+        Row: {
+          ai_lab_config: Json | null
+          backed_up_at: string | null
+          id: string | null
+        }
+        Insert: {
+          ai_lab_config?: Json | null
+          backed_up_at?: string | null
+          id?: string | null
+        }
+        Update: {
+          ai_lab_config?: Json | null
+          backed_up_at?: string | null
+          id?: string | null
+        }
+        Relationships: []
+      }
+      _bak_qaharga_20261020: {
+        Row: {
+          agent_key: string | null
+          content: string | null
+          created_at: string | null
+          doc_category: string | null
+          file_path: string | null
+          file_type: string | null
+          folder: string | null
+          folder_id: string | null
+          id: string | null
+          name: string | null
+          property_id: string | null
+          source_url: string | null
+          storage_bucket: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_key?: string | null
+          content?: string | null
+          created_at?: string | null
+          doc_category?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
+          id?: string | null
+          name?: string | null
+          property_id?: string | null
+          source_url?: string | null
+          storage_bucket?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_key?: string | null
+          content?: string | null
+          created_at?: string | null
+          doc_category?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
+          id?: string | null
+          name?: string | null
+          property_id?: string | null
+          source_url?: string | null
+          storage_bucket?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_qaharga_20261020_chunks: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          document_id: string | null
+          embedding: string | null
+          id: string | null
+          source_url: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          document_id?: string | null
+          embedding?: string | null
+          id?: string | null
+          source_url?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          document_id?: string | null
+          embedding?: string | null
+          id?: string | null
+          source_url?: string | null
+        }
+        Relationships: []
+      }
+      _bak_reviews_20261014_properties: {
+        Row: {
+          backed_up_at: string | null
+          custom_google_rating: number | null
+          custom_google_reviews_checked_at: string | null
+          custom_google_reviews_json: Json | null
+          custom_google_reviews_total: number | null
+          id: string | null
+          review_source_badges: Json | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          custom_google_rating?: number | null
+          custom_google_reviews_checked_at?: string | null
+          custom_google_reviews_json?: Json | null
+          custom_google_reviews_total?: number | null
+          id?: string | null
+          review_source_badges?: Json | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          custom_google_rating?: number | null
+          custom_google_reviews_checked_at?: string | null
+          custom_google_reviews_json?: Json | null
+          custom_google_reviews_total?: number | null
+          id?: string | null
+          review_source_badges?: Json | null
+        }
+        Relationships: []
+      }
+      _bak_seo_20261019_properties: {
+        Row: {
+          homepage_config: Json | null
+          id: string | null
+        }
+        Insert: {
+          homepage_config?: Json | null
+          id?: string | null
+        }
+        Update: {
+          homepage_config?: Json | null
+          id?: string | null
+        }
+        Relationships: []
+      }
+      _bak_seo_20261019_room_types: {
+        Row: {
+          amenities: string[] | null
+          base_rate: number | null
+          bathrooms: number | null
+          bed_size: string | null
+          bed_type: string | null
+          bedrooms: number | null
+          capacity: number | null
+          created_at: string | null
+          description: string | null
+          extrabed_capacity: number | null
+          extrabed_rate: number | null
+          floor_info: string | null
+          hero_image_url: string | null
+          id: string | null
+          images: string[] | null
+          is_active: boolean | null
+          is_published: boolean | null
+          max_occupancy: number | null
+          meta_description: string | null
+          name: string | null
+          property_id: string | null
+          seo_h1: string | null
+          seo_title: string | null
+          short_description: string | null
+          size_sqm: number | null
+          slug: string | null
+          total_units: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          amenities?: string[] | null
+          base_rate?: number | null
+          bathrooms?: number | null
+          bed_size?: string | null
+          bed_type?: string | null
+          bedrooms?: number | null
+          capacity?: number | null
+          created_at?: string | null
+          description?: string | null
+          extrabed_capacity?: number | null
+          extrabed_rate?: number | null
+          floor_info?: string | null
+          hero_image_url?: string | null
+          id?: string | null
+          images?: string[] | null
+          is_active?: boolean | null
+          is_published?: boolean | null
+          max_occupancy?: number | null
+          meta_description?: string | null
+          name?: string | null
+          property_id?: string | null
+          seo_h1?: string | null
+          seo_title?: string | null
+          short_description?: string | null
+          size_sqm?: number | null
+          slug?: string | null
+          total_units?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          amenities?: string[] | null
+          base_rate?: number | null
+          bathrooms?: number | null
+          bed_size?: string | null
+          bed_type?: string | null
+          bedrooms?: number | null
+          capacity?: number | null
+          created_at?: string | null
+          description?: string | null
+          extrabed_capacity?: number | null
+          extrabed_rate?: number | null
+          floor_info?: string | null
+          hero_image_url?: string | null
+          id?: string | null
+          images?: string[] | null
+          is_active?: boolean | null
+          is_published?: boolean | null
+          max_occupancy?: number | null
+          meta_description?: string | null
+          name?: string | null
+          property_id?: string | null
+          seo_h1?: string | null
+          seo_title?: string | null
+          short_description?: string | null
+          size_sqm?: number | null
+          slug?: string | null
+          total_units?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_seo_20261019_seo_landing_pages: {
+        Row: {
+          body_content: string | null
+          brief_id: string | null
+          created_at: string | null
+          custom_head: string | null
+          custom_json_ld: string | null
+          custom_robots: string | null
+          hero_cta_text: string | null
+          hero_cta_url: string | null
+          hero_headline: string | null
+          hero_subheadline: string | null
+          homepage_config: Json | null
+          id: string | null
+          json_ld_enabled: boolean | null
+          meta_description: string | null
+          meta_title: string | null
+          noindex: boolean | null
+          og_image_url: string | null
+          property_id: string | null
+          published: boolean | null
+          related_explore_slugs: string[] | null
+          sections: Json | null
+          slug: string | null
+          target_keyword: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          body_content?: string | null
+          brief_id?: string | null
+          created_at?: string | null
+          custom_head?: string | null
+          custom_json_ld?: string | null
+          custom_robots?: string | null
+          hero_cta_text?: string | null
+          hero_cta_url?: string | null
+          hero_headline?: string | null
+          hero_subheadline?: string | null
+          homepage_config?: Json | null
+          id?: string | null
+          json_ld_enabled?: boolean | null
+          meta_description?: string | null
+          meta_title?: string | null
+          noindex?: boolean | null
+          og_image_url?: string | null
+          property_id?: string | null
+          published?: boolean | null
+          related_explore_slugs?: string[] | null
+          sections?: Json | null
+          slug?: string | null
+          target_keyword?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          body_content?: string | null
+          brief_id?: string | null
+          created_at?: string | null
+          custom_head?: string | null
+          custom_json_ld?: string | null
+          custom_robots?: string | null
+          hero_cta_text?: string | null
+          hero_cta_url?: string | null
+          hero_headline?: string | null
+          hero_subheadline?: string | null
+          homepage_config?: Json | null
+          id?: string | null
+          json_ld_enabled?: boolean | null
+          meta_description?: string | null
+          meta_title?: string | null
+          noindex?: boolean | null
+          og_image_url?: string | null
+          property_id?: string | null
+          published?: boolean | null
+          related_explore_slugs?: string[] | null
+          sections?: Json | null
+          slug?: string | null
+          target_keyword?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_sopdapur_20261020_sop_chunks: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          document_id: string | null
+          embedding: string | null
+          id: string | null
+          source_url: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          document_id?: string | null
+          embedding?: string | null
+          id?: string | null
+          source_url?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          document_id?: string | null
+          embedding?: string | null
+          id?: string | null
+          source_url?: string | null
+        }
+        Relationships: []
+      }
+      _bak_sopdapur_20261020_sop_documents: {
+        Row: {
+          agent_key: string | null
+          content: string | null
+          created_at: string | null
+          doc_category: string | null
+          file_path: string | null
+          file_type: string | null
+          folder: string | null
+          folder_id: string | null
+          id: string | null
+          name: string | null
+          property_id: string | null
+          source_url: string | null
+          storage_bucket: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_key?: string | null
+          content?: string | null
+          created_at?: string | null
+          doc_category?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
+          id?: string | null
+          name?: string | null
+          property_id?: string | null
+          source_url?: string | null
+          storage_bucket?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_key?: string | null
+          content?: string | null
+          created_at?: string | null
+          doc_category?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
+          id?: string | null
+          name?: string | null
+          property_id?: string | null
+          source_url?: string | null
+          storage_bucket?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_sopdapur_20261020_training: {
+        Row: {
+          created_at: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
+          id: string | null
+          ideal_assistant_response: string | null
+          intent: string | null
+          is_active: boolean | null
+          language: string | null
+          promoted_from_log_id: string | null
+          slot_updates: Json | null
+          source_file: string | null
+          stage: string | null
+          state_before: string | null
+          training_type: string | null
+          updated_at: string | null
+          user_message: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          ideal_assistant_response?: string | null
+          intent?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          promoted_from_log_id?: string | null
+          slot_updates?: Json | null
+          source_file?: string | null
+          stage?: string | null
+          state_before?: string | null
+          training_type?: string | null
+          updated_at?: string | null
+          user_message?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          ideal_assistant_response?: string | null
+          intent?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          promoted_from_log_id?: string | null
+          slot_updates?: Json | null
+          source_file?: string | null
+          stage?: string | null
+          state_before?: string | null
+          training_type?: string | null
+          updated_at?: string | null
+          user_message?: string | null
+        }
+        Relationships: []
+      }
+      _bak_training_20261011_ai_conversation_logs: {
+        Row: {
+          ai_response: string | null
+          correction: string | null
+          created_at: string | null
+          effective_answer: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
+          id: string | null
+          metadata: Json | null
+          rating: string | null
+          source: string | null
+          thread_id: string | null
+          title: string | null
+          transcript: Json | null
+          used: boolean | null
+          user_message: string | null
+        }
+        Insert: {
+          ai_response?: string | null
+          correction?: string | null
+          created_at?: string | null
+          effective_answer?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          metadata?: Json | null
+          rating?: string | null
+          source?: string | null
+          thread_id?: string | null
+          title?: string | null
+          transcript?: Json | null
+          used?: boolean | null
+          user_message?: string | null
+        }
+        Update: {
+          ai_response?: string | null
+          correction?: string | null
+          created_at?: string | null
+          effective_answer?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          metadata?: Json | null
+          rating?: string | null
+          source?: string | null
+          thread_id?: string | null
+          title?: string | null
+          transcript?: Json | null
+          used?: boolean | null
+          user_message?: string | null
+        }
+        Relationships: []
+      }
+      _bak_training_20261011_chatbot_training_examples: {
+        Row: {
+          created_at: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
+          id: string | null
+          ideal_assistant_response: string | null
+          intent: string | null
+          is_active: boolean | null
+          language: string | null
+          promoted_from_log_id: string | null
+          slot_updates: Json | null
+          source_file: string | null
+          stage: string | null
+          state_before: string | null
+          training_type: string | null
+          updated_at: string | null
+          user_message: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          ideal_assistant_response?: string | null
+          intent?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          promoted_from_log_id?: string | null
+          slot_updates?: Json | null
+          source_file?: string | null
+          stage?: string | null
+          state_before?: string | null
+          training_type?: string | null
+          updated_at?: string | null
+          user_message?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          ideal_assistant_response?: string | null
+          intent?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          promoted_from_log_id?: string | null
+          slot_updates?: Json | null
+          source_file?: string | null
+          stage?: string | null
+          state_before?: string | null
+          training_type?: string | null
+          updated_at?: string | null
+          user_message?: string | null
+        }
+        Relationships: []
+      }
+      _bak_training_20261011_wa_correction_dataset: {
+        Row: {
+          bot_wrong_reply: string | null
+          canonical_phone: string | null
+          context_after: Json | null
+          context_before: Json | null
+          correct_agent: string | null
+          correct_intent: string | null
+          created_at: string | null
+          created_by: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
+          error_type: string | null
+          id: string | null
+          ideal_reply: string | null
+          notes: string | null
+          session_id: string | null
+          severity: string | null
+          source: string | null
+          status: string | null
+          thread_id: string | null
+          turn_index: number | null
+          updated_at: string | null
+          user_message: string | null
+          user_message_id: string | null
+          wrong_reply_message_id: string | null
+        }
+        Insert: {
+          bot_wrong_reply?: string | null
+          canonical_phone?: string | null
+          context_after?: Json | null
+          context_before?: Json | null
+          correct_agent?: string | null
+          correct_intent?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          error_type?: string | null
+          id?: string | null
+          ideal_reply?: string | null
+          notes?: string | null
+          session_id?: string | null
+          severity?: string | null
+          source?: string | null
+          status?: string | null
+          thread_id?: string | null
+          turn_index?: number | null
+          updated_at?: string | null
+          user_message?: string | null
+          user_message_id?: string | null
+          wrong_reply_message_id?: string | null
+        }
+        Update: {
+          bot_wrong_reply?: string | null
+          canonical_phone?: string | null
+          context_after?: Json | null
+          context_before?: Json | null
+          correct_agent?: string | null
+          correct_intent?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          error_type?: string | null
+          id?: string | null
+          ideal_reply?: string | null
+          notes?: string | null
+          session_id?: string | null
+          severity?: string | null
+          source?: string | null
+          status?: string | null
+          thread_id?: string | null
+          turn_index?: number | null
+          updated_at?: string | null
+          user_message?: string | null
+          user_message_id?: string | null
+          wrong_reply_message_id?: string | null
+        }
+        Relationships: []
+      }
+      _bak_training_20261011_wa_correction_sessions: {
+        Row: {
+          canonical_phone: string | null
+          conversation_summary: string | null
+          corrected_transcript: Json | null
+          created_at: string | null
+          created_by: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
+          full_transcript: Json | null
+          guest_memory_snapshot: Json | null
+          id: string | null
+          source: string | null
+          status: string | null
+          thread_id: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          canonical_phone?: string | null
+          conversation_summary?: string | null
+          corrected_transcript?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          full_transcript?: Json | null
+          guest_memory_snapshot?: Json | null
+          id?: string | null
+          source?: string | null
+          status?: string | null
+          thread_id?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          canonical_phone?: string | null
+          conversation_summary?: string | null
+          corrected_transcript?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          full_transcript?: Json | null
+          guest_memory_snapshot?: Json | null
+          id?: string | null
+          source?: string | null
+          status?: string | null
+          thread_id?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_training_20261011b_ai_conversation_logs: {
+        Row: {
+          ai_response: string | null
+          correction: string | null
+          created_at: string | null
+          effective_answer: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
+          id: string | null
+          metadata: Json | null
+          rating: string | null
+          source: string | null
+          thread_id: string | null
+          title: string | null
+          transcript: Json | null
+          used: boolean | null
+          user_message: string | null
+        }
+        Insert: {
+          ai_response?: string | null
+          correction?: string | null
+          created_at?: string | null
+          effective_answer?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          metadata?: Json | null
+          rating?: string | null
+          source?: string | null
+          thread_id?: string | null
+          title?: string | null
+          transcript?: Json | null
+          used?: boolean | null
+          user_message?: string | null
+        }
+        Update: {
+          ai_response?: string | null
+          correction?: string | null
+          created_at?: string | null
+          effective_answer?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          id?: string | null
+          metadata?: Json | null
+          rating?: string | null
+          source?: string | null
+          thread_id?: string | null
+          title?: string | null
+          transcript?: Json | null
+          used?: boolean | null
+          user_message?: string | null
+        }
+        Relationships: []
+      }
+      _bak_training_20261011b_seo_landmarks: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          id: string | null
+          lat: number | null
+          lng: number | null
+          name: string | null
+          notes: string | null
+          road_distance_km: number | null
+          sort_order: number | null
+          travel_minutes: number | null
+          updated_at: string | null
+          verified: boolean | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          id?: string | null
+          lat?: number | null
+          lng?: number | null
+          name?: string | null
+          notes?: string | null
+          road_distance_km?: number | null
+          sort_order?: number | null
+          travel_minutes?: number | null
+          updated_at?: string | null
+          verified?: boolean | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          id?: string | null
+          lat?: number | null
+          lng?: number | null
+          name?: string | null
+          notes?: string | null
+          road_distance_km?: number | null
+          sort_order?: number | null
+          travel_minutes?: number | null
+          updated_at?: string | null
+          verified?: boolean | null
+        }
+        Relationships: []
+      }
+      _bak_training_20261011b_sop_documents: {
+        Row: {
+          agent_key: string | null
+          content: string | null
+          created_at: string | null
+          doc_category: string | null
+          file_path: string | null
+          file_type: string | null
+          folder: string | null
+          folder_id: string | null
+          id: string | null
+          name: string | null
+          property_id: string | null
+          source_url: string | null
+          storage_bucket: string | null
+        }
+        Insert: {
+          agent_key?: string | null
+          content?: string | null
+          created_at?: string | null
+          doc_category?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
+          id?: string | null
+          name?: string | null
+          property_id?: string | null
+          source_url?: string | null
+          storage_bucket?: string | null
+        }
+        Update: {
+          agent_key?: string | null
+          content?: string | null
+          created_at?: string | null
+          doc_category?: string | null
+          file_path?: string | null
+          file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
+          id?: string | null
+          name?: string | null
+          property_id?: string | null
+          source_url?: string | null
+          storage_bucket?: string | null
+        }
+        Relationships: []
+      }
       ai_conversation_logs: {
         Row: {
           ai_response: string
@@ -665,6 +2087,59 @@ export type Database = {
           user_message?: string
         }
         Relationships: []
+      }
+      chatbot_training_suggestions: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          flags: string[]
+          guest_question: string
+          id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_message_id: string
+          staff_answer: string
+          status: string
+          thread_id: string | null
+          training_example_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          flags?: string[]
+          guest_question: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_message_id: string
+          staff_answer: string
+          status?: string
+          thread_id?: string | null
+          training_example_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          flags?: string[]
+          guest_question?: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_message_id?: string
+          staff_answer?: string
+          status?: string
+          thread_id?: string | null
+          training_example_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chatbot_training_suggestions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       competitor_prices: {
         Row: {
@@ -1549,6 +3024,7 @@ export type Database = {
           created_at: string
           currency: string
           custom_google_rating: number | null
+          custom_google_reviews_checked_at: string | null
           custom_google_reviews_json: Json | null
           custom_google_reviews_total: number | null
           description: string | null
@@ -1574,6 +3050,7 @@ export type Database = {
           payment_bank_name: string | null
           phone: string | null
           public_domain: string | null
+          review_source_badges: Json
           serper_api_key: string | null
           smart_delay_config: Json | null
           tagline: string | null
@@ -1598,6 +3075,7 @@ export type Database = {
           created_at?: string
           currency?: string
           custom_google_rating?: number | null
+          custom_google_reviews_checked_at?: string | null
           custom_google_reviews_json?: Json | null
           custom_google_reviews_total?: number | null
           description?: string | null
@@ -1623,6 +3101,7 @@ export type Database = {
           payment_bank_name?: string | null
           phone?: string | null
           public_domain?: string | null
+          review_source_badges?: Json
           serper_api_key?: string | null
           smart_delay_config?: Json | null
           tagline?: string | null
@@ -1647,6 +3126,7 @@ export type Database = {
           created_at?: string
           currency?: string
           custom_google_rating?: number | null
+          custom_google_reviews_checked_at?: string | null
           custom_google_reviews_json?: Json | null
           custom_google_reviews_total?: number | null
           description?: string | null
@@ -1672,6 +3152,7 @@ export type Database = {
           payment_bank_name?: string | null
           phone?: string | null
           public_domain?: string | null
+          review_source_badges?: Json
           serper_api_key?: string | null
           smart_delay_config?: Json | null
           tagline?: string | null
@@ -1809,6 +3290,62 @@ export type Database = {
             foreignKeyName: "room_daily_rates_room_type_id_fkey"
             columns: ["room_type_id"]
             isOneToOne: false
+            referencedRelation: "room_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_facility_knowledge: {
+        Row: {
+          checkin_point: string | null
+          cooking_tools: string | null
+          hairdryer: string | null
+          id: string
+          kitchen: string | null
+          maps_url: string | null
+          notes: string | null
+          room_type_id: string | null
+          towels: string | null
+          updated_at: string
+          updated_by: string | null
+          wifi_password: string | null
+          wifi_password_location: string | null
+        }
+        Insert: {
+          checkin_point?: string | null
+          cooking_tools?: string | null
+          hairdryer?: string | null
+          id?: string
+          kitchen?: string | null
+          maps_url?: string | null
+          notes?: string | null
+          room_type_id?: string | null
+          towels?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          wifi_password?: string | null
+          wifi_password_location?: string | null
+        }
+        Update: {
+          checkin_point?: string | null
+          cooking_tools?: string | null
+          hairdryer?: string | null
+          id?: string
+          kitchen?: string | null
+          maps_url?: string | null
+          notes?: string | null
+          room_type_id?: string | null
+          towels?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          wifi_password?: string | null
+          wifi_password_location?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_facility_knowledge_room_type_id_fkey"
+            columns: ["room_type_id"]
+            isOneToOne: true
             referencedRelation: "room_types"
             referencedColumns: ["id"]
           },
@@ -2366,9 +3903,78 @@ export type Database = {
         }
         Relationships: []
       }
+      seo_landing_briefs: {
+        Row: {
+          created_at: string
+          explore_slugs: string[]
+          faq_seeds: string[]
+          id: string
+          intent: string
+          landing_page_id: string | null
+          landmark_ids: string[]
+          min_capacity: number | null
+          primary_keyword: string
+          review_keywords: string[]
+          room_type_ids: string[]
+          secondary_keywords: string[]
+          slug: string
+          status: string
+          target_audience: string
+          unique_angle: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          explore_slugs?: string[]
+          faq_seeds?: string[]
+          id?: string
+          intent?: string
+          landing_page_id?: string | null
+          landmark_ids?: string[]
+          min_capacity?: number | null
+          primary_keyword: string
+          review_keywords?: string[]
+          room_type_ids?: string[]
+          secondary_keywords?: string[]
+          slug: string
+          status?: string
+          target_audience?: string
+          unique_angle?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          explore_slugs?: string[]
+          faq_seeds?: string[]
+          id?: string
+          intent?: string
+          landing_page_id?: string | null
+          landmark_ids?: string[]
+          min_capacity?: number | null
+          primary_keyword?: string
+          review_keywords?: string[]
+          room_type_ids?: string[]
+          secondary_keywords?: string[]
+          slug?: string
+          status?: string
+          target_audience?: string
+          unique_angle?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seo_landing_briefs_landing_page_id_fkey"
+            columns: ["landing_page_id"]
+            isOneToOne: false
+            referencedRelation: "seo_landing_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       seo_landing_pages: {
         Row: {
           body_content: string | null
+          brief_id: string | null
           created_at: string
           custom_head: string | null
           custom_json_ld: string | null
@@ -2386,6 +3992,7 @@ export type Database = {
           og_image_url: string | null
           property_id: string | null
           published: boolean
+          related_explore_slugs: string[]
           sections: Json | null
           slug: string
           target_keyword: string | null
@@ -2394,6 +4001,7 @@ export type Database = {
         }
         Insert: {
           body_content?: string | null
+          brief_id?: string | null
           created_at?: string
           custom_head?: string | null
           custom_json_ld?: string | null
@@ -2411,6 +4019,7 @@ export type Database = {
           og_image_url?: string | null
           property_id?: string | null
           published?: boolean
+          related_explore_slugs?: string[]
           sections?: Json | null
           slug: string
           target_keyword?: string | null
@@ -2419,6 +4028,7 @@ export type Database = {
         }
         Update: {
           body_content?: string | null
+          brief_id?: string | null
           created_at?: string
           custom_head?: string | null
           custom_json_ld?: string | null
@@ -2436,6 +4046,7 @@ export type Database = {
           og_image_url?: string | null
           property_id?: string | null
           published?: boolean
+          related_explore_slugs?: string[]
           sections?: Json | null
           slug?: string
           target_keyword?: string | null
@@ -2444,6 +4055,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "seo_landing_pages_brief_id_fkey"
+            columns: ["brief_id"]
+            isOneToOne: false
+            referencedRelation: "seo_landing_briefs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "seo_landing_pages_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
@@ -2451,6 +4069,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      seo_landmarks: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          lat: number | null
+          lng: number | null
+          name: string
+          notes: string | null
+          road_distance_km: number | null
+          sort_order: number
+          travel_minutes: number | null
+          updated_at: string
+          verified: boolean
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name: string
+          notes?: string | null
+          road_distance_km?: number | null
+          sort_order?: number
+          travel_minutes?: number | null
+          updated_at?: string
+          verified?: boolean
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name?: string
+          notes?: string | null
+          road_distance_km?: number | null
+          sort_order?: number
+          travel_minutes?: number | null
+          updated_at?: string
+          verified?: boolean
+        }
+        Relationships: []
       }
       seo_pages: {
         Row: {
@@ -3850,6 +5513,16 @@ export type Database = {
       _jsonb_date: { Args: { p_json: Json; p_key: string }; Returns: string }
       _jsonb_int: { Args: { p_json: Json; p_key: string }; Returns: number }
       _jsonb_text: { Args: { p_json: Json; p_key: string }; Returns: string }
+      apply_whatsapp_message_reaction: {
+        Args: {
+          p_at: string
+          p_direction?: string
+          p_emoji: string
+          p_message_id: string
+          p_reactor: string
+        }
+        Returns: boolean
+      }
       apply_whatsapp_meta_status: {
         Args: {
           p_errors: Json
@@ -3917,10 +5590,12 @@ export type Database = {
         Args: never
         Returns: {
           custom_google_rating: number
+          custom_google_reviews_checked_at: string
           custom_google_reviews_json: Json
           custom_google_reviews_total: number
           google_place_id: string
           google_places_api_key: string
+          review_source_badges: Json
         }[]
       }
       get_guest_structured_memory: { Args: { p_phone: string }; Returns: Json }
