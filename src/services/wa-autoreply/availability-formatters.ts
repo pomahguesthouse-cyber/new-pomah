@@ -27,6 +27,7 @@ type ToolCombinationRoom = {
   nama?: unknown;
   jumlah_kamar?: unknown;
   kapasitas_maksimal?: unknown;
+  kapasitas_ditawarkan?: unknown;
   extra_bed?: unknown;
   tarif_extra_bed_per_malam?: unknown;
   subtotal_per_malam?: unknown;
@@ -36,6 +37,7 @@ type ToolCombination = {
   label?: unknown;
   total_kamar?: unknown;
   total_kapasitas_maksimal?: unknown;
+  total_kapasitas_ditawarkan?: unknown;
   total_extra_bed?: unknown;
   total_per_malam?: unknown;
   kamar?: unknown;
@@ -156,7 +158,11 @@ function formatToolCombinationRecommendations(
     const roomLines = rooms.map((room) => {
       const quantity = Math.max(0, Math.floor(Number(room.jumlah_kamar ?? 0)));
       const name = String(room.nama ?? "Kamar");
-      const capacity = Math.max(0, Math.floor(Number(room.kapasitas_maksimal ?? 0)));
+      // Kutip kapasitas yang ditawarkan (standar + extra bed teralokasi), bukan kapasitas maksimal teoretis.
+      const capacity = Math.max(
+        0,
+        Math.floor(Number(room.kapasitas_ditawarkan ?? room.kapasitas_maksimal ?? 0)),
+      );
       const extraBeds = Math.max(0, Math.floor(Number(room.extra_bed ?? 0)));
       const extraRate = Math.max(0, Number(room.tarif_extra_bed_per_malam ?? 0));
       const subtotal = Math.max(0, Number(room.subtotal_per_malam ?? 0));
@@ -171,12 +177,27 @@ function formatToolCombinationRecommendations(
     });
     const total = Math.max(0, Number(combo.total_per_malam ?? 0));
     const totalText = total > 0 ? `Total ${formatRp(total)}/malam.` : "";
-    const capacity = Math.max(0, Math.floor(Number(combo.total_kapasitas_maksimal ?? 0)));
+    const capacity = Math.max(
+      0,
+      Math.floor(Number(combo.total_kapasitas_ditawarkan ?? combo.total_kapasitas_maksimal ?? 0)),
+    );
     const capacityText = capacity > 0 ? `Kapasitas sampai ${capacity} tamu.` : "";
     return [`${label}:`, ...roomLines, [totalText, capacityText].filter(Boolean).join(" ")].filter(Boolean).join("\n");
   });
 
   return blocks.join("\n\n");
+}
+
+/**
+ * Tambahkan catatan asumsi checkout (1 malam) supaya tamu bisa mengoreksi
+ * sebelum booking final. Tanggal ditulis DD/MM/YYYY.
+ */
+export function appendCheckoutAssumedNote(reply: string, checkOutIso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(checkOutIso);
+  if (!match) return reply;
+  const display = `${match[3]}/${match[2]}/${match[1]}`;
+  const note = `Catatan: saya hitung 1 malam dengan checkout ${display}. Kalau checkout-nya berbeda, kabari saya ya, Kak.`;
+  return reply.includes(note) ? reply : `${reply}\n\n${note}`;
 }
 
 export function buildAvailabilityNeedDatesReply(
@@ -485,7 +506,7 @@ export function formatAvailabilityForGuestCount(
     const lines = combination.picks.map((pick) => {
       const totalPrice = pick.price * pick.quantity;
       const priceText = totalPrice > 0 ? `, total ${formatRp(totalPrice)}/malam` : "";
-      return `- ${pick.quantity} kamar ${pick.name}: kapasitas sampai ${pick.quantity * pick.capacity} tamu${priceText}`;
+      return `- ${pick.quantity} kamar ${pick.name}${priceText}`;
     });
 
     return {
@@ -493,7 +514,7 @@ export function formatAvailabilityForGuestCount(
       reply:
         `Untuk ${period} dengan ${guestLabel}, tidak ada satu kamar yang cukup sendiri, tapi masih bisa pakai kombinasi beberapa kamar:\n` +
         `${lines.join("\n")}\n\n` +
-        `Total kapasitas kombinasi ini sampai ${combination.capacity} tamu. Kakak mau saya bantu proses opsi ${combination.rooms} kamar ini?`,
+        `Kombinasi ini cukup untuk ${guests.total} tamu. Kakak mau saya bantu proses opsi ${combination.rooms} kamar ini?`,
     };
   }
 

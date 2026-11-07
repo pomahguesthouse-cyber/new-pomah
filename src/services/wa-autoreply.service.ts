@@ -52,9 +52,11 @@ import { buildPropertyFaqReply, ensureLocationCorrection } from "@/services/prop
 import {
   buildRoomComparisonReply,
   isBrochureOfferAcceptance,
+  photoOfferAcceptanceText,
   isRoomComparisonQuestion,
 } from "@/services/room-comparison";
 import { buildRoomSharingReply } from "@/services/room-sharing-policy";
+import { guardCombinationCapacity } from "@/services/wa-autoreply/combination-capacity-guard";
 import {
   AI_TIMEOUT_MS,
   FALLBACK_MESSAGE,
@@ -126,6 +128,7 @@ import {
 import {
   buildAvailabilityNeedDatesReply,
   formatAvailabilityForGuestCount,
+  appendCheckoutAssumedNote,
   formatAvailabilityReply,
   detectFocusRoomName,
   lastBotAskedGuestCount,
@@ -542,7 +545,7 @@ async function buildGuestCountAfterAvailabilityReply(params: {
   rooms: any[];
   property: any;
   origin: string;
-  dates?: { checkIn?: unknown; checkOut?: unknown } | null;
+  dates?: { checkIn?: unknown; checkOut?: unknown; checkoutAssumed?: unknown } | null;
   messages: Array<{ direction: string; body?: string }>;
 }): Promise<FastFaqResult | null> {
   if (!lastBotAskedGuestCount(params.messages)) return null;
@@ -573,8 +576,11 @@ async function buildGuestCountAfterAvailabilityReply(params: {
 
   const result = formatAvailabilityForGuestCount(raw, guests);
   if (result) {
+    const checkoutAssumed = params.dates?.checkoutAssumed === true;
     result.guests = guests;
-    result.dates = { checkIn, checkOut };
+    result.dates = { checkIn, checkOut, ...(checkoutAssumed ? { checkoutAssumed: true } : {}) };
+    // Checkout belum disebut tamu → sebutkan asumsinya agar bisa dikoreksi.
+    if (checkoutAssumed) result.reply = appendCheckoutAssumedNote(result.reply, checkOut);
   }
   return result;
 }
@@ -1431,7 +1437,10 @@ export async function executeAutoreplyForPhone(
   // "harganya berapa ya ka" membuat permintaan foto tak terlihat).
   // Tamu menjawab "ya/mau/boleh" atas tawaran brosur dari jawaban perbandingan kamar.
   const brochureOfferAccepted = isBrochureOfferAcceptance(rollingMessages);
-  const wantsMedia = burstWantsMedia(rollingMessages) || brochureOfferAccepted;
+  // Tamu menjawab "boleh/ya" atas tawaran FOTO kamar → kirim foto sungguhan,
+  // bukan janji "diteruskan ke admin" (kasus Sofiah, 8 Nov 2026).
+  const photoOfferText = brochureOfferAccepted ? null : photoOfferAcceptanceText(rollingMessages);
+  const wantsMedia = burstWantsMedia(rollingMessages) || brochureOfferAccepted || photoOfferText != null;
   const mediaBurstText = inboundBurstText(rollingMessages);
   const facilityAsk = isGeneralFacilityQuestion(mediaBurstText);
   const deferMediaToAi = shouldAnswerMediaWithAi(mediaBurstText);
@@ -1449,7 +1458,9 @@ export async function executeAutoreplyForPhone(
       const cannedPlan =
         brochureOfferAccepted
           ? ({ kind: "brochure", reply: MEDIA_FAST_PATH_BROCHURE_REPLY, photoFallback: planRoomPhotos("", gallery) } as const)
-          : !facilityAsk && !deferMediaToAi
+          : photoOfferText != null
+            ? planRoomPhotos(photoOfferText, gallery)
+            : !facilityAsk && !deferMediaToAi
             ? planMediaFastPath(rollingMessages, gallery, { roomType: contextRoom })
             : null;
       const threadSends = await loadThreadBrochureSendTimes(c.thread_id);
@@ -1808,6 +1819,7 @@ export async function executeAutoreplyForPhone(
       const availabilitySlots = {
         checkIn: activeSlots.checkIn ?? chatSummaryJson?.check_in,
         checkOut: activeSlots.checkOut ?? chatSummaryJson?.check_out,
+        checkoutAssumed: activeSlots.checkOut ? activeSlots.checkoutAssumed === true : false,
       };
       const guestCountReply = await buildGuestCountAfterAvailabilityReply({
         message: lastMessage,
@@ -2642,6 +2654,34 @@ export async function executeAutoreplyForPhone(
   }
   // Pomah ada di Jl. Dewi Sartika, BUKAN Lumbung/Lumbungsari (30 Okt 2026).
   if (!isManager && lastMessage) finalReply = ensureLocationCorrection(finalReply, lastMessage);
+
+  // Guard kapasitas kombinasi kamar pada balasan LLM: buang opsi yang tidak
+  // cukup untuk jumlah tamu atau mengklaim kapasitas salah (kasus Sofiah).
+  if (!isManager && orchResult?.fastPath !== true) {
+    try {
+      const slots = ((bookingState as any)?.slots ?? {}) as Record<string, unknown>;
+      const slotAdults = Number(slots.adults ?? slots.guestCount ?? 0);
+      const slotTotal = slotAdults > 0 ? slotAdults + Number(slots.children ?? 0) : 0;
+      const parsedTotal = rollingMessages
+        .filter((m) => m.direction === "in")
+        .map((m) => parseGuestCountFollowup(m.body ?? "")?.total ?? 0)
+        .filter((n) => n > 0)
+        .pop() ?? 0;
+      const guestTotal = slotTotal || parsedTotal;
+      const guardRooms = ((rooms ?? []) as Array<Record<string, unknown>>).map((r) => ({
+        name: String(r.name ?? ""),
+        capacity: Math.max(1, Number(r.capacity ?? 1) || 1),
+        extraBedCapacity: Math.max(0, Number(r.extrabed_capacity ?? 0) || 0),
+      })).filter((r) => r.name);
+      const guarded = guardCombinationCapacity(finalReply, guardRooms, guestTotal);
+      if (guarded.removed > 0 && guarded.text) {
+        finalReply = guarded.text;
+        console.warn(`[Autoreply] removed ${guarded.removed} under-capacity combination line(s) for ${phone.slice(-6)}`);
+      }
+    } catch (e) {
+      console.warn("[Autoreply] combination capacity guard failed (non-fatal):", e);
+    }
+  }
 
   // Invarian #5: balasan media jangan menanyakan ulang slot yang sudah
   // disebut tamu di percakapan ini (insiden 28 Sep 2026).

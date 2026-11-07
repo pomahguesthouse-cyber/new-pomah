@@ -224,3 +224,30 @@ export function isBrochureOfferAcceptance(messages: Array<{ direction: string; b
   if (!text || text.length > 60 || NEGATIVE_RE.test(text)) return false;
   return AFFIRM_RE.test(text);
 }
+
+// Tawaran foto dari balasan bot (bukan brosur), mis. "Mau saya kirimkan foto Family Room 222, Kak?"
+const PHOTO_OFFER_RE =
+  /\b(?:foto|gambar|tour\s*360)\b[^?]{0,120}\?|\b(?:mau|boleh|perlu|ingin)\b[^?]{0,80}\b(?:foto|gambar)\b[^?]{0,80}\?/i;
+
+/**
+ * Tamu menerima tawaran FOTO kamar ("boleh kak" sesudah "Mau saya kirimkan
+ * foto Family 222?"). Mengembalikan teks tawaran bot supaya pemanggil bisa
+ * mencocokkan tipe kamar; `null` bila bukan penerimaan tawaran foto.
+ */
+export function photoOfferAcceptanceText(
+  messages: Array<{ direction: string; body?: string }>,
+): string | null {
+  let i = messages.length - 1;
+  const burst: string[] = [];
+  while (i >= 0 && messages[i]?.direction === "in") {
+    burst.unshift(messages[i]!.body ?? "");
+    i--;
+  }
+  if (!burst.length || i < 0) return null;
+  const offer = String(messages[i]!.body ?? "");
+  if (offer.toLowerCase().includes(ROOM_BROCHURE_OFFER_MARKER)) return null;
+  if (!PHOTO_OFFER_RE.test(offer)) return null;
+  const text = burst.join(" ").replace(/\s+/g, " ").trim();
+  if (!text || text.length > 60 || NEGATIVE_RE.test(text)) return null;
+  return AFFIRM_RE.test(text) ? offer : null;
+}

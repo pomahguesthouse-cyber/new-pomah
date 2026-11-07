@@ -56,6 +56,8 @@ type CombinationRoomPick = {
   jumlah_kamar: number;
   kapasitas_standar: number;
   kapasitas_maksimal: number;
+  // Kapasitas yang benar-benar ditawarkan: standar + extra bed yang dialokasikan & dihargai.
+  kapasitas_ditawarkan: number;
   harga_kamar_per_malam: number;
   extra_bed: number;
   tarif_extra_bed_per_malam: number;
@@ -67,7 +69,10 @@ type RoomCombinationRecommendation = {
   alasan: string;
   total_kamar: number;
   total_kapasitas_standar: number;
+  // Info internal: kapasitas bila SEMUA slot extra bed dipakai. Jangan dikutip ke tamu.
   total_kapasitas_maksimal: number;
+  // Kapasitas sesuai penawaran (standar + extra bed teralokasi).
+  total_kapasitas_ditawarkan: number;
   total_extra_bed: number;
   total_per_malam: number;
   kamar: CombinationRoomPick[];
@@ -147,7 +152,7 @@ function allocateExtraBeds(
   return { extraBedsById, extraBedTotal, ok: remaining <= 0 };
 }
 
-function buildRoomCombinationRecommendations(
+export function buildRoomCombinationRecommendations(
   options: CombinationRoomOption[],
   guestCount: number,
 ): RoomCombinationRecommendation[] {
@@ -190,6 +195,7 @@ function buildRoomCombinationRecommendations(
           kapasitas_standar: pick.quantity * pick.option.kapasitas_tamu,
           kapasitas_maksimal:
             pick.quantity * (pick.option.kapasitas_tamu + pick.option.kapasitas_extra_bed),
+          kapasitas_ditawarkan: pick.quantity * pick.option.kapasitas_tamu + extraBed,
           harga_kamar_per_malam: hargaKamar,
           extra_bed: extraBed,
           tarif_extra_bed_per_malam: pick.option.tarif_extra_bed_per_malam,
@@ -205,6 +211,7 @@ function buildRoomCombinationRecommendations(
         total_kamar: totalKamar,
         total_kapasitas_standar: totalKapasitasStandar,
         total_kapasitas_maksimal: totalKapasitasMaksimal,
+        total_kapasitas_ditawarkan: totalKapasitasStandar + extraBedNeeded,
         total_extra_bed: extraBedNeeded,
         total_per_malam: totalPerMalam,
         kamar,
