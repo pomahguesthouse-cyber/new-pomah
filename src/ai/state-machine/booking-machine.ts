@@ -236,18 +236,51 @@ const CONFIRM_PATTERN =
 export function isBookingConfirmationMessage(message: string): boolean {
   const text = (message ?? "").trim();
   if (!text || text.includes("?")) return false;
-  // Frasa "sudah/udah sesuai|benar|bener|betul|oke" (opsional sapaan).
+  // Negasi/koreksi SELALU didahulukan dari kata setuju: "belum sesuai kak",
+  // "tidak sesuai", "ok tanggalnya 22 Juni", "iya, jumlah tamu 5" BUKAN
+  // persetujuan ringkasan — jangan pernah membuat booking/invoice dari data lama.
+  if (isBookingNegationOrCorrection(text)) return false;
+  // Hanya persetujuan murni (seluruh pesan) yang dihitung, bukan substring.
+  return PURE_BOOKING_APPROVAL_RE.test(text);
+}
+
+/** Kata sapaan/partikel yang boleh menempel pada persetujuan murni. */
+const APPROVAL_FILLER =
+  "(?:ya|iya|yaa+|betul|benar|bener|kak|ka|kk|kakak|min|mba?k|mas|bang|pak|bu|deh|aja|saja|dong|sih|banget|sesuai|lanjut|lanjutkan|terima\\s*kasih|makasih|trims?|thanks?)";
+const PURE_BOOKING_APPROVAL_RE = new RegExp(
+  "^(?:(?:ya|iya|oke|ok|baik)[\\s,.!]+)*(?:(?:sudah|udah)\\s+)?" +
+    "(?:ya|iya|iyaa+|yes|yess+|yup|yoi|lanjut|lanjutkan|ok+|oke|okey|okay|setuju|betul|btul|benar|bener|bnr|bner|sip|siap|mantap|gas|fix|deal|cocok|boleh|monggo|correct|sesuai|baik)" +
+    `(?:[\\s,.!]+${APPROVAL_FILLER})*[\\s.!,🙏👍]*$`,
+  "i",
+);
+
+/**
+ * True bila pesan menolak atau mengoreksi ringkasan: negasi (belum/tidak/
+ * bukan/salah/…), kata koreksi (ganti/ubah/tapi/…), atau menyebut slot baru
+ * (angka, tanggal, tamu, kamar, malam). Diekspor untuk regresi.
+ */
+export function isBookingNegationOrCorrection(message: string): boolean {
+  const text = (message ?? "").trim().toLowerCase();
+  if (!text) return false;
   if (
-    /^(?:(?:ya|iya|oke|ok|baik)\s+)*(?:sudah|udah)\s+(?:sesuai|benar|bener|betul|oke|ok|setuju)(?:\s+(?:kak|ka|kk|min|ya|deh|dong|aja|saja|banget))*[\s.!,🙏]*$/i.test(
+    /\b(belum|blm|blom|tidak|tdk|tak|gak|ga|gk|nggak|ngga|enggak|engga|bukan|bkn|jangan|salah|keliru|kurang|no|nope|not)\b/i.test(
       text,
     )
   ) {
     return true;
   }
-  if (/^sesuai(?:\s+(?:kak|ka|kk|min|ya|deh|dong|aja|saja))*[\s.!,🙏]*$/i.test(text)) {
+  if (/\b(ganti|ubah|diubah|rubah|koreksi|revisi|tapi|tp|tetapi|namun|seharusnya|harusnya|mestinya|maksud(?:nya)?|ralat|batal|cancel)\b/i.test(text)) {
     return true;
   }
-  return CONFIRM_PATTERN.test(text);
+  if (/\d/.test(text)) return true;
+  if (
+    /\b(tanggal|tgl|check[-\s]?in|check[-\s]?out|checkin|checkout|malam|tamu|orang|dewasa|anak|kamar|room|extra\s*bed|extrabed|deluxe|single|family|suite|grand|nama|email|hp|nomor|jan|feb|mar|apr|mei|jun|jul|agu|agt|sep|okt|nov|des)\w*/i.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /** Persetujuan singkat, bukan pertanyaan yang kebetulan memuat kata "ya". */
@@ -3073,10 +3106,8 @@ export async function processBookingState(
     // Trigger HANYA jika pesan TIDAK murni konfirmasi/kanselasi singkat.
     // Konfirmasi murni: satu/dua kata afirmasi, boleh diikuti partikel sapaan
     // informal ("bener ka", "oke kak", "sip deh", "iya dong").
-    const PURE_CONFIRM_RE =
-      /^(?:(?:ya|iya|oke|ok|baik)\s+)*(?:sudah\s+|udah\s+)?(ya|iya|iyaa+|yes|yess+|yup|yoi|lanjut|lanjutkan|ok+|oke|okey|okay|setuju|betul|btul|benar|bener|bnr|bner|sip|siap|mantap|gas|fix|deal|cocok|boleh|sesuai)(\s+(ya|iya|betul|benar|bener|kak?|mba?k|bang|pak|bu|deh|aja|saja|dong|sih|banget|sesuai))*[\s.!,🙏]*$/i;
-    const isPureConfirm =
-      PURE_CONFIRM_RE.test(message.trim()) || isBookingConfirmationMessage(message);
+    // Persetujuan murni dengan negasi/koreksi didahulukan (lihat isBookingConfirmationMessage).
+    const isPureConfirm = isBookingConfirmationMessage(message);
     const isPureCancel = /^(batal|batalkan|cancel|tidak|gak jadi|ga jadi|nggak jadi)(\s+(kak?|dulu|aja|saja))*[\s.!,]*$/i.test(
       message.trim(),
     );
@@ -3449,6 +3480,17 @@ export async function processBookingState(
       return await buildBookingSummaryAsync(ctx, context);
     } else if (QUESTION_PATTERN.test(message)) {
       return { handled: false };
+    } else if (!messageMentionsExtraBed(message) && isBookingNegationOrCorrection(message)) {
+      // Penolakan/koreksi yang belum bisa dibaca slotnya ("belum sesuai kak",
+      // "tidak sesuai"): JANGAN buat booking. Minta bagian yang perlu diubah;
+      // ringkasan baru wajib dikonfirmasi ulang sebelum write.
+      return {
+        handled: true,
+        reply:
+          "Baik Kak, pemesanan belum saya proses. Bagian mana yang perlu diperbaiki? " +
+          "Misalnya tanggal menginap, jumlah tamu, tipe/jumlah kamar, atau nama. " +
+          "Setelah diperbaiki saya kirim ringkasan baru untuk dikonfirmasi ulang 🙏",
+      };
     } else if (messageMentionsExtraBed(message)) {
       const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
       const policy = resolveRoomExtraBedPolicy(context, ctx.rooms);
