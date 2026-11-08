@@ -1,3 +1,4 @@
+import { evaluateAutoApplyEligibility } from "@/services/payment-auto-apply";
 /**
  * Tool: get_payment_proof_result
  *
@@ -46,7 +47,7 @@ interface MatchShape {
   transfer_fee_surplus?: number | null;
 }
 
-function shape(ocr: OcrShape, match: MatchShape | null | undefined) {
+function shape(ocr: OcrShape, match: MatchShape | null | undefined, autoApply?: unknown) {
   const safe: MatchShape = match ?? {
     status: "pending",
     booking_code: null,
@@ -54,8 +55,14 @@ function shape(ocr: OcrShape, match: MatchShape | null | undefined) {
     amount_diff: null,
   };
   const summary = safe.summary || formatPaymentProofSummary(safe) || null;
+  const aa = autoApply && typeof autoApply === "object" ? (autoApply as Record<string, unknown>) : null;
   return {
     ok: true,
+    // Hasil pencatatan otomatis (deterministik, dari pipeline media). Hanya
+    // status/nominal — tanpa data rekening.
+    auto_apply: aa
+      ? { status: aa.status ?? null, payment_status: aa.paymentStatus ?? null, paid_after: aa.paidAfter ?? null, total: aa.total ?? null }
+      : null,
     ocr: {
       nominal:           ocr.nominal,
       nominal_tampil:    formatRupiahOcr(ocr.nominal),
@@ -165,7 +172,17 @@ export const getPaymentProofResult: ToolHandler = async (
       const withOcr = rows.find((m) => m.metadata && (m.metadata as any).ocr_result);
       if (withOcr) {
         const meta = withOcr.metadata as any;
-        return JSON.stringify(shape(meta.ocr_result, meta.ocr_match));
+        // Bukti layak catat-otomatis: tunggu hasil pencatatan (dalam budget
+        // polling) agar balasan tidak bertentangan dengan notifikasi status.
+        if (
+          !meta.payment_auto_apply &&
+          evaluateAutoApplyEligibility(meta.ocr_result, meta.ocr_match).eligible &&
+          Date.now() + POLL_INTERVAL_MS < deadline
+        ) {
+          await sleep(POLL_INTERVAL_MS);
+          continue;
+        }
+        return JSON.stringify(shape(meta.ocr_result, meta.ocr_match, meta.payment_auto_apply));
       }
 
       // Detect a proof image still being OCR'd. Meta sometimes stores only a

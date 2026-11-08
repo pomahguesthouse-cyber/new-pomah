@@ -52,7 +52,7 @@ export function buildInvoicePaymentLines(opts: {
   return `• Status Pembayaran: Menunggu pembayaran ⏳` + fullLine + deadlineText + (opts.bankDetails ?? "");
 }
 
-async function resolveOrCreateNotificationThread({
+export async function resolveOrCreateNotificationThread({
   supabase,
   phone,
   displayName,

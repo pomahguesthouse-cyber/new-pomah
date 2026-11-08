@@ -608,6 +608,12 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       "@/services/manager-notifier.service"
     );
     const beforeSnap = await snapshotBookingForDiff(context.supabase, data.id);
+    // Status pembayaran sebelum disimpan — untuk pemberitahuan transisi ke tamu.
+    const { data: beforePay } = await (context.supabase as any)
+      .from("bookings")
+      .select("payment_status, paid_amount")
+      .eq("id", data.id)
+      .maybeSingle();
 
     const nights =
       (Date.parse(`${data.check_out}T00:00:00Z`) - Date.parse(`${data.check_in}T00:00:00Z`)) /
@@ -628,14 +634,17 @@ export const updateBookingFull = createServerFn({ method: "POST" })
         Number(r.extra_bed_rate ?? 0) * Number(r.extra_bed_count ?? 0) * nights,
       0,
     );
-    let final_paid_amount = data.paid_amount;
-
-    if (data.payment_status === "paid") {
-      total_amount = data.paid_amount;
-      final_paid_amount = data.paid_amount;
-    } else if (data.payment_status === "unpaid") {
-      final_paid_amount = 0;
-    }
+    // Total TIDAK lagi ditimpa paid_amount (dulu status "paid" → total=paid).
+    // Total hanya berubah bila harga kamar diedit; status mengikuti kumulatif.
+    const { resolveEditedPaymentTotals } = await import("@/services/payment-totals");
+    const totals = resolveEditedPaymentTotals({
+      computedTotal: total_amount,
+      status: data.payment_status,
+      paidAmount: data.paid_amount,
+    });
+    total_amount = totals.total;
+    const final_paid_amount = totals.paid;
+    data = { ...data, payment_status: totals.status as typeof data.payment_status };
 
     // Gunakan kontak kanonis bila nomor telepon sudah terdaftar pada tamu lain.
     // Ini mencegah pelanggaran indeks unik phone_normalized saat booking diedit.
@@ -750,16 +759,34 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     const { error: insErr } = await context.supabase.from("booking_rooms").insert(roomInserts);
     if (insErr) throw insErr;
 
-    // Fix 2: Silently regenerate the stored PDF so the invoice record stays
-    // in sync with the latest payment status. We do NOT re-send WhatsApp here
-    // to avoid flooding the guest — admin can do that explicitly via resendInvoice.
-    void generateAndSendInvoiceNotification({
+    // Sinkronkan snapshot invoice dengan status pembayaran terbaru. DITUNGGU
+    // (dengan batas waktu): `void ...` terputus di Cloudflare Workers sehingga
+    // snapshot tetap "unpaid" (PG-EC83T, 8 Nov 2026 19.11 WIB).
+    const { awaitInvoiceNotification } = await import("@/services/invoice-dispatch");
+    const snapshotSync = await awaitInvoiceNotification({
       supabase: context.supabase,
       bookingId: data.id,
       skipWhatsApp: true,
-    }).catch((err) =>
-      console.warn("[bookings] PDF regen failed (non-fatal):", err),
-    );
+    });
+    if (snapshotSync.status === "failed") {
+      console.warn("[bookings] invoice snapshot sync failed (non-fatal):", snapshotSync.reason);
+    }
+
+    // Kabari tamu bila staf baru saja memverifikasi pembayaran (unpaid→DP/lunas,
+    // atau nominal bertambah). Dikirim SETELAH data tersimpan; sekali per
+    // (booking, status, nominal). Tidak pernah membatalkan simpan.
+    let paymentNotice: { status: string; reason?: string } = { status: "skipped", reason: "tidak ada perubahan" };
+    if (beforePay && (beforePay.payment_status !== data.payment_status || Number(beforePay.paid_amount ?? 0) !== Number(final_paid_amount ?? 0))) {
+      const { notifyPaymentStatusChange } = await import("@/services/payment-status-notice");
+      paymentNotice = await notifyPaymentStatusChange({
+        supabase: context.supabase,
+        bookingId: data.id,
+        before: { payment_status: beforePay.payment_status, paid_amount: beforePay.paid_amount },
+      });
+      if (paymentNotice.status === "failed") {
+        console.warn("[bookings] payment status notice failed:", paymentNotice.reason);
+      }
+    }
 
     // Alert ke manager bila tanggal / jumlah tamu / kamar berubah.
     const { runDeferred } = await import("@/lib/cf-context");
@@ -782,7 +809,7 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       });
     }
 
-    return { ok: true, total_amount, nights };
+    return { ok: true, total_amount, nights, invoice_snapshot: snapshotSync.status, payment_notice: paymentNotice };
   });
 
 /**

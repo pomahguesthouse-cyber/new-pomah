@@ -16,10 +16,14 @@ import { recoverMissingInvoices } from "@/services/invoice-recovery.service";
 
 async function handle(): Promise<Response> {
   const result = await recoverMissingInvoices(supabaseAdmin as never);
+  // Outbox pembayaran otomatis: kirim ulang notifikasi/sinkron invoice yang
+  // gagal (klaim atomik di DB; aman bila tabel belum dimigrasi → 0).
+  const { retryPendingPaymentNotices } = await import("@/services/payment-auto-apply");
+  const paymentNotices = await retryPendingPaymentNotices(supabaseAdmin as never).catch(() => ({ retried: 0 }));
   if (!result.ok) {
-    return Response.json(result, { status: 500 });
+    return Response.json({ ...result, paymentNotices }, { status: 500 });
   }
-  return Response.json(result);
+  return Response.json({ ...result, paymentNotices });
 }
 
 export const Route = createFileRoute("/api/cron/recover-missing-invoices")({

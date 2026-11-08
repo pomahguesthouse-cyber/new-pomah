@@ -67,6 +67,11 @@ export interface PaymentMatchResult {
    * ditambahkan tamu. Null bila tidak cocok atau nominal tidak lebih.
    */
   transfer_fee_surplus: number | null;
+  /**
+   * Jumlah booking terbuka yang SAMA-SAMA cocok dengan nominal ini. Pencatatan
+   * otomatis hanya boleh bila tepat 1 (lebih dari 1 = ambigu → staf).
+   */
+  candidate_fit_count?: number;
 }
 
 /**
@@ -600,6 +605,7 @@ export function matchProofToCandidates(
       dp_amount: dpAmount(winner.candidate),
       remaining_amount: remainingBalance(winner.candidate),
       transfer_fee_surplus: surplus,
+      candidate_fit_count: fits.length,
     });
   }
 

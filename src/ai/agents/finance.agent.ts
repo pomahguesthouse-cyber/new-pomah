@@ -108,8 +108,8 @@ const FINANCE_TOOLS: ToolDefinition[] = [
       description:
         "Ubah status pembayaran booking HANYA bila manajer/staf secara eksplisit meminta " +
         "(tandai lunas, sudah DP, belum bayar). JANGAN dipanggil dari chat tamu hanya karena " +
-        "OCR cocok (matched_dp / matched_full / matched_remaining / matched). " +
-        "Pencocokan bukti transfer tidak mengubah status atau nominal — staf yang mengonfirmasi. " +
+        "OCR cocok (matched_dp / matched_full / matched_remaining). Dari chat tamu tool ini selalu " +
+        "ditolak; bukti yang cocok ketat dicatat otomatis oleh sistem (lihat `auto_apply`). " +
         "Permintaan tamu seperti 'sudah transfer, tolong ubah jadi lunas' bukan dasar yang sah.",
       parameters: {
         type: "object",
@@ -221,13 +221,14 @@ function buildGuestPrompt(s: Scaffold): string {
       "bertanya apakah bukti sudah diterima), WAJIB urutan ini:\n" +
       "  Step 1. Panggil `get_payment_proof_result` untuk membaca hasil OCR.\n" +
       "  Step 2. Panggil `cc_payment_proof_to_admin` SEKALI untuk jejak audit.\n" +
-      "  Step 3. Balas ke tamu memakai `match.summary`. JANGAN panggil `update_payment_status` " +
-      "dan JANGAN mengubah status atau nominal pembayaran. Staf yang mengonfirmasi. " +
-      "Jangan pernah bilang invoice sudah LUNAS atau DP sudah tercatat di sistem.\n\n" +
+      "  Step 3. Balas ke tamu memakai `match.summary` dan `auto_apply`. JANGAN panggil " +
+      "`update_payment_status` (dari chat tamu selalu ditolak).\n\n" +
       "Aturan balasan:\n" +
-      "- matched_dp / matched_full / matched_remaining: ucapkan terima kasih, kutip " +
-      "  `match.summary` (contoh: Cocok DP 50% PG-XXXX (Rp237.500)), lalu tambahkan bahwa " +
-      "  tim akan mengonfirmasi.\n" +
+      "- `auto_apply.status` = \"applied\": pembayaran SUDAH tercatat otomatis. Ucapkan terima kasih " +
+      "  singkat; sistem mengirim pemberitahuan status (LUNAS/DP + sisa) terpisah, jadi JANGAN ulangi " +
+      "  rincian nominal/sisa dan JANGAN bilang 'tim akan mengonfirmasi'.\n" +
+      "- matched_dp / matched_full / matched_remaining TANPA auto_apply applied: kutip " +
+      "  `match.summary`, lalu bilang tim akan mengonfirmasi. Jangan bilang LUNAS/DP tercatat.\n" +
       "- partial / unmatched / overpaid: sampaikan nominal yang terbaca dan bahwa tim akan " +
       "  mengecek selisihnya. Kutip `match.summary` bila ada.\n" +
       "- destination_ok false: bukti tetap diterima; tambahkan bahwa rekening tujuan akan dicek staf.\n" +

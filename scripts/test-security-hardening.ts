@@ -185,8 +185,8 @@ const baseCtx = (over: Partial<ToolContext>): ToolContext =>
   assert.match(String(out.error), /tidak valid/i);
 }
 
-// (c) Simulator/OCR cocok → lolos gate otorisasi (gagal setelahnya karena stub
-//     tidak menyediakan booking, tapi pesan errornya BUKAN soal otorisasi).
+// (c) Kebijakan 8 Nov 2026: kanal tamu SELALU ditolak, bahkan dengan hasil OCR
+//     "cocok" di context — pencatatan otomatis hanya lewat pipeline media.
 {
   const out = JSON.parse(
     await updatePaymentStatus(
@@ -202,8 +202,7 @@ const baseCtx = (over: Partial<ToolContext>): ToolContext =>
     ),
   );
   assert.equal(out.ok, false);
-  assert.doesNotMatch(String(out.error), /bukti transfer/i);
-  assert.match(String(out.error), /tidak ditemukan/i);
+  assert.match(String(out.error), /tidak bisa diubah dari chat tamu/i);
 }
 
 // ── S3: helper kode booking dipakai semua lookup reference_code ──────────────
