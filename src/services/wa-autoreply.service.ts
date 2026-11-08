@@ -1,5 +1,5 @@
 import { buildPricelistAskDatesReply, isPricelistAsk } from "@/services/wa-autoreply/pricelist-ask";
-import { resolveRelativeDayRange, nowForStayParsing } from "@/lib/id-date";
+import { resolveRelativeDayRange, nowForStayParsing, resolveMonthOnlyCorrection } from "@/lib/id-date";
 import { formatStayConfirmQuestion } from "@/ai/state-machine/booking-stay-guard";
 /**
  * Reliable WhatsApp autoreply: debounce wait → AI → WhatsApp gateway send.
@@ -1327,6 +1327,20 @@ export async function executeAutoreplyForPhone(
     });
     if (error) throw new Error(`Could not save confirmed stay: ${error.message}`);
     if (bookingState) (bookingState as any).slots = { ...(bookingState as any).slots, ...patch };
+  }
+
+  // Koreksi bulan saja ("Des", "des bukan nov") atas rentang tanpa bulan yang
+  // disebut sebelumnya ("tgl 11 - 14") → perjelas pesan untuk semua jalur.
+  if (!reply && !isManager && lastMessage) {
+    const inboundBodies = rollingMessages
+      .filter((m: { direction: string }) => m.direction === "in")
+      .map((m: { body?: string | null }) => m.body ?? "");
+    const monthFix = resolveMonthOnlyCorrection(lastMessage, inboundBodies.slice(0, -1), todayWIB());
+    if (monthFix && monthFix.checkIn >= todayWIB()) {
+      lastMessage += ` (check-in ${fmtDateID(monthFix.checkIn)}, check-out ${fmtDateID(monthFix.checkOut)})`;
+      const inbound = [...rollingMessages].reverse().find((m) => m.direction === "in");
+      if (inbound) inbound.body = lastMessage;
+    }
   }
 
   const slashStay = resolveRelativeDayRange(lastMessage, nowForStayParsing(todayWIB()));
