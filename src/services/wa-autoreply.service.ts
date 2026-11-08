@@ -1,5 +1,5 @@
 import { buildPricelistAskDatesReply, isPricelistAsk } from "@/services/wa-autoreply/pricelist-ask";
-import { resolveRelativeDayRange, nowForStayParsing, resolveMonthOnlyCorrection, resolveLabeledDaysAgainstKnownStay } from "@/lib/id-date";
+import { resolveRelativeDayRange, nowForStayParsing, resolveMonthOnlyCorrection } from "@/lib/id-date";
 import { formatStayConfirmQuestion } from "@/ai/state-machine/booking-stay-guard";
 /**
  * Reliable WhatsApp autoreply: debounce wait → AI → WhatsApp gateway send.
@@ -55,6 +55,7 @@ import {
 } from "@/services/room-comparison";
 import { buildRoomSharingReply } from "@/services/room-sharing-policy";
 import { applyCombinationGuardToReply, isRoomSelectionMessage } from "@/services/wa-autoreply/combination-capacity-guard";
+import { applyAnchoredStayFromSlots } from "@/services/wa-autoreply/anchored-stay";
 import { dispatchBrochureDocument, isMediaOfferAcceptance } from "@/services/wa-autoreply/offer-acceptance";
 import {
   AI_TIMEOUT_MS,
@@ -1344,22 +1345,20 @@ export async function executeAutoreplyForPhone(
   }
 
   // Hari check-in/out berlabel tanpa bulan ("chek-in nya tanggal 11 cek-out
-  // nya tgl 12") dijangkarkan ke stay di slot (kasus Sofiah 8 Nov 2026), lalu
-  // checkout dianggap DIKONFIRMASI (checkoutAssumed=false).
+  // nya tgl 12") dijangkarkan ke stay di slot (kasus Sofiah 8 Nov 2026).
   if (!reply && !isManager && lastMessage) {
-    const sl = ((bookingState as any)?.slots ?? {}) as Record<string, unknown>;
-    const known = typeof sl.checkIn === "string" && sl.checkIn >= todayWIB() ? sl.checkIn : null;
-    const anchored = resolveLabeledDaysAgainstKnownStay(lastMessage, known);
-    if (anchored && anchored.checkIn >= todayWIB()) {
-      lastMessage += ` (check-in ${fmtDateID(anchored.checkIn)}, check-out ${fmtDateID(anchored.checkOut)})`;
+    const anchoredMsg = await applyAnchoredStayFromSlots({
+      db: supabaseAdmin as any,
+      phone,
+      message: lastMessage,
+      slots: ((bookingState as any)?.slots ?? {}) as Record<string, unknown>,
+      today: todayWIB(),
+    });
+    if (anchoredMsg) {
+      lastMessage = anchoredMsg.message;
       const inbound = [...rollingMessages].reverse().find((m) => m.direction === "in");
       if (inbound) inbound.body = lastMessage;
-      const patch = { checkIn: anchored.checkIn, checkOut: anchored.checkOut, checkoutAssumed: false };
-      const { error } = await (supabaseAdmin as any).rpc("update_conversation_topic", {
-        p_phone: phone, p_last_topic: "availability", p_last_entity: null, p_slots: patch,
-      });
-      if (error) console.warn("[Autoreply] persist anchored stay failed:", error.message);
-      if (bookingState) (bookingState as any).slots = { ...sl, ...patch };
+      if (bookingState) (bookingState as any).slots = anchoredMsg.slots;
     }
   }
 

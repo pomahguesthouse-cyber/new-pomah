@@ -1,7 +1,12 @@
 import { parseCompleteReply, isTruncatedFinish } from "./reply-integrity";
 import { findAcceptedOffer } from "./state-machine/offer-acceptance";
-import { todayWIB } from "@/lib/date";
+import { fmtDateID, nextDay, todayWIB } from "@/lib/date";
 import { startBookingDetails } from "@/tools/start-booking.tool";
+import {
+  decideRoomSelection,
+  formatCheckoutOnlyQuestion,
+  resumePendingSelection,
+} from "@/ai/state-machine/room-selection";
 import { formatRoomQuoteText } from "@/services/pricing/price-quote";
 /**
  * Multi-Agent Orchestrator.
@@ -40,7 +45,7 @@ import { getAgent } from "./agents/registry";
 import { ASK_AGENT_TOOL_NAME } from "./agents/manager.agent";
 import { executeTool } from "@/tools/executor";
 import { parseManagerCommand, formatManagerCommandResult, formatRoomRatesList } from "./manager-command-parser";
-import type { ToolContext } from "@/tools/types";
+import type { ToolContext, ToolHandler } from "@/tools/types";
 import { getBookingState, processBookingState, isDataEntryState, ROOM_CHANGE_INTENT_RE } from "./state-machine/booking-machine";
 import { getMissingSlots, formatPartialBookingSummary, extractAllSlots } from "./state-machine/flexible-slot-extractor";
 import { resolveContext, seedEntityFromSummary } from "./router/context-resolver";
@@ -826,6 +831,10 @@ export interface MultiAgentInput {
   agentCtx: AgentContext;
   /** Supabase clients + room data for tool execution */
   toolCtx: ToolContext;
+  /** Test seam: ganti start_booking_details (default tool asli). */
+  startBookingImpl?: ToolHandler;
+  /** Test seam: ganti create_booking (default tool asli). */
+  createBookingImpl?: ToolHandler;
   /** AI gateway credentials */
   llmConfig: AiClientConfig;
   /** AI Lab Dashboard Configuration */
@@ -968,6 +977,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
     const stateResult = await processBookingState(input.toolCtx, input.phone, lastUserMsg, stateRecord, {
       knownGuestName: input.agentCtx.chatSummaryJson?.guest_name ?? null,
       knownGuestCount: input.agentCtx.chatSummaryJson?.guest_count ?? null,
+      ...(input.createBookingImpl ? { createBookingImpl: input.createBookingImpl } : {}),
     });
 
     if (stateResult.handled && stateResult.silent) {
@@ -1097,6 +1107,37 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
       } catch (e) {
         console.warn("[MultiAgent] offer acceptance start_booking gagal (lanjut ke AI):", e);
       }
+    }
+  }
+
+  // 3c. Tamu MEMILIH kombinasi kamar sendiri ("1 family room + 1 kamar
+  //     deluxe boleh") saat tanggal & jumlah tamu sudah ada di slot (kasus
+  //     Sofiah 8 Nov 2026). Deterministik — tidak bergantung LLM, tidak
+  //     menanyakan check-in lagi; checkout asumsi → tanya checkout SAJA.
+  //     Booking tetap baru dibuat setelah ringkasan disetujui eksplisit.
+  if (stateRecord.state === "IDLE" && !input.agentCtx.activeBooking?.referenceCode) {
+    try {
+      const selectionReply = await handleGuestRoomSelection({
+        lastUserMsg,
+        messages: input.messages,
+        slots: (stateRecord.slots ?? {}) as Record<string, unknown>,
+        toolCtx: input.toolCtx,
+        phone: input.phone,
+        startBooking: input.startBookingImpl ?? startBookingDetails,
+      });
+      if (selectionReply) {
+        return {
+          status: "reply",
+          reply: selectionReply.reply,
+          toolsUsed: selectionReply.toolsUsed,
+          agentKey: "front-office",
+          intent: "booking_inquiry",
+          routingConfidence: 1.0,
+          escalated: false,
+        };
+      }
+    } catch (e) {
+      console.warn("[MultiAgent] room selection path gagal (lanjut ke AI):", e);
     }
   }
 
@@ -1619,4 +1660,86 @@ export function deriveAgentLabelFromKey(agentKey: string): string {
     manager: "Manager Agent",
   };
   return labels[agentKey] ?? "Front Office Agent";
+}
+
+/**
+ * Jalur deterministik pilihan kamar (3c). Return null bila tidak berlaku.
+ * Side effect: start_booking_details (state COLLECTING_DATA) atau simpan
+ * `pendingRoomSelection` di slots saat menunggu checkout.
+ */
+export async function handleGuestRoomSelection(params: {
+  lastUserMsg: string;
+  messages: Array<{ direction: string; body?: string | null }>;
+  slots: Record<string, unknown>;
+  toolCtx: ToolContext;
+  phone: string;
+  startBooking: ToolHandler;
+}): Promise<{ reply: string; toolsUsed: string[] } | null> {
+  const today = params.toolCtx.today || todayWIB();
+  const rooms = (params.toolCtx.rooms ?? []) as Array<{ id: string; name: string }>;
+  const recentBot = params.messages
+    .filter((m) => m.direction === "out")
+    .slice(-6)
+    .map((m) => m.body ?? "");
+  const saveSlots = async (patch: Record<string, unknown>) => {
+    const { error } = await (params.toolCtx.supabaseAdmin as any).rpc("update_conversation_topic", {
+      p_phone: params.phone, p_last_topic: "booking", p_last_entity: null, p_slots: patch,
+    });
+    if (error) console.warn("[MultiAgent] simpan pendingRoomSelection gagal:", error.message ?? error);
+  };
+
+  let decision = decideRoomSelection({ message: params.lastUserMsg, rooms, slots: params.slots, today, recentBotTexts: recentBot });
+  let resumed = false;
+  if (!decision && params.slots.pendingRoomSelection) {
+    decision = resumePendingSelection({ pending: params.slots.pendingRoomSelection, message: params.lastUserMsg, slots: params.slots, today });
+    resumed = !!decision;
+    if (!decision && /\b(tidak|gak|nggak|batal|ganti|ubah|bukan)\b/i.test(params.lastUserMsg)) {
+      await saveSlots({ pendingRoomSelection: null });
+    }
+  }
+  if (!decision) return null;
+
+  // Ketersediaan sesuai tanggal di slot — kurang → biarkan agent menawarkan alternatif.
+  const avail = await (params.toolCtx.supabasePublic as any).rpc("room_type_availability_detail", {
+    p_check_in: decision.checkIn,
+    p_check_out: decision.checkOut ?? nextDay(decision.checkIn),
+  });
+  if (avail?.error) return null;
+  const availMap = new Map(((avail?.data ?? []) as any[]).map((r) => [r.room_type_id, Number(r.available ?? 0)]));
+  for (const item of decision.rooms) {
+    const rt = rooms.find((r) => r.name === item.roomName);
+    if (!rt || (availMap.get(rt.id) ?? 0) < item.quantity) return null;
+  }
+
+  if (decision.kind === "ask_checkout") {
+    await saveSlots({
+      pendingRoomSelection: { rooms: decision.rooms, checkIn: decision.checkIn, checkOut: decision.checkOut },
+    });
+    return {
+      reply: formatCheckoutOnlyQuestion(
+        decision.rooms,
+        fmtDateID(decision.checkIn),
+        decision.checkOut ? fmtDateID(decision.checkOut) : null,
+      ),
+      toolsUsed: ["room_selection", "checkout_clarification"],
+    };
+  }
+
+  const raw = await params.startBooking(
+    {
+      check_in: decision.checkIn,
+      check_out: decision.checkOut,
+      adults: decision.adults,
+      children: decision.children,
+      rooms: decision.rooms.map((r) => ({ room_type: r.roomName, quantity: r.quantity })),
+    },
+    params.toolCtx,
+  );
+  const parsed = JSON.parse(raw) as { ok?: boolean; message?: string };
+  if (!parsed.ok || !parsed.message) return null;
+  await saveSlots({ pendingRoomSelection: null, checkoutAssumed: false });
+  console.info(
+    `[MultiAgent] room selection${resumed ? " (resumed)" : ""} → start_booking ${decision.rooms.map((r) => `${r.quantity}x ${r.roomName}`).join(" + ")} ${decision.checkIn}..${decision.checkOut}`,
+  );
+  return { reply: parsed.message, toolsUsed: ["room_selection", "start_booking_details"] };
 }
