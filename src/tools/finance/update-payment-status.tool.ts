@@ -162,7 +162,7 @@ export const updatePaymentStatus: ToolHandler = async (
   try {
     const { data: booking, error: bErr } = await (ctx.supabaseAdmin as any)
       .from("bookings")
-      .select("id, reference_code")
+      .select("id, reference_code, payment_status, paid_amount, total_amount")
       .eq("reference_code", code)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -197,6 +197,20 @@ export const updatePaymentStatus: ToolHandler = async (
       })
       .eq("booking_id", booking.id);
 
+    // Pemberitahuan ke tamu HANYA dari kanal manajer (verifikasi oleh orang).
+    // "paid" dari tool ini tidak mengubah paid_amount, jadi notifikasi LUNAS
+    // hanya terkirim bila paid_amount memang sudah menutup total; selain itu
+    // modul notifikasi melewatinya (staf perlu mencatat nominal).
+    let paymentNotice: { status: string; reason?: string } | null = null;
+    if (ctx.isManager === true && booking.payment_status !== rawStatus) {
+      const { notifyPaymentStatusChange } = await import("@/services/payment-status-notice");
+      paymentNotice = await notifyPaymentStatusChange({
+        supabase: ctx.supabaseAdmin as any,
+        bookingId: booking.id,
+        before: { payment_status: booking.payment_status, paid_amount: booking.paid_amount },
+      });
+    }
+
     // Once payment is confirmed paid, release the booking state machine
     // so the guest's next turn is handled normally instead of staying
     // pinned to PAYMENT_PENDING.
@@ -218,6 +232,7 @@ export const updatePaymentStatus: ToolHandler = async (
       new_status: rawStatus,
       status_label: rawStatus === "paid" ? "LUNAS" : rawStatus === "partial" ? "DIBAYAR SEBAGIAN" : "BELUM DIBAYAR",
       invoice_url: buildInvoiceUrl(booking.reference_code ?? booking.id, ctx),
+      guest_notice: paymentNotice,
     });
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
