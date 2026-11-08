@@ -544,6 +544,11 @@ export interface InboundMediaDeps {
   analyze?: (dataUri: string, phone: string, messageId: string) => Promise<PaymentProofResult>;
   loadPaymentContext?: (phone: string) => Promise<AwaitingPaymentContext>;
   claimNotice?: (notice: PaymentProofStaffNotice) => Promise<"sent" | "duplicate">;
+  /**
+   * Pencatatan pembayaran otomatis (deterministik, tidak tergantung LLM).
+   * Hanya dipanggil untuk bukti segar dengan OCR ok. Atomik & idempoten di DB.
+   */
+  autoApply?: (input: { messageId: string; phone: string; result: PaymentProofResult }) => Promise<{ status: string; [k: string]: unknown }>;
 }
 
 export interface InboundMediaJobResult {
@@ -693,6 +698,22 @@ export async function processInboundMedia(
       ocr_status: ocrStatus,
       ocr_reason: ocrReason,
     });
+
+    if (
+      ocrStatus === "ok" &&
+      ocrResult &&
+      deps.autoApply &&
+      isFreshPaymentProof(input.sentAt, input.now ?? new Date())
+    ) {
+      try {
+        const applied = await deps.autoApply({ messageId: input.messageId, phone: input.phone, result: ocrResult });
+        await deps.saveMetadata(input.messageId, { payment_auto_apply: applied });
+      } catch (e) {
+        await deps.saveMetadata(input.messageId, {
+          payment_auto_apply: { status: "error", reason: (e instanceof Error ? e.message : String(e)).slice(0, 180) },
+        });
+      }
+    }
 
     const notified = await maybeNotify(input, deps, candidate, transfer, ocrResult);
     await deps.saveMetadata(input.messageId, { payment_proof_notified: notified });
@@ -982,6 +1003,10 @@ export async function runInboundMediaJob(
     saveMetadata: (messageId, patch) => saveMessageMetadata(admin as never, { messageId, metadata: patch }),
     analyze: (dataUri, phone, messageId) => modules.analyzePaymentProof(admin, dataUri, phone, messageId),
     loadPaymentContext: (phone) => loadAwaitingPaymentContext(admin, phone),
+    autoApply: async ({ messageId, phone, result }) => {
+      const { autoApplyPaymentProof } = await import("./payment-auto-apply");
+      return autoApplyPaymentProof({ supabase: admin, phone, messageId, ocr: result.ocr, match: result.match });
+    },
     claimNotice: (notice) =>
       claimPaymentProofStaffNotice(admin, notice, async () => {
         await modules.notifyPaymentProof(admin, {

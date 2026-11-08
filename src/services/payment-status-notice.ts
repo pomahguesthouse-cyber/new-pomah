@@ -26,6 +26,8 @@ export type PaymentStatusValue = "unpaid" | "partial" | "paid" | string | null |
 export interface PaymentNoticeDeps {
   send?: (phone: string, body: string) => Promise<{ ok: boolean; error?: string | null; channel?: string | null }>;
   resolveThread?: typeof resolveOrCreateNotificationThread;
+  /** Jeda staf per-thread (dipakai jalur otomatis). */
+  isPaused?: (bookingId: string) => Promise<boolean>;
 }
 
 export type PaymentNoticeOutcome =
@@ -47,9 +49,25 @@ export function buildPaymentStatusNotice(p: {
   paidAmount: number;
   totalAmount: number;
   invoiceUrl: string;
+  /** Nominal pembayaran ini (bukan kumulatif). */
+  appliedAmount?: number | null;
+  /** true = dicatat otomatis dari bukti transfer (belum cek mutasi bank). */
+  autoRecorded?: boolean;
 }): string {
   const remaining = Math.max(0, p.totalAmount - p.paidAmount);
   const hello = p.guestName?.trim() ? `Halo Kak ${p.guestName.trim()},` : "Halo Kak,";
+  if (p.autoRecorded) {
+    const status = p.status === "paid" ? "*LUNAS*" : "*DIBAYAR SEBAGIAN (DP)*";
+    const applied = p.appliedAmount && p.appliedAmount > 0 ? `• Pembayaran ini: ${rp(p.appliedAmount)}\n` : "";
+    return (
+      `${hello}\n\nBukti transfer untuk booking ${p.referenceCode} sudah kami terima dan pembayaran sudah dicatat. ` +
+      `Status invoice sekarang: ${status}.\n\n` +
+      applied +
+      `• Total tagihan: ${rp(p.totalAmount)}\n• Total dibayar: ${rp(p.paidAmount)}\n• Sisa: ${rp(remaining)}\n\n` +
+      (p.status === "paid" ? "" : `Sisa pembayaran bisa dilunasi sebelum atau saat check-in.\n`) +
+      `Invoice terbaru: ${p.invoiceUrl}\n\nTerima kasih 🙏`
+    );
+  }
   if (p.status === "paid") {
     return (
       `${hello}\n\nPembayaran untuk booking ${p.referenceCode} sudah kami terima dan terverifikasi. ` +
@@ -76,6 +94,10 @@ export async function notifyPaymentStatusChange(params: {
   bookingId: string;
   before: { payment_status: PaymentStatusValue; paid_amount: number | null | undefined };
   deps?: PaymentNoticeDeps;
+  appliedAmount?: number;
+  autoRecorded?: boolean;
+  /** true bila dedup sudah dijamin klaim atomik (payment_applications). */
+  skipDedup?: boolean;
 }): Promise<PaymentNoticeOutcome> {
   const db = params.supabase as any;
   const send = params.deps?.send ?? sendGuestWhatsApp;
@@ -115,7 +137,7 @@ export async function notifyPaymentStatusChange(params: {
       guestId: guest?.id ?? null,
       provider: null,
     } as any);
-    if (threadId) {
+    if (threadId && !params.skipDedup) {
       const { data: dup } = await db
         .from("whatsapp_messages")
         .select("id")
@@ -134,6 +156,8 @@ export async function notifyPaymentStatusChange(params: {
       status: effective,
       paidAmount: paid,
       totalAmount: total,
+      appliedAmount: params.appliedAmount,
+      autoRecorded: params.autoRecorded,
       invoiceUrl: `${base}/book/confirmation/${encodeURIComponent(String(b.reference_code ?? b.id))}`,
     });
     const res = await send(phone, body);

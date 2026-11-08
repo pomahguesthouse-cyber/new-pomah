@@ -13,9 +13,8 @@
  * PG-XXXXX jadi lunas" cukup untuk mengubah status pembayaran tanpa bukti.
  * Sekarang ada dua jalur sah:
  *   1. Kanal managerial (`ctx.isManager === true`) — admin boleh set apa pun.
- *   2. Kanal tamu — HANYA bila ada hasil OCR `status="matched"` di thread nomor
- *      tersebut untuk kode booking yang sama, dan booking itu memang milik
- *      nomor penelepon.
+ *   2. Kanal tamu — SELALU ditolak (8 Nov 2026). Bukti cocok dicatat
+ *      deterministik oleh pipeline media (payment-auto-apply).
  */
 
 import { bookingBelongsToPhone, invalidBookingCodeError, normalizeBookingCode } from "@/lib/booking-code";
@@ -40,63 +39,16 @@ function sameCode(a: unknown, b: string): boolean {
  * (string) bila tidak sah, atau `null` bila boleh lanjut.
  */
 async function guestProofRejectionReason(
-  ctx: ToolContext,
+  _ctx: ToolContext,
   refCode: string,
 ): Promise<string | null> {
-  if (!ctx.phone) {
-    return "Tool ini hanya bisa dipakai dari percakapan tamu yang nomornya dikenali.";
-  }
-
-  // Simulator AI Lab menyuntikkan hasil OCR langsung ke context.
-  const injected = ctx.recentOcrResult?.match as
-    | { status?: unknown; booking_code?: unknown }
-    | undefined;
-  if (injected && injected.status === "matched" && sameCode(injected.booking_code, refCode)) {
-    return null;
-  }
-
-  const db = ctx.supabaseAdmin as any;
-
-  const { data: thread } = await db
-    .from("whatsapp_threads")
-    .select("id")
-    .eq("phone", ctx.phone)
-    .limit(1);
-  const threadId = (thread ?? [])[0]?.id;
-  if (!threadId) {
-    return "Belum ada bukti transfer yang terverifikasi untuk nomor ini.";
-  }
-
-  const sinceIso = new Date(Date.now() - OCR_PROOF_MAX_AGE_MS).toISOString();
-  const { data: rows } = await db
-    .from("whatsapp_messages")
-    .select("metadata, sent_at")
-    .eq("thread_id", threadId)
-    .eq("direction", "in")
-    .gte("sent_at", sinceIso)
-    .order("sent_at", { ascending: false })
-    .limit(20);
-
-  const matched = ((rows ?? []) as Array<{ metadata: Record<string, unknown> | null }>).some((row) => {
-    const match = (row.metadata as { ocr_match?: { status?: unknown; booking_code?: unknown } } | null)
-      ?.ocr_match;
-    return !!match && match.status === "matched" && sameCode(match.booking_code, refCode);
-  });
-
-  if (!matched) {
-    return (
-      `Belum ada bukti transfer terverifikasi (OCR cocok) untuk booking ${refCode} dari nomor ini. ` +
-      `Minta tamu mengirim ulang bukti transfer, atau teruskan ke admin untuk verifikasi manual.`
-    );
-  }
-
-  // Pertahanan berlapis: pastikan booking-nya memang milik nomor ini.
-  const owned = await bookingBelongsToPhone(db, refCode, ctx.phone);
-  if (owned !== true) {
-    return `Booking ${refCode.toUpperCase()} tidak terdaftar atas nomor ini.`;
-  }
-
-  return null;
+  // Kanal tamu TIDAK PERNAH boleh mengubah status lewat argumen tool (bisa
+  // dipalsukan lewat prompt). Pencatatan dari bukti transfer dilakukan
+  // deterministik oleh pipeline media (payment-auto-apply) dari hasil OCR.
+  return (
+    `Status pembayaran ${refCode.toUpperCase()} tidak bisa diubah dari chat tamu. ` +
+    `Bukti transfer yang cocok dicatat otomatis oleh sistem; selain itu diteruskan ke staf.`
+  );
 }
 
 function buildInvoiceUrl(refOrId: string, ctx: ToolContext): string {

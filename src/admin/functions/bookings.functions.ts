@@ -634,14 +634,17 @@ export const updateBookingFull = createServerFn({ method: "POST" })
         Number(r.extra_bed_rate ?? 0) * Number(r.extra_bed_count ?? 0) * nights,
       0,
     );
-    let final_paid_amount = data.paid_amount;
-
-    if (data.payment_status === "paid") {
-      total_amount = data.paid_amount;
-      final_paid_amount = data.paid_amount;
-    } else if (data.payment_status === "unpaid") {
-      final_paid_amount = 0;
-    }
+    // Total TIDAK lagi ditimpa paid_amount (dulu status "paid" → total=paid).
+    // Total hanya berubah bila harga kamar diedit; status mengikuti kumulatif.
+    const { resolveEditedPaymentTotals } = await import("@/services/payment-totals");
+    const totals = resolveEditedPaymentTotals({
+      computedTotal: total_amount,
+      status: data.payment_status,
+      paidAmount: data.paid_amount,
+    });
+    total_amount = totals.total;
+    const final_paid_amount = totals.paid;
+    data = { ...data, payment_status: totals.status as typeof data.payment_status };
 
     // Gunakan kontak kanonis bila nomor telepon sudah terdaftar pada tamu lain.
     // Ini mencegah pelanggaran indeks unik phone_normalized saat booking diedit.
