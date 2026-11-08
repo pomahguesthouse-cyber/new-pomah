@@ -16,10 +16,9 @@ export function resolveEditedPaymentTotals(p: {
   paidAmount: number;
 }): { total: number; paid: number; status: PayStatus } {
   const total = Math.max(0, Number(p.computedTotal) || 0);
-  let paid = Math.max(0, Number(p.paidAmount) || 0);
+  const paid = Math.max(0, Number(p.paidAmount) || 0);
   if (p.status === "unpaid") return { total, paid: 0, status: "unpaid" };
-  // Admin menandai "lunas" tanpa mengisi nominal → anggap dibayar penuh.
-  if (p.status === "paid" && paid === 0) paid = total;
-  if (p.status === "partial" && paid === 0) return { total, paid: 0, status: "unpaid" };
+  // Tidak ada inferensi "lunas tanpa nominal = penuh": UI admin sudah mengisi
+  // nominal = total saat memilih Lunas. Status murni dari nominal kumulatif.
   return { total, paid, status: statusFromCumulative(paid, total) };
 }

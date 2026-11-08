@@ -137,16 +137,38 @@ export async function notifyPaymentStatusChange(params: {
       guestId: guest?.id ?? null,
       provider: null,
     } as any);
-    if (threadId && !params.skipDedup) {
-      const { data: dup } = await db
-        .from("whatsapp_messages")
-        .select("id")
-        .eq("thread_id", threadId)
-        .eq("direction", "out")
-        .contains("metadata", { notice_key: noticeKey })
-        .limit(1);
-      if ((dup ?? []).length > 0) return { status: "skipped", reason: "sudah pernah dikirim" };
+    // Klaim atomik (payment_status_notices) bila migrasi sudah ada; jalur
+    // otomatis memakai klaim payment_applications (skipDedup).
+    let claimToken: string | null = null;
+    let atomic = false;
+    if (!params.skipDedup) {
+      const { data: tok, error: claimErr } =
+        typeof db.rpc === "function"
+          ? await db.rpc("claim_payment_status_notice", { p_notice_key: noticeKey, p_booking_id: b.id })
+          : { data: null, error: { message: "rpc unavailable" } };
+      if (!claimErr) {
+        atomic = true;
+        if (!tok) return { status: "skipped", reason: "sudah pernah dikirim" };
+        claimToken = String(tok);
+      } else if (threadId) {
+        // Fallback lama (non-atomik) bila RPC belum dimigrasi.
+        const { data: dup } = await db
+          .from("whatsapp_messages")
+          .select("id")
+          .eq("thread_id", threadId)
+          .eq("direction", "out")
+          .contains("metadata", { notice_key: noticeKey })
+          .limit(1);
+        if ((dup ?? []).length > 0) return { status: "skipped", reason: "sudah pernah dikirim" };
+      }
     }
+    const finish = async (ok: boolean, err?: string | null) => {
+      if (atomic && claimToken) {
+        await db.rpc("finish_payment_status_notice", {
+          p_notice_key: noticeKey, p_claim_token: claimToken, p_ok: ok, p_error: err ?? null,
+        });
+      }
+    };
 
     const domain = String((b.properties as any)?.public_domain ?? "pomahguesthouse.com");
     const base = (domain.startsWith("http") ? domain : `https://${domain}`).replace(/\/+$/, "");
@@ -161,7 +183,11 @@ export async function notifyPaymentStatusChange(params: {
       invoiceUrl: `${base}/book/confirmation/${encodeURIComponent(String(b.reference_code ?? b.id))}`,
     });
     const res = await send(phone, body);
-    if (!res.ok) return { status: "failed", reason: res.error ?? "kirim WhatsApp gagal" };
+    if (!res.ok) {
+      await finish(false, res.error ?? "kirim WhatsApp gagal");
+      return { status: "failed", reason: res.error ?? "kirim WhatsApp gagal" };
+    }
+    await finish(true);
     if (threadId) {
       await db.from("whatsapp_messages").insert({
         thread_id: threadId,

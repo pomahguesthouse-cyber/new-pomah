@@ -58,6 +58,9 @@ export function evaluateAutoApplyEligibility(
   const amount = Number(match.expected_amount ?? 0);
   if (!(amount > 0)) reasons.push("invalid_amount");
   const fee = Math.max(0, Number(match.transfer_fee_surplus ?? 0));
+  const received = Number(match.received_amount ?? 0);
+  // Kurang bayar tidak pernah lolos; lebih hanya ≤ 6.500 (biaya transfer).
+  if (amount > 0 && (received < amount || received - amount > 6500)) reasons.push("amount_mismatch");
   if (reasons.length) return { eligible: false, reasons };
   return { eligible: true, reasons, kind, amount, fee, bookingCode: match.booking_code!, reference: ref };
 }
@@ -112,10 +115,13 @@ export async function autoApplyPaymentProof(params: {
 
     const { data: res, error: rpcErr } = await db.rpc("apply_payment_proof", {
       p_booking_id: b.id,
+      p_phone: params.phone,
       p_reference: elig.reference,
       p_message_id: params.messageId,
       p_amount: elig.amount,
-      p_fee: elig.fee,
+      // Nominal diterima aktual: DB hanya menoleransi LEBIH ≤ 6.500 (biaya
+      // transfer), tidak pernah kurang.
+      p_received: Number(params.match?.received_amount ?? 0),
       p_kind: elig.kind,
       p_expected_paid: paid,
     });
@@ -159,8 +165,11 @@ export async function deliverPaymentApplicationNotice(
   // (yang juga mengecek jeda), jadi tidak ada bypass jeda global.
   const paused = await (p.deps?.isPaused ?? ((id: string) => threadPausedForBooking(db, id)))(p.bookingId).catch(() => false);
   if (paused) return "deferred_staff_pause";
-  const { data: claimed, error } = await db.rpc("claim_payment_notice", { p_application_id: p.applicationId });
-  if (error || claimed !== true) return "not_claimed";
+  // Lease + token: klaim ganda ditolak; worker basi tidak bisa menimpa hasil.
+  // At-least-once: crash setelah kirim sebelum finish → bisa terkirim ulang
+  // setelah lease habis (exactly-once ke Meta tidak bisa dijamin).
+  const { data: token, error } = await db.rpc("claim_payment_notice", { p_application_id: p.applicationId });
+  if (error || !token) return "not_claimed";
   const out = await notifyPaymentStatusChange({
     supabase: db,
     bookingId: p.bookingId,
@@ -170,11 +179,11 @@ export async function deliverPaymentApplicationNotice(
     autoRecorded: true,
     skipDedup: true,
   });
-  const ok = out.status === "sent" || out.status === "skipped";
   await db.rpc("finish_payment_notice", {
     p_application_id: p.applicationId,
-    p_ok: ok,
-    p_error: out.status === "failed" ? out.reason : null,
+    p_claim_token: token,
+    p_outcome: out.status,
+    p_error: out.status === "failed" ? out.reason : out.status === "skipped" ? out.reason : null,
   });
   return out.status === "sent" ? "sent" : out.status === "skipped" ? "skipped" : "failed";
 }

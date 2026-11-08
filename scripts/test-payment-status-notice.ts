@@ -36,6 +36,31 @@ const deps = (sent: string[], ok = true) => ({
 });
 
 async function main() {
+  // 0. Klaim atomik manual (RPC tersedia): klaim pertama kirim, kedua ditolak
+  //    walau riwayat pesan kosong (tidak bergantung read-then-send).
+  {
+    const { db } = makeDb({ ...base, payment_status: "paid", paid_amount: 830000 });
+    const claims = new Set<string>();
+    const finished: any[] = [];
+    db.rpc = async (fn: string, a: any) => {
+      if (fn === "claim_payment_status_notice") {
+        if (claims.has(a.p_notice_key)) return { data: null, error: null };
+        claims.add(a.p_notice_key);
+        return { data: "tok-1", error: null };
+      }
+      finished.push(a);
+      return { data: true, error: null };
+    };
+    const sent: string[] = [];
+    const before = { payment_status: "unpaid", paid_amount: 0 };
+    const [r1, r2] = await Promise.all([
+      notifyPaymentStatusChange({ supabase: db, bookingId: "bk-1", before, deps: deps(sent) }),
+      notifyPaymentStatusChange({ supabase: db, bookingId: "bk-1", before, deps: deps(sent) }),
+    ]);
+    assert.deepEqual([r1.status, r2.status].sort(), ["sent", "skipped"]);
+    assert.equal(sent.length, 1);
+    assert.equal(finished[0].p_ok, true);
+  }
   // 1. unpaid → paid (nominal menutup total) → kirim LUNAS sekali.
   {
     const { db, inserted } = makeDb({ ...base, payment_status: "paid", paid_amount: 830000 });

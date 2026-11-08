@@ -59,6 +59,9 @@ function fakeDb(bookings: any[], opts: { migrated?: boolean; paused?: boolean } 
       const b = t.bookings.find((x) => x.id === a.p_booking_id);
       if (!b) return { data: { ok: false, reason: "booking_not_found" }, error: null };
       if (b.status === "cancelled") return { data: { ok: false, reason: "booking_closed" }, error: null };
+      if (b.phone !== a.p_phone) return { data: { ok: false, reason: "not_owner" }, error: null };
+      const fee = Number(a.p_received) - Number(a.p_amount);
+      if (fee < 0 || fee > 6500) return { data: { ok: false, reason: "amount_mismatch" }, error: null };
       if (Number(b.paid_amount) !== Number(a.p_expected_paid)) return { data: { ok: false, reason: "paid_amount_changed" }, error: null };
       const newPaid = Number(b.paid_amount) + Number(a.p_amount);
       if (newPaid > b.total_amount) return { data: { ok: false, reason: "overpayment" }, error: null };
@@ -80,14 +83,17 @@ function fakeDb(bookings: any[], opts: { migrated?: boolean; paused?: boolean } 
     }
     if (fn === "claim_payment_notice") {
       const p = t.payment_applications.find((x) => x.id === a.p_application_id);
-      if (!p || p.notice_attempts >= 5 || !["pending", "failed"].includes(p.notice_status)) return { data: false, error: null };
+      if (!p || p.notice_attempts >= 5 || !["pending", "failed"].includes(p.notice_status)) return { data: null, error: null };
       p.notice_status = "sending";
       p.notice_attempts++;
-      return { data: true, error: null };
+      p.token = `tok-${++seq}`;
+      return { data: p.token, error: null };
     }
     if (fn === "finish_payment_notice") {
       const p = t.payment_applications.find((x) => x.id === a.p_application_id);
-      if (p && p.notice_status === "sending") p.notice_status = a.p_ok ? "sent" : "failed";
+      if (p && p.notice_status === "sending" && p.token === a.p_claim_token) {
+        p.notice_status = a.p_outcome === "sent" || a.p_outcome === "skipped" ? a.p_outcome : "failed";
+      }
       return { data: null, error: null };
     }
     throw new Error(fn);
@@ -320,7 +326,10 @@ async function main() {
   {
     const base: any = { status: "matched", destination_ok: true, candidate_fit_count: 1, booking_code: "PG-X", expected_amount: 1 };
     assert.equal(evaluateAutoApplyEligibility({ nomor_referensi: "ABCDEF12" }, base).eligible, false);
-    assert.equal(evaluateAutoApplyEligibility({ nomor_referensi: "ABCDEF12" }, { ...base, status: "matched_full" }).eligible, true);
+    assert.equal(evaluateAutoApplyEligibility({ nomor_referensi: "ABCDEF12" }, { ...base, status: "matched_full", received_amount: 1 }).eligible, true);
+    // matched_* tetapi diterima < tagihan (mis. toleransi matcher) → tidak otomatis.
+    assert.equal(evaluateAutoApplyEligibility({ nomor_referensi: "ABCDEF12" }, { ...base, status: "matched_full", expected_amount: 830000, received_amount: 829000 }).eligible, false);
+    assert.equal(evaluateAutoApplyEligibility({ nomor_referensi: "ABCDEF12" }, { ...base, status: "matched_full", expected_amount: 830000, received_amount: 836501 }).eligible, false);
     assert.equal(evaluateAutoApplyEligibility({ nomor_referensi: "ABCDEF12" }, { ...base, status: "matched_full", candidate_fit_count: 2 }).eligible, false);
   }
 
@@ -328,7 +337,8 @@ async function main() {
   {
     assert.deepEqual(resolveEditedPaymentTotals({ computedTotal: 830000, status: "paid", paidAmount: 400000 }), { total: 830000, paid: 400000, status: "partial" });
     assert.deepEqual(resolveEditedPaymentTotals({ computedTotal: 830000, status: "paid", paidAmount: 900000 }), { total: 830000, paid: 900000, status: "paid" });
-    assert.deepEqual(resolveEditedPaymentTotals({ computedTotal: 830000, status: "paid", paidAmount: 0 }), { total: 830000, paid: 830000, status: "paid" });
+    // Tidak ada inferensi "lunas tanpa nominal": nominal 0 tidak pernah jadi lunas.
+    assert.deepEqual(resolveEditedPaymentTotals({ computedTotal: 830000, status: "paid", paidAmount: 0 }), { total: 830000, paid: 0, status: "unpaid" });
     assert.deepEqual(resolveEditedPaymentTotals({ computedTotal: 830000, status: "unpaid", paidAmount: 5 }), { total: 830000, paid: 0, status: "unpaid" });
     assert.equal(statusFromCumulative(829999, 830000), "partial");
   }

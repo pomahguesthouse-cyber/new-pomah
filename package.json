@@ -87,7 +87,8 @@
     "android:sync": "cap sync android",
     "android:debug": "bash scripts/build-android-debug.sh",
     "test:seo-room-prices": "tsx scripts/test-seo-room-prices.ts",
-    "test:sofiah-flow": "bun scripts/test-sofiah-combination-flow.ts"
+    "test:sofiah-flow": "bun scripts/test-sofiah-combination-flow.ts",
+    "test:payment-sql": "bash scripts/sql/test-payment-applications.sh"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.79",
