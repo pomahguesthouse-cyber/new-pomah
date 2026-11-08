@@ -445,6 +445,32 @@ function tryExplicitStay(text: string, today: string): ExplicitStay | null {
   if (labeledOut && !labeledIn) return null;
   if (labeledIn && !labeledOut) return assumedOneNight(labeledIn);
 
+  // Lintas bulan/tahun dengan dua nama bulan: "31 Des-4 Jan 2027",
+  // "26 des -1 jan". Tanpa pola ini dayMonth mengambil tanggal pertama saja
+  // dan checkout diasumsikan +1 malam (log 25 & 30 Okt 2026).
+  const crossMonth =
+    /\b(\d{1,2})\s*([a-z]+)\.?\s*(\d{4})?\s*(?:-|–|—|sampai|sd|s\/d|to|hingga)\s*(\d{1,2})\s*([a-z]+)\.?\s*(\d{2,4})?\b/gi;
+  for (const match of text.matchAll(crossMonth)) {
+    const inMonth = resolveMonthName(match[2] ?? "");
+    const outMonth = resolveMonthName(match[5] ?? "");
+    if (!inMonth || !outMonth) continue;
+    let inYear: number;
+    let outYear: number;
+    if (match[3]) {
+      inYear = resolveYear(inMonth, match[3], today);
+      outYear = match[6] ? resolveYear(outMonth, match[6], today) : outMonth < inMonth ? inYear + 1 : inYear;
+    } else if (match[6]) {
+      outYear = resolveYear(outMonth, match[6], today);
+      inYear = inMonth > outMonth ? outYear - 1 : outYear;
+    } else {
+      inYear = resolveYear(inMonth, undefined, today);
+      outYear = outMonth < inMonth ? inYear + 1 : inYear;
+    }
+    const checkIn = makeIsoDate(Number(match[1]), inMonth, inYear);
+    const checkOut = makeIsoDate(Number(match[4]), outMonth, outYear);
+    if (checkIn && checkOut && checkOut > checkIn) return { checkIn, checkOut };
+  }
+
   const monthRange =
     /\b(\d{1,2})(?:\s*(?:-|–|—|sampai|sd|s\/d|to|dan)\s*|\s+)(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/gi;
   for (const match of text.matchAll(monthRange)) {
@@ -697,5 +723,41 @@ export function resolveRelativeDayRange(
     });
   }
 
+  return null;
+}
+
+/**
+ * Koreksi bulan saja ("Des", "des kak", "bulan Desember", "des bukan nov")
+ * setelah tamu sebelumnya menyebut rentang tanggal TANPA bulan ("tgl 11 - 14").
+ * Log 8 Nov 2026 (Hany): "Rencana kami ditgl 11 - 14" dibaca November, lalu
+ * balasan "Des" diabaikan bot ("Iya Kak, ada yang bisa kami bantu?").
+ * Mengembalikan rentang hasil gabungan, atau null bila pola tidak cocok.
+ */
+const MONTH_ONLY_RE =
+  /^(?:(?:bulan|bln)\s+)?([a-z]{3,9})\.?(?:\s+(?:bukan|bkn)\s+(?:bulan\s+)?[a-z]{3,9}\.?)?(?:\s+(?:kak|ka|kk|min|pak|bu|ya|yah|ya kak))*[\s.!?]*$/i;
+export function resolveMonthOnlyCorrection(
+  message: string,
+  priorInbound: readonly string[],
+  today: string,
+): { checkIn: string; checkOut: string; monthWord: string } | null {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  const m = text.match(MONTH_ONLY_RE);
+  if (!m) return null;
+  const word = m[1];
+  // Hanya nama/singkatan bulan yang persis (bukan typo-tolerant) agar
+  // "deluxe", "desa", dll. tidak pernah dianggap bulan.
+  const month = ID_MONTHS[word];
+  if (!month) return null;
+  for (const prior of [...priorInbound].reverse().slice(0, 4)) {
+    const p = prior.toLowerCase().replace(/\s+/g, " ").trim();
+    if ((p.match(/[a-z]{3,}/g) ?? []).some((t) => ID_MONTHS[t] !== undefined)) return null;
+    const days = p.match(/\b(\d{1,2})\s*(?:-|–|—|sampai|sd|s\/d|to|hingga)\s*(\d{1,2})\b(?!\s*[/.:]\d)/);
+    if (!days) continue;
+    const after = followingWord(p, (days.index ?? 0) + days[0].length);
+    if (UNIT_WORD_RE.test(after)) continue;
+    const explicit = tryExplicitStay(`${days[1]}-${days[2]} ${word}`, today);
+    if (!explicit || explicit.checkoutAssumed) return null;
+    return { checkIn: explicit.checkIn, checkOut: explicit.checkOut, monthWord: word };
+  }
   return null;
 }
