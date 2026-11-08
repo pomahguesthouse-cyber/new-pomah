@@ -423,6 +423,10 @@ function precededByCheckoutLabel(text: string, index: number): boolean {
   return /(?:check[\s-]*out|cek[\s-]*out|checkout|cekout)\s+(?:nya\s+)?(?:tanggal\s+|tgl\s+)?$/i.test(before);
 }
 
+// "chek-in", "cek in", "chekout" — typo lazim di log WA (Sofiah 8 Nov 2026).
+const CHECKIN_LABEL = /(?:che?c?k|chek|cek)[\s-]*in/i;
+const CHECKOUT_LABEL = /(?:che?c?k|chek|cek)[\s-]*out/i;
+
 function labeledStayDate(text: string, label: RegExp, today: string): string | null {
   const re = new RegExp(
     `(?:${label.source})(?:\\s*(?:nya|tanggal|tgl|pada|di|:|jadi|ke|menjadi))*\\s*(\\d{1,2})(?:\\s+([a-z]{3,}))?(?:\\s+(\\d{2,4}))?`,
@@ -436,8 +440,8 @@ function labeledStayDate(text: string, label: RegExp, today: string): string | n
 }
 
 function tryExplicitStay(text: string, today: string): ExplicitStay | null {
-  const labeledIn = labeledStayDate(text, /check[\s-]*in|cek[\s-]*in|checkin|cekin/i, today);
-  const labeledOut = labeledStayDate(text, /check[\s-]*out|cek[\s-]*out|checkout|cekout/i, today);
+  const labeledIn = labeledStayDate(text, CHECKIN_LABEL, today);
+  const labeledOut = labeledStayDate(text, CHECKOUT_LABEL, today);
   if (labeledIn && labeledOut && labeledOut > labeledIn) {
     return { checkIn: labeledIn, checkOut: labeledOut };
   }
@@ -760,4 +764,36 @@ export function resolveMonthOnlyCorrection(
     return { checkIn: explicit.checkIn, checkOut: explicit.checkOut, monthWord: word };
   }
   return null;
+}
+
+/**
+ * Hari check-in/check-out berlabel TANPA bulan ("chek-in nya tanggal 11
+ * cek-out nya tgl 12") dijangkarkan ke bulan/tahun stay yang SUDAH diketahui
+ * di slot (kasus Sofiah 8 Nov 2026: slot 11 Des, parser umum membaca null
+ * sehingga bot menanyakan tanggal lagi). Hanya dipakai bila hari check-in
+ * sama dengan hari slot ATAU berada di bulan yang sama — tidak menebak bulan
+ * baru. Return null bila pesan sudah menyebut bulan (parser umum menang).
+ */
+export function resolveLabeledDaysAgainstKnownStay(
+  message: string,
+  knownCheckIn: string | null | undefined,
+): { checkIn: string; checkOut: string } | null {
+  if (!knownCheckIn || !/^\d{4}-\d{2}-\d{2}$/.test(knownCheckIn)) return null;
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if ((text.match(/[a-z]{3,}/g) ?? []).some((t) => ID_MONTHS[t] !== undefined)) return null;
+  const tail = "(?:\\s*(?:nya|tanggal|tgl\\.?|pada|di|:|jadi|ke))*\\s*(\\d{1,2})\\b";
+  const inM = text.match(new RegExp(`(?:${CHECKIN_LABEL.source})${tail}`, "i"));
+  const outM = text.match(new RegExp(`(?:${CHECKOUT_LABEL.source})${tail}`, "i"));
+  if (!inM || !outM) return null;
+  const year = Number(knownCheckIn.slice(0, 4));
+  const month = Number(knownCheckIn.slice(5, 7));
+  const checkIn = makeIsoDate(Number(inM[1]), month, year);
+  if (!checkIn) return null;
+  let checkOut = makeIsoDate(Number(outM[1]), month, year);
+  if (!checkOut || checkOut <= checkIn) {
+    const nm = month === 12 ? 1 : month + 1;
+    checkOut = makeIsoDate(Number(outM[1]), nm, month === 12 ? year + 1 : year);
+  }
+  if (!checkOut || checkOut <= checkIn) return null;
+  return { checkIn, checkOut };
 }

@@ -54,7 +54,8 @@ import {
   isRoomComparisonQuestion,
 } from "@/services/room-comparison";
 import { buildRoomSharingReply } from "@/services/room-sharing-policy";
-import { applyCombinationGuardToReply } from "@/services/wa-autoreply/combination-capacity-guard";
+import { applyCombinationGuardToReply, isRoomSelectionMessage } from "@/services/wa-autoreply/combination-capacity-guard";
+import { applyAnchoredStayFromSlots } from "@/services/wa-autoreply/anchored-stay";
 import { dispatchBrochureDocument, isMediaOfferAcceptance } from "@/services/wa-autoreply/offer-acceptance";
 import {
   AI_TIMEOUT_MS,
@@ -1343,6 +1344,24 @@ export async function executeAutoreplyForPhone(
     }
   }
 
+  // Hari check-in/out berlabel tanpa bulan ("chek-in nya tanggal 11 cek-out
+  // nya tgl 12") dijangkarkan ke stay di slot (kasus Sofiah 8 Nov 2026).
+  if (!reply && !isManager && lastMessage) {
+    const anchoredMsg = await applyAnchoredStayFromSlots({
+      db: supabaseAdmin as any,
+      phone,
+      message: lastMessage,
+      slots: ((bookingState as any)?.slots ?? {}) as Record<string, unknown>,
+      today: todayWIB(),
+    });
+    if (anchoredMsg) {
+      lastMessage = anchoredMsg.message;
+      const inbound = [...rollingMessages].reverse().find((m) => m.direction === "in");
+      if (inbound) inbound.body = lastMessage;
+      if (bookingState) (bookingState as any).slots = anchoredMsg.slots;
+    }
+  }
+
   const slashStay = resolveRelativeDayRange(lastMessage, nowForStayParsing(todayWIB()));
   if (!reply && !isManager && slashStay?.reason === "slash-day-range" && slashStay.needsConfirm) {
     const { error } = await (supabaseAdmin as any).rpc("update_conversation_topic", {
@@ -1928,7 +1947,10 @@ export async function executeAutoreplyForPhone(
   // dihitung deterministik dari `checkRoomAvailability`.
   if (!reply && !isManager && !availabilityBlocked && !multiPendingInbound && !wantsMedia && lastMessage) {
     try {
-      const contextualReply = await buildContextualBookingInquiryReply({
+      // Tamu MEMILIH kombinasi kamar ("1 family room + 1 kamar deluxe boleh")
+      // — jangan ulangi daftar kombinasi (kasus Sofiah 14.10 WIB).
+      const namesSelection = isRoomSelectionMessage(lastMessage, rooms ?? []);
+      const contextualReply = namesSelection ? null : await buildContextualBookingInquiryReply({
         message: lastMessage,
         rooms: rooms ?? [],
         property: p,
@@ -2677,6 +2699,16 @@ export async function executeAutoreplyForPhone(
         rooms: (rooms ?? []) as Array<Record<string, unknown>>,
         slots: ((bookingState as any)?.slots ?? {}) as Record<string, unknown>,
         inboundBodies: rollingMessages.filter((m) => m.direction === "in").map((m) => m.body ?? ""),
+        stay: (() => {
+          const sl = ((bookingState as any)?.slots ?? {}) as Record<string, unknown>;
+          const ci = typeof sl.checkIn === "string" && sl.checkIn >= todayWIB() ? sl.checkIn : null;
+          return {
+            checkIn: ci,
+            checkOut: ci && typeof sl.checkOut === "string" ? sl.checkOut : null,
+            checkoutAssumed: sl.checkoutAssumed === true,
+            lastInbound: lastMessage,
+          };
+        })(),
       });
       // Fail-closed: teks hasil guard SELALU dipakai bila ada baris dibuang
       // (termasuk fallback aman saat semua opsi invalid).

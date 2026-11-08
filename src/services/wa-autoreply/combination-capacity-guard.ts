@@ -11,6 +11,8 @@
  */
 
 import { parseGuestCountFollowup } from "@/services/wa-autoreply/message-parsers";
+import { formatStayEcho } from "@/lib/id-date";
+import { fmtDateID } from "@/lib/date";
 
 export type GuardRoom = {
   name: string;
@@ -124,12 +126,76 @@ function hasValidCombination(line: string, rooms: GuardRoom[], guestTotal: numbe
   });
 }
 
-export function capacityGuardFallbackReply(guestTotal: number): string {
-  return (
-    `Mohon maaf Kak, untuk ${guestTotal} tamu saya cek ulang dulu kombinasi kamar yang kapasitasnya pas di sistem. ` +
-    "Boleh dikonfirmasi tanggal check-in dan check-out-nya, Kak?"
-  );
+export type GuardStayContext = {
+  /** Tanggal stay yang sudah diketahui (slot/summary). */
+  checkIn?: string | null;
+  checkOut?: string | null;
+  /** true bila checkout hanya diasumsikan +1 malam. */
+  checkoutAssumed?: boolean;
+  /** Pesan tamu terakhir — dipakai untuk membaca kombinasi yang ia pilih. */
+  lastInbound?: string;
+};
+
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Teks fallback guard. Kasus Sofiah 8 Nov 2026: tanggal 11–12 Des sudah ada di
+ * slot, tetapi fallback lama SELALU menanyakan check-in & check-out lagi.
+ * Sekarang hanya slot yang kosong/ambigu yang ditanyakan, dan pilihan kamar
+ * tamu dijawab dengan kebutuhan extra bed yang sebenarnya.
+ */
+export function capacityGuardFallbackReply(
+  guestTotal: number,
+  stay?: GuardStayContext,
+  rooms: GuardRoom[] = [],
+): string {
+  const hasIn = !!stay?.checkIn && ISO.test(stay.checkIn);
+  const hasOut = hasIn && !!stay?.checkOut && ISO.test(stay.checkOut) && stay.checkOut! > stay.checkIn!;
+  if (!hasIn) {
+    return (
+      `Mohon maaf Kak, untuk ${guestTotal} tamu saya cek ulang dulu kombinasi kamar yang kapasitasnya pas di sistem. ` +
+      "Boleh dikonfirmasi tanggal check-in dan check-out-nya, Kak?"
+    );
+  }
+  const period = hasOut ? formatStayEcho(stay!.checkIn!, stay!.checkOut!) : fmtDateID(stay!.checkIn!);
+  const sel = stay?.lastInbound ? analyzeCombinationLine(stay.lastInbound, rooms) : null;
+  let body: string;
+  if (sel && sel.standard >= guestTotal) {
+    body = `pilihan kamar Kakak sudah cukup untuk ${guestTotal} tamu (kapasitas standar ${sel.standard} orang).`;
+  } else if (sel && sel.standard + extraSlotsOf(stay!.lastInbound!, rooms) >= guestTotal) {
+    const need = guestTotal - sel.standard;
+    body =
+      `pilihan kamar Kakak kapasitas standarnya ${sel.standard} orang, jadi perlu tambahan ${need} extra bed ` +
+      `agar cukup untuk ${guestTotal} tamu. Apakah mau dilanjutkan dengan tambahan ${need} extra bed, Kak?`;
+  } else if (sel) {
+    body =
+      `pilihan kamar Kakak maksimal ${sel.standard + extraSlotsOf(stay!.lastInbound!, rooms)} orang meski ditambah extra bed, ` +
+      `belum cukup untuk ${guestTotal} tamu. Boleh pilih kombinasi kamar lain, Kak?`;
+  } else {
+    body = `boleh disebutkan kombinasi kamar yang Kakak inginkan? Nanti kami hitungkan kapasitasnya.`;
+  }
+  const checkoutAsk =
+    !hasOut
+      ? " Check-out-nya tanggal berapa, Kak?"
+      : stay?.checkoutAssumed
+        ? ` Check-out-nya tanggal ${fmtDateID(stay!.checkOut!)} (1 malam) ya, Kak?`
+        : "";
+  return `Untuk ${guestTotal} tamu pada ${period}, ${body}${checkoutAsk}`;
 }
+
+function extraSlotsOf(line: string, rooms: GuardRoom[]): number {
+  let text = ` ${line.toLowerCase()} `.replace(/(\d+)?\s*(?:unit\s+)?extra\s*-?\s*bed/g, " ");
+  let slots = 0;
+  for (const { alias, room } of buildAliases(rooms)) {
+    const re = new RegExp(`(?:(\\d+)\\s*(?:x\\s*)?(?:kamar\\s+|unit\\s+)?)?\\b${escapeRegExp(alias)}\\b`, "g");
+    text = text.replace(re, (_m, qty: string | undefined) => {
+      slots += (qty ? Math.max(1, Number(qty)) : 1) * room.extraBedCapacity;
+      return " ";
+    });
+  }
+  return slots;
+}
+
 
 /**
  * Buang opsi kombinasi yang tidak cukup untuk `guestTotal` atau yang
@@ -140,6 +206,7 @@ export function guardCombinationCapacity(
   reply: string,
   rooms: GuardRoom[],
   guestTotal: number,
+  stay?: GuardStayContext,
 ): { text: string; removed: number; fallback: boolean } {
   if (guestTotal <= 0 || rooms.length === 0) return { text: reply, removed: 0, fallback: false };
   const lines = reply.split("\n");
@@ -148,7 +215,7 @@ export function guardCombinationCapacity(
   if (removed === 0) return { text: reply, removed: 0, fallback: false };
   const text = kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   if (!text || !kept.some((line) => hasValidCombination(line, rooms, guestTotal))) {
-    return { text: capacityGuardFallbackReply(guestTotal), removed, fallback: true };
+    return { text: capacityGuardFallbackReply(guestTotal, stay, rooms), removed, fallback: true };
   }
   return { text, removed, fallback: false };
 }
@@ -176,6 +243,7 @@ export function applyCombinationGuardToReply(params: {
   rooms: Array<Record<string, unknown>>;
   slots: Record<string, unknown>;
   inboundBodies: string[];
+  stay?: GuardStayContext;
 }): { text: string; removed: number; fallback: boolean } {
   const guestTotal = resolveGuardGuestTotal(params.slots, params.inboundBodies);
   const guardRooms = params.rooms
@@ -185,5 +253,19 @@ export function applyCombinationGuardToReply(params: {
       extraBedCapacity: Math.max(0, Number(r.extrabed_capacity ?? 0) || 0),
     }))
     .filter((r) => r.name);
-  return guardCombinationCapacity(params.reply, guardRooms, guestTotal);
+  return guardCombinationCapacity(params.reply, guardRooms, guestTotal, params.stay);
+}
+
+/** Pesan tamu yang memilih ≥2 unit kamar / kamar + extra bed (bukan bertanya). */
+export function isRoomSelectionMessage(message: string, rooms: Array<Record<string, unknown>>): boolean {
+  if (!message || /\?\s*$/.test(message.trim())) return false;
+  if (!/\b(boleh|ambil|pilih|mau|jadi|oke|ok|iya+|ya|deal|fix)\b/i.test(message)) return false;
+  const guardRooms = rooms
+    .map((r) => ({
+      name: String(r.name ?? ""),
+      capacity: Math.max(1, Number(r.capacity ?? 1) || 1),
+      extraBedCapacity: Math.max(0, Number(r.extrabed_capacity ?? 0) || 0),
+    }))
+    .filter((r) => r.name);
+  return analyzeCombinationLine(message, guardRooms) !== null;
 }

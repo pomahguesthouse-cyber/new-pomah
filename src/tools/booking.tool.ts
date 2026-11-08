@@ -652,7 +652,11 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   // ringkasan konfirmasi dan total DB bisa selisih beberapa sen/rupiah.
   const roomSubtotalRaw = assignments.reduce((acc, curr) => acc + curr.rate * nights, 0);
   // Extra bed: tarif per malam dari kalender harga (fallback room_types.extrabed_rate).
+  // Kamar penampung = kamar pertama (urutan pesanan) yang PUNYA slot extra
+  // bed dan tarif > 0 — sama dengan ringkasan state machine
+  // (resolveRoomExtraBedPolicy), sehingga Family+Deluxe ditagih tarif Family.
   const extraBedRate = assignments
+    .filter((a) => Number(ctx.rooms.find((r) => r.id === a.roomTypeId)?.extrabed_capacity ?? 1) > 0)
     .map((a) => resolvedByRoomType.get(a.roomTypeId)?.avgExtraBedRate ?? Number(ctx.rooms.find((r) => r.id === a.roomTypeId)?.extrabed_rate ?? 0))
     .find((rate) => rate > 0) ?? 0;
   const extraBedTotal = requestedExtraBeds > 0 && extraBedRate > 0 ? toRupiah(requestedExtraBeds * extraBedRate * nights) : 0;
