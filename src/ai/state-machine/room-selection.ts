@@ -102,6 +102,9 @@ export function decideRoomSelection(params: {
   const adults = Number(s.adults ?? s.partialAdults ?? s.guestCount ?? 0) || 0;
   const children = Number(s.children ?? s.partialChildren ?? 0) || 0;
   if (adults <= 0) return null;
+  // start_booking_details membatasi jumlah tamu ke 8 (cappedCount) — rombongan
+  // lebih besar jangan dipaksa lewat jalur ini (jumlah tamu bisa terpotong).
+  if (adults + children > 8) return null;
   if (!checkOut || s.checkoutAssumed === true) {
     return { kind: "ask_checkout", rooms: items, checkIn, checkOut, adults, children };
   }

@@ -592,14 +592,26 @@ function resolveRoomExtraBedPolicy(
     if (rows.every((x) => x.row)) {
       const count = items.reduce((sum, r) => sum + r.quantity, 0);
       const std = rows.reduce((sum, x) => sum + x.item.quantity * (Number(x.row!.capacity ?? 0) || 1), 0);
-      const extra = rows.reduce((sum, x) => sum + x.item.quantity * (Number(x.row!.extrabed_capacity ?? 0) || 0), 0);
       const host = rows.find((x) => (Number(x.row!.extrabed_capacity ?? 0) || 0) > 0 && Number(x.row!.extrabed_rate ?? 0) > 0);
+      const hostRate = Number(host?.row!.extrabed_rate ?? 0) || 0;
+      // Fail-safe: create_booking menagih SEMUA extra bed dengan satu tarif
+      // (kamar penampung). Slot extra bed di tipe bertarif BERBEDA tidak
+      // dihitung, supaya kebutuhan yang melampaui slot bertarif sama menjadi
+      // overCapacity (ringkasan tidak lengkap, create diblok) — bukan ditagih
+      // dengan tarif yang salah.
+      const extra = rows.reduce(
+        (sum, x) =>
+          (Number(x.row!.extrabed_rate ?? 0) || 0) === hostRate
+            ? sum + x.item.quantity * (Number(x.row!.extrabed_capacity ?? 0) || 0)
+            : sum,
+        0,
+      );
       return {
         roomTypeId: host?.row!.id ?? rows[0]!.row!.id,
         roomTypeName: host?.row!.name ?? rows[0]!.row!.name,
         capacity: std / count,
         extrabedCapacity: extra / count,
-        extrabedRate: Number(host?.row!.extrabed_rate ?? 0) || 0,
+        extrabedRate: hostRate,
       };
     }
   }
@@ -1724,6 +1736,36 @@ async function respondToOverCapacity(
 
   if (context.capacityHandoffDone && !followup) {
     return { handled: true, silent: true };
+  }
+
+  // Kombinasi tipe campuran: penawaran "tambah kamar / pesan 1 dulu" di bawah
+  // hanya paham satu tipe kamar. Bila kebutuhan extra bed melampaui slot
+  // bertarif sama dengan kamar penampung, JANGAN tebak tarif — serah ke staf.
+  const mixedTypes = new Set((context.rooms ?? []).map((r) => r.roomTypeId)).size > 1;
+  if (mixedTypes && eb.overCapacity) {
+    const label = formatRoomsDisplay(context.rooms, context.roomName);
+    try {
+      const { createHandoffTicket } = await import("@/services/frustration-detector");
+      await createHandoffTicket(ctx.supabaseAdmin, {
+        phone,
+        kind: "capacity_dead_end",
+        triggerMessage:
+          `Kombinasi ${label} untuk ${guests} tamu butuh extra bed di tipe kamar bertarif berbeda — ` +
+          `mohon hitung & konfirmasi manual (booking belum dibuat).`,
+        context,
+      });
+    } catch (e) {
+      console.warn("[BookingState] tiket extra bed campuran gagal (non-fatal):", e);
+    }
+    context.capacityHandoffDone = true;
+    await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+    return {
+      handled: true,
+      reply:
+        `${inlinePrefix}Untuk ${guests} tamu dengan pilihan ${label}, kapasitas standarnya ${Math.round(policy.capacity * totalRoomsCount)} orang ` +
+        `dan extra bed yang dibutuhkan harus dibagi ke tipe kamar dengan tarif berbeda. ` +
+        `Supaya rincian biayanya tepat, staf kami bantu hitung dan konfirmasi ya, Kak. Booking belum kami buat. 🙏`,
+    };
   }
 
   const nights =
