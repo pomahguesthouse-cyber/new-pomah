@@ -141,9 +141,13 @@ import {
 import {
   isConfiguredAdminPhone,
   isManagerInGuestMode,
+  managerRoleOf,
   normalizePhone,
   resolveManagerByPhone,
+  resolveManagerChannel,
+  setManagerGuestMode,
 } from "@/services/wa-autoreply/identity";
+import { parseManagerModeSwitch } from "@/services/manager-chat/confirm";
 
 export {
   isConfiguredAdminPhone,
@@ -742,14 +746,50 @@ export async function executeAutoreplyForPhone(
 
   const c = ctx as any;
   const sendTarget = String(c.send_target || c.external_chat_id || phone);
-  const rawManager = await resolveManagerByPhone(phone);
-  // Satu-satunya kanal WhatsApp adalah nomor resmi Meta: semua pengirim
-  // (termasuk manager) selalu dilayani kami, bukan Asisten Admin.
-  const viaOfficialNumber = true;
-  // Manager bisa mengaktifkan "guest mode" untuk menguji alur tamu (booking,
-  // invoice, pembayaran) tanpa ter-route ke agen manajerial.
-  const guestModeActive = viaOfficialNumber || (rawManager ? await isManagerInGuestMode(phone) : false);
-  const manager = guestModeActive ? null : rawManager;
+  const channel = await resolveManagerChannel(phone);
+  const rawManager = channel.kind === "guest" ? null : channel.manager;
+  // Mode tamu hanya jika manajer terdaftar mengaktifkannya (manager_test_modes).
+  // Nomor resmi Meta tidak lagi memaksa semua pengirim ke alur tamu —
+  // nomor aktif di property_managers dilayani Asisten Admin.
+  if (rawManager && c.thread_id) {
+    try {
+      const { data: lastIn } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("body")
+        .eq("thread_id", c.thread_id)
+        .eq("direction", "in")
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const modeSwitch = parseManagerModeSwitch(String(lastIn?.body ?? ""));
+      if (modeSwitch) {
+        await setManagerGuestMode(rawManager.phone, modeSwitch === "guest");
+        await setManagerGuestMode(phone, modeSwitch === "guest");
+        const switchReply = modeSwitch === "guest"
+          ? "Mode tamu aktif. Pesan berikutnya dilayani seperti tamu (termasuk tes booking). Ketik mode manajer untuk kembali ke Asisten Admin."
+          : "Mode manajer aktif. Ketik bantuan untuk daftar perintah.";
+        const { sendGuestWhatsApp } = await import("@/services/guest-whatsapp.service");
+        await sendGuestWhatsApp(sendTarget || phone, switchReply);
+        if (c.thread_id) {
+          try {
+            await saveOutboundMessage(supabaseAdmin, {
+              threadId: c.thread_id,
+              body: switchReply,
+              metadata: { agent: "system", agent_key: "manager-mode-switch", source: "manager_chat" } as any,
+            });
+          } catch (e) {
+            console.warn("[Autoreply] mode-switch outbound row failed:", e);
+          }
+        }
+        await markReplyCommitted();
+        return "ok";
+      }
+    } catch (e) {
+      console.warn("[Autoreply] manager mode-switch check failed:", e);
+    }
+  }
+  const guestModeActive = channel.kind === "guest_mode";
+  const manager = channel.kind === "manager" ? channel.manager : null;
   const metrics = {
     workerStartedAt,
     contextLoadedAt: Date.now(),
@@ -762,7 +802,7 @@ export async function executeAutoreplyForPhone(
 
   // ── Mode selection ──────────────────────────────
   let mode = "guest"; // Default
-  if (manager || (isConfiguredAdminPhone(phone) && !guestModeActive)) {
+  if (manager) {
     mode = "admin";
   }
 
@@ -2318,6 +2358,8 @@ export async function executeAutoreplyForPhone(
       orchResult = await runMultiAgentOrchestration({
         phone,
         isManager,
+        managerRole: isManager ? managerRoleOf(manager) ?? undefined : undefined,
+        managerId: isManager ? manager?.id : undefined,
         // Riwayat dipotong di jeda >12 jam supaya topik hari lalu tidak dijawab ulang.
         messages: isManager ? rollingMessages : trimHistoryAtGap(rollingMessages),
         agentCtx: {
@@ -2332,6 +2374,7 @@ export async function executeAutoreplyForPhone(
           activeBooking: activeBooking ?? undefined,
           managerName: manager?.name ?? (isManager ? "Admin" : undefined),
           mode: isManager ? "managerial" : undefined,
+          managerRole: isManager ? managerRoleOf(manager) ?? undefined : undefined,
           recoveryMode,
           unansweredMessages,
           activeBookingContext,
@@ -2361,6 +2404,9 @@ export async function executeAutoreplyForPhone(
           origin,
           idempotencyKey: queueEntryId ? `wa_queue:${queueEntryId}` : undefined,
           llmConfig: llmConfig!,
+          isManager: isManager || undefined,
+          managerRole: isManager ? managerRoleOf(manager) ?? undefined : undefined,
+          managerId: isManager ? manager?.id : undefined,
         },
         llmConfig: llmConfig!,
         signal: controller.signal,
@@ -3564,9 +3610,8 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
-    const entryViaOfficial = true;
-    const isManagerEntry =
-      !entryViaOfficial && (!!(await resolveManagerByPhone(entry.phone)) || isConfiguredAdminPhone(entry.phone));
+    const managerEntry = await resolveManagerByPhone(entry.phone);
+    const isManagerEntry = !!managerEntry && !(await isManagerInGuestMode(entry.phone));
     const fallbackBody = isManagerEntry ? MANAGER_FALLBACK_MESSAGE : TERMINAL_FALLBACK_MESSAGE;
 
     // Lewati kalau worker sebenarnya sudah mengirim balasan sebelum di-mark zombie/failed,

@@ -1,3 +1,4 @@
+import { normalizePhone } from "@/services/wa-autoreply/identity";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -441,7 +442,9 @@ export const addPropertyManager = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { error } = await db(context.supabase).from("property_managers").insert([data]);
+    const { error } = await db(context.supabase).from("property_managers").insert([
+      { ...data, phone: normalizePhone(data.phone) || data.phone, is_active: true },
+    ]);
     if (error) throw error;
     return { ok: true };
   });

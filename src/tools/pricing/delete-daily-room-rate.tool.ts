@@ -15,6 +15,7 @@
 
 import { isDateString, nextDay, fmtDateID } from "@/lib/date";
 import type { ToolContext, ToolHandler } from "@/tools/types";
+import { roleCanUseTool, unauthorizedToolMessage } from "@/services/manager-chat/rbac";
 import { resolveRoomType } from "./_resolve-room-type";
 
 const MAX_RANGE_DAYS         = 366;
@@ -36,6 +37,11 @@ export const deleteDailyRoomRate: ToolHandler = async (
       error: "Tool ini hanya tersedia untuk manajer/super admin.",
     });
   }
+
+  if (!roleCanUseTool(ctx.managerRole, "delete_daily_room_rate")) {
+    return JSON.stringify({ ok: false, error: unauthorizedToolMessage(ctx.managerRole, "delete_daily_room_rate") });
+  }
+
 
   const roomNeedle = str(args.room_type);
   const fromDate   = str(args.from_date);

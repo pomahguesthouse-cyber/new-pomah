@@ -33,6 +33,8 @@
 
 import { isDateString, nextDay, fmtDateID } from "@/lib/date";
 import type { ToolContext, ToolHandler } from "@/tools/types";
+import { roleCanUseTool, unauthorizedToolMessage } from "@/services/manager-chat/rbac";
+import { getPendingAction, rememberPendingAction } from "@/services/manager-chat/pending-actions";
 import { resolveRoomType } from "./_resolve-room-type";
 
 const MAX_RATE        = 50_000_000;
@@ -88,6 +90,11 @@ export const setDailyRoomRate: ToolHandler = async (
         "hanya tersedia di kanal internal (nomor WhatsApp manajer terdaftar).",
     });
   }
+
+  if (!roleCanUseTool(ctx.managerRole, "set_daily_room_rate")) {
+    return JSON.stringify({ ok: false, error: unauthorizedToolMessage(ctx.managerRole, "set_daily_room_rate") });
+  }
+
 
   // ── 2. Parse arguments ────────────────────────────────────────────
   const roomNameOrId = str(args.room_type);
@@ -167,6 +174,32 @@ export const setDailyRoomRate: ToolHandler = async (
   if (!resolved.ok) return JSON.stringify({ ok: false, error: resolved.error });
   const room        = resolved.room;
   const baseRateNow = Number(room.base_rate ?? 0);
+
+  const pendingDaily = getPendingAction(ctx.phone ?? "");
+  const allowedDailyConfirm = args.confirmed === true && pendingDaily?.toolName === "set_daily_room_rate";
+  if (!allowedDailyConfirm) {
+    const preview =
+      `Konfirmasi harga harian ${room.name} ${fromDate}${toDate !== fromDate ? " – " + toDate : ""}` +
+      (rate != null ? `: Rp${rate.toLocaleString("id-ID")}` : "") +
+      (extrabedRate != null ? `, extrabed Rp${extrabedRate.toLocaleString("id-ID")}` : "") +
+      (stopSell ? ", stop sell" : "") +
+      ".";
+    if (ctx.phone) {
+      rememberPendingAction({
+        phone: ctx.phone,
+        toolName: "set_daily_room_rate",
+        args: { ...args, confirmed: true },
+        preview,
+      });
+    }
+    return JSON.stringify({
+      ok: false,
+      needs_confirmation: true,
+      action: "set_daily_room_rate",
+      preview,
+      error: preview,
+    });
+  }
 
   // ── 4. Read existing rows in range so we can preserve fields the
   //       manager did NOT touch (upsert with smart defaults).
