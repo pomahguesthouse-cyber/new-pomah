@@ -1,8 +1,14 @@
-import { normalizePhone } from "@/services/wa-autoreply/identity";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  MANAGER_ROLES,
+  friendlyManagerError,
+  insertPropertyManager,
+  rowIdSchema,
+  validateAddManagerInput,
+} from "./property-managers.shared";
 
 /** Untyped client view — branding columns aren't in the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -77,7 +83,7 @@ export const updatePropertySettings = createServerFn({ method: "POST" })
         // Single-property app: the id is resolved server-side, so a missing or
         // malformed client id must NOT hard-fail. `.catch` turns an invalid
         // uuid into undefined instead of throwing "Invalid input (uuid)".
-        id: z.string().uuid().optional().catch(undefined),
+        id: rowIdSchema.optional().catch(undefined),
         name: z.string().max(100).nullable().optional(),
         tagline: z.string().max(250).nullable().optional(),
         address: z.string().max(500).nullable().optional(),
@@ -126,7 +132,7 @@ export const updateDomainSettings = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        id: z.string().uuid(),
+        id: rowIdSchema,
         public_domain: z.string().max(253).nullable().optional(),
       })
       .parse(d),
@@ -170,7 +176,7 @@ export const updateBrandingSettings = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        id: z.string().uuid(),
+        id: rowIdSchema,
         logo_url: z.string().url().max(1000).nullable().optional(),
         invoice_logo_url: z.string().url().max(1000).nullable().optional(),
         favicon_url: z.string().url().max(1000).nullable().optional(),
@@ -252,7 +258,7 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        id: z.string().uuid(),
+        id: rowIdSchema,
         google_place_id: z.string().max(300).nullable().optional(),
         google_places_api_key: z.string().max(500).nullable().optional(),
         google_analytics_id: z.string().max(100).nullable().optional(),
@@ -333,7 +339,7 @@ export const updateCustomGoogleReviews = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        id: z.string().uuid(),
+        id: rowIdSchema,
         custom_google_rating: z.number().min(0).max(5).nullable().optional(),
         custom_google_reviews_total: z.number().int().min(0).nullable().optional(),
         custom_google_reviews_json: z.any().nullable().optional(),
@@ -394,7 +400,7 @@ export const updateWebSearchApiSettings = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        id: z.string().uuid(),
+        id: rowIdSchema,
         tavily_api_key: z.string().max(500).nullable().optional(),
         serper_api_key: z.string().max(500).nullable().optional(),
       })
@@ -423,86 +429,88 @@ export const getPropertyManagers = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await db(context.supabase)
       .from("property_managers")
-      .select("id, property_id, name, phone, role, is_active, created_at")
+      .select("id, property_id, name, phone, role, is_active, is_muted, created_at")
       .order("created_at", { ascending: true });
     if (error) throw error;
     return data ?? [];
   });
 
+/** Parse input server function tanpa pernah melempar JSON Zod mentah ke UI. */
+function parseOrFriendly<T>(schema: z.ZodType<T>, d: unknown): T {
+  const r = schema.safeParse(d);
+  if (!r.success) throw new Error(friendlyManagerError({ issues: r.error.issues }));
+  return r.data;
+}
+
+/** Hasil insert/update Supabase → Error dengan pesan Indonesia. */
+function throwFriendly(error: unknown): never {
+  console.error("[property_managers]", error);
+  throw new Error(friendlyManagerError(error));
+}
+
+const roleSchema = z.enum(MANAGER_ROLES, { message: "Pilih role manager." });
+
 export const addPropertyManager = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
-    z
-      .object({
-        property_id: z.string().uuid(),
-        name: z.string().min(1).max(100),
-        phone: z.string().min(5).max(20),
-        role: z.enum(["super_admin", "booking_manager", "viewer"]),
-      })
-      .parse(d),
-  )
+  .inputValidator((d) => {
+    const raw = (d && typeof d === "object" ? d : {}) as Record<string, unknown>;
+    const v = validateAddManagerInput(raw);
+    if (!v.ok) throw new Error(v.message);
+    // property_id opsional: server memakai properti utama bila tidak dikirim.
+    const pid = rowIdSchema.optional().catch(undefined).parse(raw.property_id ?? undefined);
+    return { ...v.value, property_id: pid };
+  })
   .handler(async ({ data, context }) => {
-    const { error } = await db(context.supabase).from("property_managers").insert([
-      { ...data, phone: normalizePhone(data.phone) || data.phone, is_active: true },
-    ]);
-    if (error) throw error;
-    return { ok: true };
+    const manager = await insertPropertyManager(db(context.supabase), data);
+    return { ok: true as const, manager };
   });
 
 export const updatePropertyManagerRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
-    z
-      .object({
-        id: z.string().uuid(),
-        role: z.enum(["super_admin", "booking_manager", "viewer"]),
-      })
-      .parse(d),
-  )
+  .inputValidator((d) => parseOrFriendly(z.object({ id: rowIdSchema, role: roleSchema }), d))
   .handler(async ({ data, context }) => {
     const { error } = await db(context.supabase)
       .from("property_managers")
       .update({ role: data.role })
       .eq("id", data.id);
-    if (error) throw error;
+    if (error) throwFriendly(error);
     return { ok: true };
   });
 
 export const togglePropertyManagerActive = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({ id: z.string().uuid(), is_active: z.boolean() }).parse(d),
+    parseOrFriendly(z.object({ id: rowIdSchema, is_active: z.boolean() }), d),
   )
   .handler(async ({ data, context }) => {
     const { error } = await db(context.supabase)
       .from("property_managers")
       .update({ is_active: data.is_active })
       .eq("id", data.id);
-    if (error) throw error;
+    if (error) throwFriendly(error);
     return { ok: true };
   });
 
 export const togglePropertyManagerMute = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
-    z.object({ id: z.string().uuid(), is_muted: z.boolean() }).parse(d),
+    parseOrFriendly(z.object({ id: rowIdSchema, is_muted: z.boolean() }), d),
   )
   .handler(async ({ data, context }) => {
     const { error } = await db(context.supabase)
       .from("property_managers")
       .update({ is_muted: data.is_muted })
       .eq("id", data.id);
-    if (error) throw error;
+    if (error) throwFriendly(error);
     return { ok: true };
   });
 
-
 export const deletePropertyManager = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.string().uuid().parse(d))
+  .inputValidator((d) => parseOrFriendly(rowIdSchema, d))
   .handler(async ({ data: id, context }) => {
     const { error } = await db(context.supabase).from("property_managers").delete().eq("id", id);
-    if (error) throw error;
+    if (error) throwFriendly(error);
     return { ok: true };
   });
 
@@ -556,7 +564,7 @@ export const updateSocialSettings = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        id: z.string().uuid(),
+        id: rowIdSchema,
         instagram_url: z.string().max(500).nullable().optional(),
         tiktok_url: z.string().max(500).nullable().optional(),
         youtube_url: z.string().max(500).nullable().optional(),

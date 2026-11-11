@@ -62,6 +62,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { ManagerSettingsView, type ManagerRow } from "@/admin/modules/settings/ManagerSettingsView";
+import {
+  MANAGER_ROLE_INFO,
+  friendlyManagerError,
+  type AddManagerInput,
+} from "@/admin/modules/settings/property-managers.shared";
 
 /** Storage bucket reused for branding assets (logos / favicon). */
 const BRANDING_BUCKET = "room-images";
@@ -81,7 +87,7 @@ function SettingsPage() {
       </header>
 
       <Tabs defaultValue="properti" className="space-y-6">
-        <TabsList>
+        <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="properti">Properti</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="sosial">Sosial Media</TabsTrigger>
@@ -1061,246 +1067,91 @@ function ManagerTab() {
   const toggleActiveFn = useServerFn(togglePropertyManagerActive);
   const deleteFn = useServerFn(deletePropertyManager);
   const toggleMuteFn = useServerFn(togglePropertyManagerMute);
-  
-  
   const getPropFn = useServerFn(getPropertySettings);
   const qc = useQueryClient();
+  const [addError, setAddError] = useState<string | null>(null);
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
 
   const { data: property } = useQuery({
     queryKey: ["property-settings"],
     queryFn: () => getPropFn(),
   });
-  
+
   const { data: managers, isLoading } = useQuery({
     queryKey: ["property-managers"],
     queryFn: () => getFn(),
   });
 
-  const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
-  const [role, setRole] = useState<"super_admin" | "booking_manager" | "viewer">("super_admin");
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["property-managers"] });
 
-  const addMut = useMutation({
-    mutationFn: (v: any) => addFn({ data: v }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["property-managers"] });
-      setPhone("");
-      setName("");
-      toast.success("Manager berhasil ditambahkan");
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  const updateMut = useMutation({
-    mutationFn: (v: any) => updateFn({ data: v }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["property-managers"] });
-      toast.success("Peran berhasil diubah");
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => deleteFn({ data: id }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["property-managers"] });
-      toast.success("Manager berhasil dihapus");
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  const toggleActiveMut = useMutation({
-    mutationFn: (v: { id: string; is_active: boolean }) => toggleActiveFn({ data: v }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["property-managers"] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  const toggleMuteMut = useMutation({
-    mutationFn: (v: { id: string; is_muted: boolean }) => toggleMuteFn({ data: v }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["property-managers"] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  const handleAdd = () => {
-    if (!property?.id) return toast.error("Data properti tidak ditemukan");
-    if (!phone || !name) return toast.error("Nomor dan Nama harus diisi");
-    addMut.mutate({ property_id: property.id, phone, name, role });
+  /** Jalankan aksi per-baris dengan status sibuk + pesan ramah. */
+  const runRowAction = async (id: string, action: () => Promise<unknown>, success?: string) => {
+    setBusyIds((prev) => new Set(prev).add(id));
+    try {
+      await action();
+      await invalidate();
+      if (success) toast.success(success);
+    } catch (e) {
+      toast.error(friendlyManagerError(e));
+    } finally {
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  const addMut = useMutation({
+    mutationFn: (v: AddManagerInput) =>
+      addFn({ data: { ...v, ...(property?.id ? { property_id: property.id } : {}) } }),
+    onMutate: () => setAddError(null),
+    onSuccess: async (_res, v) => {
+      await invalidate();
+      toast.success(`${v.name} berhasil ditambahkan sebagai ${MANAGER_ROLE_INFO[v.role].label}`);
+    },
+    onError: (e) => {
+      const msg = friendlyManagerError(e);
+      setAddError(msg);
+      toast.error(msg);
+    },
+  });
+
+  const nameOf = (id: string) => managers?.find((m) => m.id === id)?.name ?? "Manager";
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <Card className="p-6">
-        <div className="flex items-center gap-2 mb-2">
-          <Users className="w-5 h-5" />
-          <h2 className="text-lg font-semibold">Daftar Manager</h2>
-        </div>
-        <p className="text-sm text-muted-foreground mb-6">
-          Nomor pengelola yang akan dilayani AI Admin dengan sapaan personal. Nomor yang tidak terdaftar di sini akan dianggap sebagai tamu.
-        </p>
-
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
-          <Input 
-            placeholder="Nomor (e.g. 628123456789)" 
-            value={phone} 
-            onChange={e => setPhone(e.target.value)}
-            className="flex-1"
-          />
-          <Input 
-            placeholder="Nama Manager (e.g. Bu Titik)" 
-            value={name} 
-            onChange={e => setName(e.target.value)}
-            className="flex-1"
-          />
-          <div className="w-48 shrink-0">
-            <Select value={role} onValueChange={(v: any) => setRole(v)}>
-              <SelectTrigger className="w-full bg-white">
-                <SelectValue placeholder="Pilih Peran" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="super_admin">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-red-500" />
-                    <span>Super Admin</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="booking_manager">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span>Booking Manager</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="viewer">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-gray-400" />
-                    <span>Viewer</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={handleAdd} disabled={addMut.isPending} className="bg-teal-600 hover:bg-teal-700 text-white shrink-0">
-            <Plus className="w-4 h-4 mr-2" />
-            Tambah
-          </Button>
-        </div>
-
-        {/* Legend */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="bg-muted/50 p-3 rounded-md text-sm">
-            <div className="flex items-center gap-2 font-medium mb-1">
-              <div className="w-2 h-2 rounded-full bg-red-500" />
-              Super Admin
-            </div>
-            <div className="text-muted-foreground text-xs pl-4">Akses penuh semua fitur</div>
-          </div>
-          <div className="bg-muted/50 p-3 rounded-md text-sm">
-            <div className="flex items-center gap-2 font-medium mb-1">
-              <div className="w-2 h-2 rounded-full bg-blue-500" />
-              Booking Manager
-            </div>
-            <div className="text-muted-foreground text-xs pl-4">Kelola booking (tanpa statistik pendapatan)</div>
-          </div>
-          <div className="bg-muted/50 p-3 rounded-md text-sm">
-            <div className="flex items-center gap-2 font-medium mb-1">
-              <div className="w-2 h-2 rounded-full bg-gray-400" />
-              Viewer
-            </div>
-            <div className="text-muted-foreground text-xs pl-4">Hanya lihat ketersediaan kamar</div>
-          </div>
-        </div>
-
-        {/* List */}
-        <div className="space-y-3">
-          {managers?.map(m => (
-            <div key={m.id} className="flex items-center justify-between p-4 rounded-lg border border-border bg-white shadow-sm">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold">{m.name}</span>
-                  {m.role === "super_admin" && <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">Super Admin</span>}
-                  {m.role === "booking_manager" && <span className="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">Booking Manager</span>}
-                  {m.role === "viewer" && <span className="bg-gray-400 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">Viewer</span>}
-                </div>
-                <div className="text-sm text-muted-foreground">{m.phone}</div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2" title="Aktif menerima notifikasi">
-                  <Switch
-                    checked={m.is_active ?? true}
-                    onCheckedChange={(checked) => toggleActiveMut.mutate({ id: m.id, is_active: checked })}
-                  />
-                  <span className="text-xs text-muted-foreground">{m.is_active ?? true ? "Aktif" : "Nonaktif"}</span>
-                </div>
-                <Select 
-                  value={m.role} 
-                  onValueChange={(v: any) => updateMut.mutate({ id: m.id, role: v })}
-                >
-                  <SelectTrigger className="w-40 h-8 text-xs bg-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="super_admin" className="text-xs">Super Admin</SelectItem>
-                    <SelectItem value="booking_manager" className="text-xs">Booking Manager</SelectItem>
-                    <SelectItem value="viewer" className="text-xs">Viewer</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-8 w-8 transition-colors",
-                    (m as any).is_muted
-                      ? "text-amber-500 hover:text-amber-600 hover:bg-amber-50"
-                      : "text-muted-foreground hover:text-amber-500 hover:bg-amber-50",
-                  )}
-                  title={(m as any).is_muted ? "Notifikasi dinonaktifkan — klik untuk aktifkan" : "Klik untuk menonaktifkan notifikasi"}
-                  onClick={() => toggleMuteMut.mutate({ id: m.id, is_muted: !(m as any).is_muted })}
-                >
-                  {(m as any).is_muted ? (
-                    <BellOff className="w-4 h-4" />
-                  ) : (
-                    <Bell className="w-4 h-4" />
-                  )}
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                  onClick={() => {
-                    if (confirm("Hapus manager ini?")) {
-                      deleteMut.mutate(m.id);
-                    }
-                  }}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-          {managers?.length === 0 && (
-             <div className="text-center p-6 border border-dashed rounded-lg text-muted-foreground text-sm">
-               Belum ada manager yang didaftarkan.
-             </div>
-          )}
-        </div>
-      </Card>
-
-      <Card className="p-6">
-        <h3 className="font-semibold mb-2 text-base">Cara Kerja Filter Nomor</h3>
-        <p className="text-sm text-muted-foreground mb-4">Bagaimana Orchestrator membedakan tamu dan pengelola</p>
-        <ul className="space-y-2 text-sm text-foreground">
-          <li className="flex items-center gap-2"><span className="text-blue-500 shrink-0">🔀</span> Pesan masuk diterima oleh <strong className="font-semibold">Orchestrator</strong></li>
-          <li className="flex items-center gap-2"><span className="text-gray-500 shrink-0">📱</span> Nomor dicek di daftar manager di atas</li>
-          <li className="flex items-center gap-2"><span className="text-green-500 shrink-0">✅</span> Jika terdaftar → dialihkan ke <strong className="font-semibold">Manager Bot</strong> (AI Admin)</li>
-          <li className="flex items-center gap-2"><span className="text-purple-500 shrink-0">👤</span> Jika tidak terdaftar → dialihkan ke <strong className="font-semibold">Intent Router</strong> → agent tamu</li>
-          <li className="flex items-center gap-2"><span className="text-pink-500 shrink-0">🤖</span> Manager Bot menyapa personal: <em className="italic">"Halo Bu Titik! Ada yang bisa saya bantu?"</em></li>
-        </ul>
-      </Card>
-    </div>
+    <ManagerSettingsView
+      managers={managers as ManagerRow[] | undefined}
+      isLoading={isLoading}
+      addPending={addMut.isPending}
+      addError={addError}
+      busyIds={busyIds}
+      onAdd={(v) => addMut.mutateAsync(v)}
+      onChangeRole={(id, role) =>
+        runRowAction(
+          id,
+          () => updateFn({ data: { id, role } }),
+          `Role ${nameOf(id)} diubah menjadi ${MANAGER_ROLE_INFO[role].label}`,
+        )
+      }
+      onToggleActive={(id, is_active) =>
+        runRowAction(
+          id,
+          () => toggleActiveFn({ data: { id, is_active } }),
+          is_active ? `${nameOf(id)} diaktifkan` : `${nameOf(id)} dinonaktifkan`,
+        )
+      }
+      onToggleMute={(id, is_muted) =>
+        runRowAction(
+          id,
+          () => toggleMuteFn({ data: { id, is_muted } }),
+          is_muted ? `Notifikasi ${nameOf(id)} dimatikan` : `Notifikasi ${nameOf(id)} dinyalakan`,
+        )
+      }
+      onDelete={(id) => {
+        const name = nameOf(id);
+        return runRowAction(id, () => deleteFn({ data: id }), `${name} dihapus dari daftar manager`);
+      }}
+    />
   );
 }

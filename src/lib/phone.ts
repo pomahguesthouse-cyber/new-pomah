@@ -22,3 +22,19 @@ export function phoneVariants(raw: string | null | undefined): string[] {
   }
   return Array.from(set);
 }
+
+/**
+ * Normalize an Indonesian phone number to digits-only with a 62 prefix.
+ * Identitas panjang (LID WhatsApp, ≥15 digit) tidak diubah menjadi nomor 62.
+ *
+ * Modul murni (tanpa import server) — dipakai pencocokan WA inbound
+ * (identity.ts) dan halaman admin Daftar Manager supaya aturannya sama.
+ */
+export function normalizePhone(raw: string): string {
+  let phone = String(raw ?? "").replace(/\D/g, "");
+  if (phone.length >= 15) return phone;
+  if (phone.startsWith("620")) phone = `62${phone.slice(3)}`;
+  else if (phone.startsWith("0")) phone = `62${phone.slice(1)}`;
+  else if (phone.startsWith("8")) phone = `62${phone}`;
+  return phone;
+}
