@@ -31,6 +31,7 @@
  */
 
 import type { ToolContext, ToolHandler } from "@/tools/types";
+import { roleCanUseTool, unauthorizedToolMessage } from "@/services/manager-chat/rbac";
 import { parseIDRAmount } from "@/lib/idr";
 import { resolveRoomType } from "./_resolve-room-type";
 
@@ -64,6 +65,11 @@ export const updateRoomRate: ToolHandler = async (
         "hanya tersedia di kanal internal (nomor WhatsApp manajer terdaftar).",
     });
   }
+
+  if (!roleCanUseTool(ctx.managerRole, "update_room_rate")) {
+    return JSON.stringify({ ok: false, error: unauthorizedToolMessage(ctx.managerRole, "update_room_rate") });
+  }
+
 
   // ── 2. Parse arguments ────────────────────────────────────────────
   const roomNameOrId = str(args.room_type);

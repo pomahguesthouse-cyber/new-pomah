@@ -240,7 +240,6 @@ export function parseManagerCommand(message: string): ParsedManagerCommand | nul
         rawArgs: JSON.stringify({
           room_type: roomName,
           extrabed_rate: price,
-          confirmed: true,
         }),
         label: "manager_command:set_extrabed",
       };
@@ -283,7 +282,6 @@ export function parseManagerCommand(message: string): ParsedManagerCommand | nul
         rawArgs: JSON.stringify({
           room_type: roomName,
           base_rate: price,
-          confirmed: true,
         }),
         label,
       };

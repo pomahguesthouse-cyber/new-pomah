@@ -22,6 +22,7 @@
  */
 
 import type { ToolContext, ToolHandler } from "@/tools/types";
+import { roleCanHardDelete, roleCanUseTool, unauthorizedToolMessage } from "@/services/manager-chat/rbac";
 
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
@@ -105,11 +106,22 @@ export const deleteBooking: ToolHandler = async (
     });
   }
 
+  if (!roleCanUseTool(ctx.managerRole, "delete_booking")) {
+    return JSON.stringify({ ok: false, error: unauthorizedToolMessage(ctx.managerRole, "delete_booking") });
+  }
+
+
   const refCode    = str(args.reference_code);
   const guestName  = str(args.guest_name);
   const modeRaw    = str(args.mode).toLowerCase();
   const mode: "cancel" | "hard" = modeRaw === "hard" ? "hard" : "cancel";
   const confirmed  = args.confirmed === true;
+  if (mode === "hard" && !roleCanHardDelete(ctx.managerRole)) {
+    return JSON.stringify({
+      ok: false,
+      error: "Hapus permanen hanya untuk Super Admin. Gunakan mode cancel untuk membatalkan booking.",
+    });
+  }
 
   if (!refCode && !guestName) {
     return JSON.stringify({

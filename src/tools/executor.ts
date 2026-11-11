@@ -20,6 +20,8 @@ import { sendInvoice }                    from "./finance/send-invoice.tool";
 import { updatePaymentStatus }            from "./finance/update-payment-status.tool";
 import { ccPaymentProofToAdmin }          from "./finance/cc-payment-proof-to-admin.tool";
 import { getBookings }                    from "./manager/get-bookings.tool";
+import { getOccupancySummary }            from "./manager/occupancy.tool";
+import { sendBrochureToGuest }            from "./manager/send-brochure-to-guest.tool";
 import { updateBookingStatus }            from "./manager/update-booking-status.tool";
 import { rescheduleBooking }               from "./manager/reschedule-booking.tool";
 import { deleteBooking }                  from "./manager/delete-booking.tool";
@@ -51,6 +53,9 @@ import { sendRoomTour }                   from "./send-room-tour.tool";
 import { generateBookingForm }            from "./generate-booking-form.tool";
 import { getBookingFormSubmission }       from "./get-booking-form-submission.tool";
 import type { ToolContext, ToolHandler }  from "./types";
+import { logManagerAction, summarizeArgs } from "@/services/manager-chat/audit";
+import { rememberPendingAction } from "@/services/manager-chat/pending-actions";
+import { roleCanHardDelete, roleCanUseTool, unauthorizedToolMessage } from "@/services/manager-chat/rbac";
 
 // ─── Handler registry ─────────────────────────────────────────────────────────
 
@@ -68,6 +73,8 @@ const HANDLERS: Record<string, ToolHandler> = {
   update_payment_status:         updatePaymentStatus,
   cc_payment_proof_to_admin:     ccPaymentProofToAdmin,
   get_bookings:                  getBookings,
+  get_occupancy_summary:         getOccupancySummary,
+  send_brochure_to_guest:        sendBrochureToGuest,
   update_booking_status:         updateBookingStatus,
   reschedule_booking:            rescheduleBooking,
   delete_booking:                deleteBooking,
@@ -138,25 +145,52 @@ export async function executeTool(
     args = {};
   }
 
+  if (ctx.isManager === true) {
+    if (!roleCanUseTool(ctx.managerRole, toolName)) {
+      const error = unauthorizedToolMessage(ctx.managerRole, toolName);
+      await logManagerAction(ctx.supabaseAdmin as any, {
+        actor_phone: ctx.phone ?? "",
+        actor_role: ctx.managerRole ?? null,
+        actor_id: ctx.managerId,
+        tool_name: toolName,
+        args_summary: summarizeArgs(toolName, args),
+        result: "denied",
+        error,
+        idempotency_key: ctx.idempotencyKey ?? null,
+      });
+      return { output: JSON.stringify({ ok: false, error }), toolLabel: label };
+    }
+    if (toolName === "delete_booking" && String(args.mode ?? "") === "hard" && !roleCanHardDelete(ctx.managerRole)) {
+      const error = "Hapus permanen hanya untuk Super Admin.";
+      return { output: JSON.stringify({ ok: false, error }), toolLabel: label };
+    }
+  }
+
   try {
     // Per-tool hard timeout so a hung Supabase RPC / external fetch can't
     // burn the worker lock window and turn the entry into a zombie.
     const TOOL_TIMEOUT_MS = 15_000;
-    const output = await Promise.race([
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let output: string;
+    try {
+    output = await Promise.race([
       handler(args, ctx),
-      new Promise<never>((_, reject) =>
-        setTimeout(
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
           () => reject(new Error(`tool_timeout_${TOOL_TIMEOUT_MS}ms`)),
           TOOL_TIMEOUT_MS,
-        ),
-      ),
+        );
+      }),
     ]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
 
     // ─── Post-success hooks ───────────────────────────────────────────────
     // Setelah booking berhasil dibuat lewat tool (di luar state machine),
     // reset wa_booking_states agar tidak macet di state lama (mis. AWAITING_NAME)
     // pada percakapan berikutnya.
-    if (toolName === "create_booking" && ctx.phone && ctx.supabaseAdmin) {
+    if (toolName === "create_booking" && ctx.phone && ctx.supabaseAdmin && ctx.isManager !== true) {
       try {
         const parsed = JSON.parse(output) as { ok?: boolean; reference_code?: string };
         if (parsed?.ok && parsed.reference_code) {
@@ -175,6 +209,35 @@ export async function executeTool(
         }
       } catch (hookErr) {
         console.warn("[ToolExecutor] reset wa_booking_states failed:", hookErr);
+      }
+    }
+
+    if (ctx.isManager === true) {
+      try {
+        const parsed = JSON.parse(output) as Record<string, unknown>;
+        if (parsed?.needs_confirmation && ctx.phone) {
+          rememberPendingAction({
+            phone: ctx.phone,
+            toolName,
+            args: { ...args, confirmed: true },
+            preview: String(parsed.preview ?? parsed.error ?? ""),
+          });
+        }
+        const result =
+          parsed?.needs_confirmation ? "needs_confirmation" :
+          parsed?.ok === false ? "error" : "ok";
+        await logManagerAction(ctx.supabaseAdmin as any, {
+          actor_phone: ctx.phone ?? "",
+          actor_role: ctx.managerRole ?? null,
+          actor_id: ctx.managerId,
+          tool_name: toolName,
+          args_summary: summarizeArgs(toolName, args),
+          result,
+          error: parsed?.ok === false ? String(parsed.error ?? "") : null,
+          idempotency_key: ctx.idempotencyKey ?? null,
+        });
+      } catch (hookErr) {
+        console.warn("[ToolExecutor] manager audit/pending hook failed:", hookErr);
       }
     }
 

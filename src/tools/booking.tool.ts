@@ -16,6 +16,8 @@ import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeGrandTotal, toRupiah, totalsMatch } from "@/lib/booking-total";
 import { snapshotFromStay, staySnapshotsMatch, type BookingSummarySnapshot } from "@/ai/state-machine/booking-stay-guard";
 import type { ToolContext, ToolHandler } from "./types";
+import { getPendingAction, rememberPendingAction } from "@/services/manager-chat/pending-actions";
+import { roleCanUseTool, unauthorizedToolMessage } from "@/services/manager-chat/rbac";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -719,6 +721,68 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
     if (dup) return dup;
   }
 
+  if (managerialDirect) {
+    if (!roleCanUseTool(ctx.managerRole, "create_booking")) {
+      return JSON.stringify({ ok: false, error: unauthorizedToolMessage(ctx.managerRole, "create_booking") });
+    }
+    const roomsPreview = Array.from(
+      assignments.reduce((map, a) => {
+        const slot = map.get(a.roomTypeId) ?? { name: a.roomTypeName, count: 0, rate: a.rate };
+        slot.count += 1;
+        map.set(a.roomTypeId, slot);
+        return map;
+      }, new Map<string, { name: string; count: number; rate: number }>()),
+    ).map(([, s]) => `${s.count}x ${s.name} @ Rp${toRupiah(s.rate).toLocaleString("id-ID")}/malam`);
+    const previewLines = [
+      "Ringkasan booking (belum disimpan)",
+      `👤 ${fullName}`,
+      phone ? `📱 ${phone}` : "📱 Nomor HP tamu belum diisi",
+      `🛏 ${roomsPreview.join(", ")}`,
+      `📅 ${fmtDateID(checkIn)} – ${fmtDateID(checkOut)} (${nights} malam)`,
+      `👥 ${adults} tamu` + (children ? ` + ${children} anak` : ""),
+      requestedExtraBeds > 0
+        ? `🛏 Extra bed: ${requestedExtraBeds}x @ Rp${toRupiah(extraBedRate).toLocaleString("id-ID")}/malam`
+        : null,
+      `💰 Total Rp${total.toLocaleString("id-ID")}`,
+      phone && phone !== (ctx.phone ?? "")
+        ? "Invoice akan dikirim ke nomor tamu setelah konfirmasi."
+        : "Invoice tidak dikirim otomatis (nomor HP tamu kosong atau sama dengan nomor manajer).",
+    ].filter((line): line is string => Boolean(line));
+
+    const pending = getPendingAction(ctx.phone ?? "");
+    const allowedConfirm = args.confirmed === true && pending?.toolName === "create_booking";
+
+    if (!allowedConfirm) {
+      if (ctx.phone) {
+        rememberPendingAction({
+          phone: ctx.phone,
+          toolName: "create_booking",
+          args: { ...args, confirmed: true },
+          preview: previewLines.join("\n"),
+        });
+      }
+      return JSON.stringify({
+        ok: false,
+        needs_confirmation: true,
+        action: "create_booking",
+        preview: previewLines.join("\n"),
+        draft: {
+          full_name: fullName,
+          phone,
+          check_in: checkIn,
+          check_out: checkOut,
+          rooms: roomsPreview,
+          nights,
+          adults,
+          children,
+          extra_beds: requestedExtraBeds,
+          total,
+        },
+        error: previewLines.join("\n"),
+      });
+    }
+  }
+
   let guestResolution: { id: string; created: boolean };
 
   try {
@@ -892,7 +956,9 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
         supabase: ctx.supabaseAdmin as any,
         bookingId: booking.id,
         origin: ctx.origin,
-        skipWhatsApp: false,
+        skipWhatsApp:
+          ctx.isSimulator === true ||
+          (managerialDirect && (!phone || phone === (ctx.phone ? String(ctx.phone) : ""))),
       });
 
       if (!res.ok) {
@@ -911,8 +977,10 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   // Alert staf di turn yang sama, dengan batas waktu. waitUntil terputus
   // sebelum attempt tercatat (baris pending, 0 attempt).
   try {
-    const { awaitNotifyNewBooking } = await import("@/services/manager-notifier.service");
-    await awaitNotifyNewBooking(ctx.supabaseAdmin as any, booking.id);
+    if (ctx.isSimulator !== true) {
+      const { awaitNotifyNewBooking } = await import("@/services/manager-notifier.service");
+      await awaitNotifyNewBooking(ctx.supabaseAdmin as any, booking.id);
+    }
   } catch (e) {
     console.error(`[create_booking] notifyNewBooking gagal untuk ${booking.id}:`, e);
   }

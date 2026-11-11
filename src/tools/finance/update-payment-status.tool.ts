@@ -19,6 +19,8 @@
 
 import { bookingBelongsToPhone, invalidBookingCodeError, normalizeBookingCode } from "@/lib/booking-code";
 import type { ToolContext, ToolHandler } from "@/tools/types";
+import { getPendingAction, rememberPendingAction } from "@/services/manager-chat/pending-actions";
+import { roleCanUseTool, unauthorizedToolMessage } from "@/services/manager-chat/rbac";
 
 type PaymentStatus = "unpaid" | "partial" | "paid";
 
@@ -124,6 +126,39 @@ export const updatePaymentStatus: ToolHandler = async (
         ok: false,
         error: `Booking "${refCode}" tidak ditemukan.`,
       });
+    }
+
+    if (ctx.isManager === true) {
+      if (!roleCanUseTool(ctx.managerRole, "update_payment_status")) {
+        return JSON.stringify({ ok: false, error: unauthorizedToolMessage(ctx.managerRole, "update_payment_status") });
+      }
+      const pending = getPendingAction(ctx.phone ?? "");
+      const allowedConfirm = args.confirmed === true && pending?.toolName === "update_payment_status";
+      if (!allowedConfirm) {
+        const preview =
+          `Konfirmasi ubah pembayaran ${booking.reference_code ?? refCode}: ` +
+          `${booking.payment_status ?? "?"} → ${rawStatus}.`;
+        if (ctx.phone) {
+          rememberPendingAction({
+            phone: ctx.phone,
+            toolName: "update_payment_status",
+            args: { ...args, reference_code: code, new_status: rawStatus, confirmed: true },
+            preview,
+          });
+        }
+        return JSON.stringify({
+          ok: false,
+          needs_confirmation: true,
+          action: "update_payment_status",
+          target: {
+            reference_code: booking.reference_code ?? refCode,
+            current_status: booking.payment_status,
+            new_status: rawStatus,
+          },
+          preview,
+          error: preview,
+        });
+      }
     }
 
     const nowIso = new Date().toISOString();

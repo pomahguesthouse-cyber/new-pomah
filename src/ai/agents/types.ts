@@ -163,6 +163,8 @@ export interface AgentContext {
    * behavior is preserved.
    */
   mode?: "guest" | "managerial";
+  /** Role resmi dari property_managers; tidak diambil dari isi chat. */
+  managerRole?: "super_admin" | "booking_manager" | "viewer";
   /**
    * Contoh percakapan ideal yang sudah diretrieve dari
    * `chatbot_training_examples` untuk pesan tamu terkini. Agent wajib

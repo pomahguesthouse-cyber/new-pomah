@@ -23,6 +23,8 @@ import {
 } from "@/lib/booking-code";
 import { fmtDateID } from "@/lib/date";
 import type { ToolContext, ToolHandler } from "@/tools/types";
+import { getPendingAction, rememberPendingAction } from "@/services/manager-chat/pending-actions";
+import { maskPhone, roleCanUseTool, unauthorizedToolMessage } from "@/services/manager-chat/rbac";
 
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
@@ -148,6 +150,35 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
         ? `Booking dengan kode "${refCode}" tidak ditemukan.`
         : "Belum ada booking aktif untuk nomor tamu ini.",
     });
+  }
+
+  if (ctx.isManager === true && args.send_to_guest === true) {
+    if (!roleCanUseTool(ctx.managerRole, "send_invoice")) {
+      return JSON.stringify({ ok: false, error: unauthorizedToolMessage(ctx.managerRole, "send_invoice") });
+    }
+    const guestRec = Array.isArray(bookingRow.guests) ? bookingRow.guests[0] : bookingRow.guests;
+    const guestPhone = guestRec?.phone ?? "";
+    const pending = getPendingAction(ctx.phone ?? "");
+    const allowedConfirm = args.confirmed === true && pending?.toolName === "send_invoice";
+    if (!allowedConfirm) {
+      const preview =
+        `Konfirmasi kirim invoice ${bookingRow.reference_code} ke tamu ${guestPhone ? maskPhone(guestPhone) : "(nomor belum ada)"}.`;
+      if (ctx.phone) {
+        rememberPendingAction({
+          phone: ctx.phone,
+          toolName: "send_invoice",
+          args: { ...args, send_to_guest: true, confirmed: true },
+          preview,
+        });
+      }
+      return JSON.stringify({
+        ok: false,
+        needs_confirmation: true,
+        action: "send_invoice",
+        preview,
+        error: preview,
+      });
+    }
   }
 
   // ── 2. Optional: kirim invoice langsung ke WhatsApp tamu ────────────────

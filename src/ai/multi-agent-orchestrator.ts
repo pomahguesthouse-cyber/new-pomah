@@ -44,7 +44,8 @@ import { routeToAgent } from "./router/agent-router";
 import { getAgent } from "./agents/registry";
 import { ASK_AGENT_TOOL_NAME } from "./agents/manager.agent";
 import { executeTool } from "@/tools/executor";
-import { parseManagerCommand, formatManagerCommandResult, formatRoomRatesList } from "./manager-command-parser";
+import { dispatchManagerChat } from "@/services/manager-chat/dispatch";
+import type { ManagerRole } from "@/services/manager-chat/rbac";
 import type { ToolContext, ToolHandler } from "@/tools/types";
 import { getBookingState, processBookingState, isDataEntryState, ROOM_CHANGE_INTENT_RE } from "./state-machine/booking-machine";
 import { getMissingSlots, formatPartialBookingSummary, extractAllSlots } from "./state-machine/flexible-slot-extractor";
@@ -824,6 +825,9 @@ export interface MultiAgentInput {
   phone: string;
   /** Is the user an authenticated property manager? */
   isManager?: boolean;
+  /** Role resmi property_managers; tidak diambil dari isi chat. */
+  managerRole?: ManagerRole;
+  managerId?: string;
   /** Full conversation history (ascending) */
   messages: Array<{ direction: string; body: string; isHuman?: boolean }>;
 
@@ -866,7 +870,14 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   input.toolCtx.llmConfig = input.toolCtx.llmConfig ?? input.llmConfig;
   // Propagate the manager flag into tool context so privileged tools
   // (e.g. update_room_rate) can gate themselves to internal users only.
-  if (input.isManager) input.toolCtx.isManager = true;
+  if (input.isManager) {
+    input.toolCtx.isManager = true;
+    if (input.managerRole) {
+      input.toolCtx.managerRole = input.managerRole;
+      input.agentCtx.managerRole = input.managerRole;
+    }
+    if (input.managerId) input.toolCtx.managerId = input.managerId;
+  }
 
   // 1. Extract last user message for classification
   const lastUserMsg = [...input.messages].reverse().find((m) => m.direction === "in")?.body ?? "";
@@ -876,34 +887,19 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   if (input.isManager) {
     console.info(`[MultiAgent] Manager authenticated — routing directly to Manager Agent`);
 
-    // Intercept deterministic commands
-    const parsedCommand = parseManagerCommand(lastUserMsg);
-    if (parsedCommand) {
-      console.info(`[MultiAgent][manager] Intercepted deterministic command: ${parsedCommand.label}`);
-
-      // list_room_rates is special: formats ctx.rooms directly, no tool call.
-      if (parsedCommand.toolName === "list_room_rates") {
-        const reply = formatRoomRatesList(input.toolCtx.rooms as any);
-        return {
-          status: "reply",
-          reply,
-          toolsUsed: [],
-          agentKey: "manager",
-          intent: "general",
-          routingConfidence: 1.0,
-          escalated: false,
-        };
-      }
-
-      const result = await executeTool(parsedCommand.toolName, parsedCommand.rawArgs, {
-        ...input.toolCtx,
-        isManager: true,
-      });
-      const reply = formatManagerCommandResult(parsedCommand, result.output);
+    const dispatched = await dispatchManagerChat({
+      phone: input.phone,
+      message: lastUserMsg,
+      toolCtx: { ...input.toolCtx, isManager: true, managerRole: input.managerRole ?? input.toolCtx.managerRole },
+      role: input.managerRole ?? input.toolCtx.managerRole ?? null,
+      rooms: input.toolCtx.rooms as any,
+    });
+    if (dispatched.handled) {
+      console.info(`[MultiAgent][manager] Deterministic dispatch: ${dispatched.intent}`);
       return {
         status: "reply",
-        reply,
-        toolsUsed: [parsedCommand.toolName],
+        reply: dispatched.reply,
+        toolsUsed: dispatched.toolsUsed,
         agentKey: "manager",
         intent: "general",
         routingConfidence: 1.0,

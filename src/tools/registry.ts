@@ -242,6 +242,15 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
               "Urutan hasil. 'recent' (default) = booking yang paling baru dibuat di atas — pakai untuk 'booking terakhir' / 'booking terbaru'. " +
               "'upcoming' = urut check-in dari yang paling dekat — pakai untuk 'jadwal check-in', 'siapa menginap besok'.",
           },
+          report_type: {
+            type: "string",
+            description: "Jenis laporan: today_checkin, tomorrow_checkout, unpaid, date_range, search, detail, dll.",
+          },
+          search: { type: "string", description: "Cari nama tamu, kode booking, atau nomor HP." },
+          reference_code: { type: "string", description: "Kode booking untuk detail." },
+          date_from: { type: "string", description: "Awal rentang tanggal YYYY-MM-DD." },
+          date_to: { type: "string", description: "Akhir rentang tanggal YYYY-MM-DD." },
+          offset: { type: "number", description: "Offset pagination. Default 0." },
         },
       },
     },
@@ -768,6 +777,34 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_occupancy_summary",
+      description: "Ringkasan okupansi harian: kamar terisi vs kosong, check-in/out, persen hunian. Default hari ini (WIB).",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "Tanggal YYYY-MM-DD. Default hari ini." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_brochure_to_guest",
+      description: "Kirim PDF brosur ke nomor WhatsApp tamu. Wajib konfirmasi (confirmed=true) sebelum dikirim.",
+      parameters: {
+        type: "object",
+        properties: {
+          guest_phone: { type: "string", description: "Nomor WhatsApp tamu." },
+          confirmed: { type: "boolean", description: "true setelah manajer membalas YA/KONFIRMASI." },
+        },
+        required: ["guest_phone"],
+      },
+    },
+  },
 ];
 
 /** Human-readable label shown in the admin inbox for each tool call. */
@@ -785,6 +822,8 @@ export const TOOL_LABELS: Record<string, string> = {
   update_payment_status:        "Finance - Update Status Pembayaran",
   cc_payment_proof_to_admin:    "Finance - CC Bukti Transfer ke Super Admin",
   get_bookings:                 "Manager - List Bookings",
+  get_occupancy_summary:        "Manager - Okupansi Harian",
+  send_brochure_to_guest:       "Manager - Kirim Brosur ke Tamu",
   update_booking_status:        "Manager - Update Booking Status",
   reschedule_booking:           "Manager - Reschedule Booking",
   delete_booking:               "Manager - Hapus / Batalkan Booking",

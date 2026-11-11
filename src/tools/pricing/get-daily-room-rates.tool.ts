@@ -21,6 +21,7 @@
 import { isDateString, nextDay } from "@/lib/date";
 import { getDailyRatesForRange } from "@/services/pricing/daily-rate.service";
 import type { ToolContext, ToolHandler } from "@/tools/types";
+import { roleCanUseTool, unauthorizedToolMessage } from "@/services/manager-chat/rbac";
 import { resolveRoomType } from "./_resolve-room-type";
 
 const MAX_RANGE_DAYS = 366;
@@ -50,6 +51,11 @@ export const getDailyRoomRates: ToolHandler = async (
       error: "Tool ini hanya tersedia untuk manajer/super admin.",
     });
   }
+
+  if (!roleCanUseTool(ctx.managerRole, "get_daily_room_rates")) {
+    return JSON.stringify({ ok: false, error: unauthorizedToolMessage(ctx.managerRole, "get_daily_room_rates") });
+  }
+
 
   const fromDate    = str(args.from_date);
   const toDateRaw   = str(args.to_date);

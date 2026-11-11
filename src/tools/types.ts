@@ -76,6 +76,10 @@ export interface ToolContext {
    * this before running.
    */
   isManager?: boolean;
+  /** Role dari property_managers. Hanya diisi bila isManager=true. */
+  managerRole?: "super_admin" | "booking_manager" | "viewer";
+  /** UUID baris property_managers, untuk audit. */
+  managerId?: string;
 }
 
 /** A tool handler: receives raw args (from LLM JSON), returns JSON string. */
