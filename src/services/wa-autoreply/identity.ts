@@ -1,3 +1,4 @@
+import { normalizePhone } from "@/lib/phone";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { isManagerRole, type ManagerRole } from "@/services/manager-chat/rbac";
 
@@ -15,16 +16,9 @@ export type ManagerChannel =
   | { kind: "guest" };
 
 /** Normalize an Indonesian phone number to digits-only with a 62 prefix.
- *  Identitas panjang (LID WhatsApp, ≥15 digit) tidak diubah menjadi nomor 62.
+ *  Implementasi di `@/lib/phone` (modul murni, aman untuk browser).
  */
-export function normalizePhone(raw: string): string {
-  let phone = String(raw ?? "").replace(/\D/g, "");
-  if (phone.length >= 15) return phone;
-  if (phone.startsWith("620")) phone = `62${phone.slice(3)}`;
-  else if (phone.startsWith("0")) phone = `62${phone.slice(1)}`;
-  else if (phone.startsWith("8")) phone = `62${phone}`;
-  return phone;
-}
+export { normalizePhone };
 
 export function identityCandidates(raw: string): string[] {
   const original = String(raw ?? "").trim();
