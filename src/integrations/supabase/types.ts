@@ -329,6 +329,30 @@ export type Database = {
         }
         Relationships: []
       }
+      _bak_booking_payment_20261108: {
+        Row: {
+          backed_up_at: string | null
+          id: string | null
+          paid_amount: number | null
+          payment_status: Database["public"]["Enums"]["payment_status"] | null
+          total_amount: number | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          id?: string | null
+          paid_amount?: number | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          total_amount?: number | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          id?: string | null
+          paid_amount?: number | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          total_amount?: number | null
+        }
+        Relationships: []
+      }
       _bak_facility_kb_20261020: {
         Row: {
           checkin_point: string | null
@@ -452,6 +476,30 @@ export type Database = {
         Update: {
           id?: string | null
           last_message_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_invoice_payment_20261108: {
+        Row: {
+          backed_up_at: string | null
+          booking_id: string | null
+          id: string | null
+          payment_status_snapshot: string | null
+          regenerated_at: string | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          booking_id?: string | null
+          id?: string | null
+          payment_status_snapshot?: string | null
+          regenerated_at?: string | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          booking_id?: string | null
+          id?: string | null
+          payment_status_snapshot?: string | null
+          regenerated_at?: string | null
         }
         Relationships: []
       }
@@ -2986,6 +3034,130 @@ export type Database = {
           },
         ]
       }
+      payment_applications: {
+        Row: {
+          amount: number
+          booking_id: string
+          created_at: string
+          id: string
+          kind: string
+          notice_attempts: number
+          notice_claim_token: string | null
+          notice_error: string | null
+          notice_lease_until: string | null
+          notice_sent_at: string | null
+          notice_status: string
+          paid_after: number
+          paid_before: number
+          received_amount: number
+          reference_no: string
+          reference_norm: string
+          source: string
+          source_message_id: string
+          status_after: string
+          status_before: string
+          transfer_fee: number
+        }
+        Insert: {
+          amount: number
+          booking_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          notice_attempts?: number
+          notice_claim_token?: string | null
+          notice_error?: string | null
+          notice_lease_until?: string | null
+          notice_sent_at?: string | null
+          notice_status?: string
+          paid_after: number
+          paid_before: number
+          received_amount: number
+          reference_no: string
+          reference_norm: string
+          source?: string
+          source_message_id: string
+          status_after: string
+          status_before: string
+          transfer_fee?: number
+        }
+        Update: {
+          amount?: number
+          booking_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          notice_attempts?: number
+          notice_claim_token?: string | null
+          notice_error?: string | null
+          notice_lease_until?: string | null
+          notice_sent_at?: string | null
+          notice_status?: string
+          paid_after?: number
+          paid_before?: number
+          received_amount?: number
+          reference_no?: string
+          reference_norm?: string
+          source?: string
+          source_message_id?: string
+          status_after?: string
+          status_before?: string
+          transfer_fee?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_applications_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_status_notices: {
+        Row: {
+          attempts: number
+          booking_id: string
+          claim_token: string
+          created_at: string
+          last_error: string | null
+          lease_until: string
+          notice_key: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          booking_id: string
+          claim_token: string
+          created_at?: string
+          last_error?: string | null
+          lease_until: string
+          notice_key: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          booking_id?: string
+          claim_token?: string
+          created_at?: string
+          last_error?: string | null
+          lease_until?: string
+          notice_key?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_status_notices_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -5513,6 +5685,19 @@ export type Database = {
       _jsonb_date: { Args: { p_json: Json; p_key: string }; Returns: string }
       _jsonb_int: { Args: { p_json: Json; p_key: string }; Returns: number }
       _jsonb_text: { Args: { p_json: Json; p_key: string }; Returns: string }
+      apply_payment_proof: {
+        Args: {
+          p_amount: number
+          p_booking_id: string
+          p_expected_paid: number
+          p_kind: string
+          p_message_id: string
+          p_phone: string
+          p_received: number
+          p_reference: string
+        }
+        Returns: Json
+      }
       apply_whatsapp_message_reaction: {
         Args: {
           p_at: string
@@ -5531,6 +5716,18 @@ export type Database = {
           p_ts: string
         }
         Returns: boolean
+      }
+      claim_payment_notice: {
+        Args: { p_application_id: string; p_lease_seconds?: number }
+        Returns: string
+      }
+      claim_payment_status_notice: {
+        Args: {
+          p_booking_id: string
+          p_lease_seconds?: number
+          p_notice_key: string
+        }
+        Returns: string
       }
       claim_queue_winner: {
         Args: {
@@ -5583,6 +5780,24 @@ export type Database = {
         Returns: string
       }
       enqueue_staff_push: { Args: { p_payload: Json }; Returns: undefined }
+      finish_payment_notice: {
+        Args: {
+          p_application_id: string
+          p_claim_token: string
+          p_error?: string
+          p_outcome: string
+        }
+        Returns: boolean
+      }
+      finish_payment_status_notice: {
+        Args: {
+          p_claim_token: string
+          p_error?: string
+          p_notice_key: string
+          p_ok: boolean
+        }
+        Returns: boolean
+      }
       generate_booking_reference: { Args: never; Returns: string }
       get_active_booking_state: { Args: { p_phone: string }; Returns: Json }
       get_autoreply_context: { Args: { p_phone: string }; Returns: Json }
@@ -5765,6 +5980,8 @@ export type Database = {
         Args: { p_value: string }
         Returns: string
       }
+      normalize_guest_phone_digits: { Args: { p: string }; Returns: string }
+      normalize_payment_reference: { Args: { p: string }; Returns: string }
       normalize_phone_id: { Args: { p_raw: string }; Returns: string }
       normalize_wa_identity: { Args: { p_raw: string }; Returns: string }
       receive_whatsapp_message:
