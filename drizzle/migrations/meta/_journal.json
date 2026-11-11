@@ -22,6 +22,13 @@
       "when": 1790702085425,
       "tag": "0002_wa_queue_upsert_idempotent_message",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794435047068,
+      "tag": "0003_lock_backup_tables_and_staff_policies",
+      "breakpoints": true
     }
   ]
 }
