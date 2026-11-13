@@ -159,7 +159,7 @@ export async function autoApplyPaymentProof(params: {
 /** Klaim atomik → kirim → tandai. Gagal → status failed, dicoba ulang cron. */
 export async function deliverPaymentApplicationNotice(
   db: any,
-  p: { applicationId: string; bookingId: string; paidBefore: number; statusBefore: string; appliedAmount: number; deps?: PaymentNoticeDeps },
+  p: { applicationId: string; bookingId: string; paidBefore: number; statusBefore: string; appliedAmount: number; deps?: PaymentNoticeDeps; verifiedByMutation?: boolean },
 ): Promise<"sent" | "not_claimed" | "failed" | "skipped" | "deferred_staff_pause"> {
   // Hormati jeda staf per-thread: jangan klaim; tetap pending untuk cron
   // (yang juga mengecek jeda), jadi tidak ada bypass jeda global.
@@ -176,7 +176,8 @@ export async function deliverPaymentApplicationNotice(
     before: { payment_status: p.statusBefore, paid_amount: p.paidBefore },
     deps: p.deps,
     appliedAmount: p.appliedAmount,
-    autoRecorded: true,
+    autoRecorded: !p.verifiedByMutation,
+    verifiedByMutation: p.verifiedByMutation === true,
     skipDedup: true,
   });
   await db.rpc("finish_payment_notice", {

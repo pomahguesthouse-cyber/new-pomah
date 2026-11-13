@@ -53,10 +53,14 @@ export function buildPaymentStatusNotice(p: {
   appliedAmount?: number | null;
   /** true = dicatat otomatis dari bukti transfer (belum cek mutasi bank). */
   autoRecorded?: boolean;
+  /** true = dana sudah cocok dengan mutasi rekening (Moota). */
+  verifiedByMutation?: boolean;
 }): string {
   const remaining = Math.max(0, p.totalAmount - p.paidAmount);
   const hello = p.guestName?.trim() ? `Halo Kak ${p.guestName.trim()},` : "Halo Kak,";
-  if (p.autoRecorded) {
+  if (p.verifiedByMutation) {
+    // Jatuh ke teks terverifikasi di bawah.
+  } else if (p.autoRecorded) {
     const status = p.status === "paid" ? "*LUNAS*" : "*DIBAYAR SEBAGIAN (DP)*";
     const applied = p.appliedAmount && p.appliedAmount > 0 ? `• Pembayaran ini: ${rp(p.appliedAmount)}\n` : "";
     return (
@@ -96,6 +100,7 @@ export async function notifyPaymentStatusChange(params: {
   deps?: PaymentNoticeDeps;
   appliedAmount?: number;
   autoRecorded?: boolean;
+  verifiedByMutation?: boolean;
   /** true bila dedup sudah dijamin klaim atomik (payment_applications). */
   skipDedup?: boolean;
 }): Promise<PaymentNoticeOutcome> {
@@ -180,6 +185,7 @@ export async function notifyPaymentStatusChange(params: {
       totalAmount: total,
       appliedAmount: params.appliedAmount,
       autoRecorded: params.autoRecorded,
+      verifiedByMutation: params.verifiedByMutation,
       invoiceUrl: `${base}/book/confirmation/${encodeURIComponent(String(b.reference_code ?? b.id))}`,
     });
     const res = await send(phone, body);

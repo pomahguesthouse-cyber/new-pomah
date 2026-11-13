@@ -12,6 +12,7 @@ export function buildManagerHelp(role: ManagerRole | null | undefined): string {
     "• check-in hari ini / check-in besok / check-out hari ini / check-out besok",
     "• booking 11–14 Des / cari Budi / detail PG-XXXX",
     "• belum lunas / tamu menginap / okupansi hari ini",
+    "• mutasi hari ini",
     "• ketersediaan Deluxe 12–14 Des",
     "• lagi  → halaman berikutnya",
   ];

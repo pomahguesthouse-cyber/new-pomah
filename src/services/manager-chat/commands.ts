@@ -44,6 +44,10 @@ export function parseManagerChatCommand(message: string, today: string): Manager
     return { toolName: "help", rawArgs: "{}", label: "manager_command:help" };
   }
 
+  if (/\b(mutasi(?:\s+rekening)?(?:\s+hari ini)?|cek mutasi)\b/.test(text)) {
+    return { toolName: "list_bank_mutations", rawArgs: JSON.stringify({ when: "today" }), label: "manager_command:mutations_today" };
+  }
+
   if (/\b(okupansi|occupancy|kamar terisi|kamar kosong hari ini|ringkasan hunian)\b/.test(text)) {
     const range = parseAvailabilityDateRange(message, today);
     return {
