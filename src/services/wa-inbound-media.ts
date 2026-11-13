@@ -335,6 +335,8 @@ export function buildPaymentProofStaffNotice(input: {
   matchSummary?: string | null;
   destinationOk?: boolean | null;
   ocrResult?: PaymentProofResult | null;
+  awaitingMutation?: boolean;
+  needsReview?: boolean;
 }): PaymentProofStaffNotice {
   const guestName = (input.guestName || "").trim() || "Tamu";
   const phone = String(input.phone ?? "").trim();
@@ -351,6 +353,8 @@ export function buildPaymentProofStaffNotice(input: {
     `Kode Booking: ${bookingRef ?? "-"}`,
   ];
   if (matchSummary) lines.push(`Pencocokan: ${matchSummary}`);
+  if (input.awaitingMutation) lines.push("⏳ Status: menunggu cek mutasi rekening (belum dicatat sebagai DP/lunas).");
+  if (input.needsReview) lines.push("⚠️ Status: perlu ditinjau staf (lebih dari satu kandidat, tidak dicatat otomatis).");
   if (destinationOk === false) lines.push("⚠️ Rekening tujuan perlu dicek staf.");
   lines.push(`Chat: ${url}`);
   const pushCore = `${guestName} · ${phone}${bookingRef ? ` · ${bookingRef}` : ""}`;
@@ -699,6 +703,7 @@ export async function processInboundMedia(
       ocr_reason: ocrReason,
     });
 
+    let applyOutcome: { status: string; [k: string]: unknown } | null = null;
     if (
       ocrStatus === "ok" &&
       ocrResult &&
@@ -707,15 +712,17 @@ export async function processInboundMedia(
     ) {
       try {
         const applied = await deps.autoApply({ messageId: input.messageId, phone: input.phone, result: ocrResult });
+        applyOutcome = applied;
         await deps.saveMetadata(input.messageId, { payment_auto_apply: applied });
       } catch (e) {
+        applyOutcome = { status: "error", reason: (e instanceof Error ? e.message : String(e)).slice(0, 180) };
         await deps.saveMetadata(input.messageId, {
-          payment_auto_apply: { status: "error", reason: (e instanceof Error ? e.message : String(e)).slice(0, 180) },
+          payment_auto_apply: applyOutcome,
         });
       }
     }
 
-    const notified = await maybeNotify(input, deps, candidate, transfer, ocrResult);
+    const notified = await maybeNotify(input, deps, candidate, transfer, ocrResult, applyOutcome);
     await deps.saveMetadata(input.messageId, { payment_proof_notified: notified });
 
     return {
@@ -754,6 +761,7 @@ async function maybeNotify(
   candidate: boolean,
   transfer: boolean,
   _ocr: PaymentProofResult | null,
+  applyOutcome?: { status: string } | null,
 ): Promise<boolean> {
   // Pemulihan sweeper/backfill untuk pesan lama: simpan + OCR, tanpa notifikasi
   // staf dan tanpa balasan tamu. Job ini tidak mengirim pesan ke tamu.
@@ -787,6 +795,8 @@ async function maybeNotify(
     matchSummary,
     destinationOk,
     ocrResult: _ocr,
+    awaitingMutation: applyOutcome?.status === "waiting_mutation",
+    needsReview: applyOutcome?.status === "review",
   });
   const result = await deps.claimNotice(notice);
   return result === "sent" || result === "duplicate";
@@ -1004,8 +1014,16 @@ export async function runInboundMediaJob(
     analyze: (dataUri, phone, messageId) => modules.analyzePaymentProof(admin, dataUri, phone, messageId),
     loadPaymentContext: (phone) => loadAwaitingPaymentContext(admin, phone),
     autoApply: async ({ messageId, phone, result }) => {
-      const { autoApplyPaymentProof } = await import("./payment-auto-apply");
-      return autoApplyPaymentProof({ supabase: admin, phone, messageId, ocr: result.ocr, match: result.match });
+      const { handleFreshPaymentProof } = await import("./bank-mutation-match");
+      const { productionMutationDeps } = await import("./moota-runtime-deps");
+      return handleFreshPaymentProof({
+        supabase: admin,
+        phone,
+        messageId,
+        ocr: result.ocr,
+        match: result.match,
+        deps: productionMutationDeps(admin),
+      });
     },
     claimNotice: (notice) =>
       claimPaymentProofStaffNotice(admin, notice, async () => {

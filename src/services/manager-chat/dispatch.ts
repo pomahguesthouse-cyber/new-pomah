@@ -275,6 +275,14 @@ export async function dispatchManagerChat(input: {
   if (parsed.toolName === "help") {
     return { handled: true, reply: buildManagerHelp(ctx.managerRole ?? null), toolsUsed: [], intent: "manager_help" };
   }
+  if (parsed.toolName === "list_bank_mutations") {
+    if (!roleCanUseTool(ctx.managerRole ?? null, "list_bank_mutations")) {
+      return { handled: true, reply: unauthorizedToolMessage(ctx.managerRole ?? null, "list_bank_mutations"), toolsUsed: [], intent: "manager_denied" };
+    }
+    const { loadTodayBankMutations } = await import("@/services/bank-mutation-match");
+    const loaded = await loadTodayBankMutations(ctx.supabaseAdmin as any);
+    return { handled: true, reply: loaded.text, toolsUsed: ["list_bank_mutations"], intent: "manager_command:mutations_today" };
+  }
   if (parsed.toolName === "list_room_rates") {
     if (!roleCanUseTool(ctx.managerRole ?? null, "list_room_rates")) {
       return { handled: true, reply: unauthorizedToolMessage(ctx.managerRole ?? null, "list_room_rates"), toolsUsed: [], intent: "manager_denied" };

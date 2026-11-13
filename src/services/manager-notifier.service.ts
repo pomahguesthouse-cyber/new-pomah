@@ -1596,3 +1596,41 @@ export async function notifyAdminHandoff(
     console.warn("[ManagerNotifier] notifyAdminHandoff error (non-fatal):", e);
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Mutasi rekening: review ambigu / timeout bukti menunggu            */
+/* ------------------------------------------------------------------ */
+
+export async function notifyBankMutationAlert(
+  db: Db,
+  alert: { kind: "review" | "timeout"; title: string; body: string; dedupeKey: string; relatedId?: string | null },
+): Promise<void> {
+  try {
+    const waToken = await getWaToken(db);
+    const managers = (await getActiveManagers(db)).filter((m) => !!m.phone);
+    if (managers.length === 0) {
+      console.info("[ManagerNotifier] notifyBankMutationAlert: no managers");
+      return;
+    }
+    const message = `${alert.title}\n\n${alert.body}`;
+    // event_type memakai 'payment_proof' (constraint existing) agar alert
+    // jalan meski SQL event_type baru belum dipasang. Kunci dedupe tetap unik.
+    const jobs: Promise<unknown>[] = [];
+    for (const manager of managers) {
+      jobs.push(
+        sendWithRetry(db, waToken, {
+          eventType: "payment_proof",
+          message,
+          recipient: manager,
+          channel: "wa",
+          relatedId: alert.relatedId ?? null,
+          dedupeKey: `${alert.dedupeKey}:wa:${manager.id}`,
+        }),
+      );
+    }
+    await Promise.all(jobs);
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyBankMutationAlert error (non-fatal):", e);
+  }
+}
+

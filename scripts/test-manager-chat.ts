@@ -75,6 +75,8 @@ ok(roleCanUseTool("booking_manager", "create_booking"), "bm create");
 ok(roleCanUseTool("booking_manager", "update_payment_status"), "bm payment");
 ok(!roleCanUseTool("booking_manager", "update_room_rate"), "bm tidak ubah harga");
 ok(roleCanUseTool("viewer", "get_occupancy_summary"), "viewer baca okupansi");
+ok(roleCanUseTool("viewer", "list_bank_mutations"), "viewer baca mutasi");
+ok(roleCanUseTool("booking_manager", "list_bank_mutations"), "bm baca mutasi");
 ok(!roleCanUseTool("viewer", "create_booking"), "viewer tidak buat booking");
 ok(roleCanUseTool("super_admin", "update_room_rate"), "sa harga");
 ok(!roleCanUseTool(null, "get_bookings"), "tanpa role ditolak");
@@ -83,6 +85,8 @@ ok(unauthorizedToolMessage("viewer", "create_booking").includes("viewer"), "pesa
 // ── 4. Parser perintah ──────────────────────────────────────────────────────
 const today = "2026-11-11";
 assert.equal(parseManagerChatCommand("bantuan", today)?.toolName, "help");
+assert.equal(parseManagerChatCommand("mutasi hari ini", today)?.toolName, "list_bank_mutations");
+assert.equal(parseManagerChatCommand("cek mutasi", today)?.toolName, "list_bank_mutations");
 assert.equal(parseManagerChatCommand("okupansi hari ini", today)?.toolName, "get_occupancy_summary");
 assert.equal(JSON.parse(parseManagerChatCommand("check-in besok", today)!.rawArgs).report_type, "tomorrow_checkin");
 assert.equal(JSON.parse(parseManagerChatCommand("detail PG-ABC123", today)!.rawArgs).reference_code, "PG-ABC123");
@@ -291,6 +295,7 @@ resetAll();
     role: "booking_manager",
   });
   ok(help.handled && help.reply.includes("Booking Manager"), "bantuan memuat peran");
+  ok(help.reply.includes("mutasi hari ini"), "bantuan memuat perintah mutasi");
 
   const price = await dispatchManagerChat({
     phone: "6281110000001",

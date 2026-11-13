@@ -30,6 +30,7 @@ export const MANAGER_TOOL_ROLES: Record<string, readonly ManagerRole[]> = {
   get_room_specifications: ["super_admin", "booking_manager", "viewer"],
   get_daily_room_rates: ["super_admin", "booking_manager", "viewer"],
   get_payment_info: ["super_admin", "booking_manager", "viewer"],
+  list_bank_mutations: ["super_admin", "booking_manager", "viewer"],
   list_room_rates: ["super_admin", "booking_manager", "viewer"],
 
   // Operasi booking
