@@ -60,6 +60,14 @@ export async function applyTakeoverMode(
         : { ai_auto: true, ai_paused_until: null },
     )
     .eq("id", threadId);
+  if (mode === "ai") {
+    try {
+      const { clearHumanHandoffForThread } = await import("@/services/frustration-detector");
+      await clearHumanHandoffForThread(db, threadId);
+    } catch (e) {
+      console.warn("[Takeover] gagal menghapus flag handoff booking:", e);
+    }
+  }
 }
 
 /** Catat perintah sebagai pesan internal supaya terlihat di inbox admin. */

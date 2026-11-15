@@ -563,6 +563,12 @@ export const setAiMode = createServerFn({ method: "POST" })
       } catch (e) {
         console.warn("[Admin WhatsApp] gagal menutup tiket handoff:", e);
       }
+      try {
+        const { clearHumanHandoffForThread } = await import("@/services/frustration-detector");
+        await clearHumanHandoffForThread(context.supabase as any, data.threadId);
+      } catch (e) {
+        console.warn("[Admin WhatsApp] gagal menghapus flag handoff booking:", e);
+      }
     }
     return { ok: true };
   });
