@@ -1107,54 +1107,86 @@ export async function executeAutoreplyForPhone(
         }
       }
       const handoffContext = bookingState?.context;
-      if (
-        handoffContext &&
+      const handoffFlag =
+        !!handoffContext &&
         typeof handoffContext === "object" &&
-        (handoffContext as { handoff?: unknown }).handoff === true
-      ) {
-        console.info(`[Autoreply] Human handoff active — skipping bot reply for ${phone.slice(-6)}`);
-        await quickAck.beforeReplySend();
-        // Kirim satu ack sopan supaya tamu tidak merasa diabaikan saat admin
-        // belum sempat membalas. Throttle 15 menit: hanya kirim jika ack
-        // terakhir dari sistem (metadata.handoff_ack=true) lebih lama dari itu.
-        try {
-          const fifteenMinAgo = new Date(Date.now() - 15 * 60_000).toISOString();
-          const { data: recentAck } = await (supabaseAdmin as any)
-            .from("whatsapp_messages")
-            .select("id")
-            .eq("thread_id", c.thread_id)
-            .eq("direction", "out")
-            .filter("metadata->>handoff_ack", "eq", "true")
-            .gte("sent_at", fifteenMinAgo)
-            .limit(1);
-          if (!recentAck || recentAck.length === 0) {
-            const ackBody =
-              "Terima kasih, Kak 🙏 Pesan Kakak sudah kami terima. " +
-              "Tim kami akan segera membalas langsung di chat ini, mohon ditunggu sebentar ya.";
-            const ackRowId = await saveOutboundMessage(supabaseAdmin, {
-              threadId: c.thread_id,
-              body: ackBody,
-              metadata: {
-                agent: "system",
-                agent_key: "handoff-ack",
-                handoff_ack: true,
-                send_status: "pending",
-              } as any,
-            });
-            try {
-              await sendWhatsAppMessage(c.wpp_token, sendTarget, ackBody);
-              await (supabaseAdmin as any)
-                .from("whatsapp_messages")
-                .update({ metadata: { agent: "system", agent_key: "handoff-ack", handoff_ack: true, send_status: "sent" } })
-                .eq("id", ackRowId);
-            } catch (sendErr) {
-              console.warn("[Autoreply] handoff ack send failed:", sendErr);
-            }
+        (handoffContext as { handoff?: unknown }).handoff === true;
+      if (handoffFlag) {
+        const { shouldSkipForHumanHandoff, clearHumanHandoff } = await import("@/services/frustration-detector");
+        let aiPausedUntil: string | null = null;
+        let hasOpenTicket = false;
+        if (c.thread_id) {
+          try {
+            const { data: threadRow } = await (supabaseAdmin as any)
+              .from("whatsapp_threads")
+              .select("ai_paused_until")
+              .eq("id", c.thread_id)
+              .maybeSingle();
+            aiPausedUntil = (threadRow as { ai_paused_until?: string | null } | null)?.ai_paused_until ?? null;
+          } catch (pauseErr) {
+            console.warn("[Autoreply] handoff pause lookup failed (non-fatal):", pauseErr);
           }
-        } catch (ackErr) {
-          console.warn("[Autoreply] handoff ack guard failed:", ackErr);
         }
-        return "skipped_config";
+        try {
+          const { data: openTickets } = await (supabaseAdmin as any)
+            .from("handoff_tickets")
+            .select("id")
+            .eq("phone", phone)
+            .eq("status", "open")
+            .limit(1);
+          hasOpenTicket = Array.isArray(openTickets) && openTickets.length > 0;
+        } catch (ticketErr) {
+          console.warn("[Autoreply] handoff ticket lookup failed (non-fatal):", ticketErr);
+        }
+        if (!shouldSkipForHumanHandoff({ handoffFlag: true, aiPausedUntil, hasOpenTicket })) {
+          // Staf sudah mengembalikan ke AI, tapi flag context.handoff masih nyala.
+          console.info(`[Autoreply] Stale human-handoff flag — resuming bot for ${phone.slice(-6)}`);
+          await clearHumanHandoff(supabaseAdmin, phone);
+        } else {
+          console.info(`[Autoreply] Human handoff active — skipping bot reply for ${phone.slice(-6)}`);
+          await quickAck.beforeReplySend();
+          // Kirim satu ack sopan supaya tamu tidak merasa diabaikan saat admin
+          // belum sempat membalas. Throttle 15 menit: hanya kirim jika ack
+          // terakhir dari sistem (metadata.handoff_ack=true) lebih lama dari itu.
+          try {
+            const fifteenMinAgo = new Date(Date.now() - 15 * 60_000).toISOString();
+            const { data: recentAck } = await (supabaseAdmin as any)
+              .from("whatsapp_messages")
+              .select("id")
+              .eq("thread_id", c.thread_id)
+              .eq("direction", "out")
+              .filter("metadata->>handoff_ack", "eq", "true")
+              .gte("sent_at", fifteenMinAgo)
+              .limit(1);
+            if (!recentAck || recentAck.length === 0) {
+              const ackBody =
+                "Terima kasih, Kak 🙏 Pesan Kakak sudah kami terima. " +
+                "Tim kami akan segera membalas langsung di chat ini, mohon ditunggu sebentar ya.";
+              const ackRowId = await saveOutboundMessage(supabaseAdmin, {
+                threadId: c.thread_id,
+                body: ackBody,
+                metadata: {
+                  agent: "system",
+                  agent_key: "handoff-ack",
+                  handoff_ack: true,
+                  send_status: "pending",
+                } as any,
+              });
+              try {
+                await sendWhatsAppMessage(c.wpp_token, sendTarget, ackBody);
+                await (supabaseAdmin as any)
+                  .from("whatsapp_messages")
+                  .update({ metadata: { agent: "system", agent_key: "handoff-ack", handoff_ack: true, send_status: "sent" } })
+                  .eq("id", ackRowId);
+              } catch (sendErr) {
+                console.warn("[Autoreply] handoff ack send failed:", sendErr);
+              }
+            }
+          } catch (ackErr) {
+            console.warn("[Autoreply] handoff ack guard failed:", ackErr);
+          }
+          return "skipped_config";
+        }
       }
 
     } catch (e) {

@@ -20,8 +20,6 @@ const FRUSTRATION_PATTERNS: RegExp[] = [
   /\bpusing\s+(saya|aku|nih|deh|kak)\b/i,
   /\bembuh\b/i,
   /\bbukan\s+email\b/i,
-  /\bini\s+benar\??\b/i,
-  /\bbenar\s+gak\??\b/i,
   /\bgak\s+ngerti\b/i,
   /\btidak\s+(ngerti|paham|mengerti)\b/i,
   /\bbingung\b/i,
@@ -41,8 +39,18 @@ const TRUST_PATTERNS: RegExp[] = [
   /\bapakah\s+ini\s+(ai|bot|robot)\b/i,
   /\bini\s+(ai|bot|robot)\??\b/i,
   /\bamankah\b/i,
-  /\bbeneran\s+(hotel|guesthouse|pomah)\??\b/i,
+  /\bbeneran\s+(hotel|guest\s*house|guesthouse|pomah)\??\b/i,
   /\basli\s+gak\??\b/i,
+  // "Halo ka, apa ini benar dengan guest house?" adalah verifikasi nomor,
+  // bukan tamu yang pusing. Pola ini sebelumnya ada di FRUSTRATION_PATTERNS
+  // dan memicu handoff + permintaan maaf yang tidak relevan (Puteri Indah, 15 Nov 2026).
+  /\bini\s+benar\??\b/i,
+  /\bbenar\s+gak\??\b/i,
+  /\bbenar\s+tidak\??\b/i,
+  /\bini\s+bener(an)?\??\b/i,
+  /\bbenar\s+dengan\s+(guest\s*house|guesthouse|pomah|hotel)\b/i,
+  /\b(nomor|wa|whatsapp)\s+ini\s+(benar|bener|asli)\b/i,
+  /\bini\s+(nomor|wa|whatsapp)\s+(benar|bener|asli)\b/i,
 ];
 
 export type FrustrationKind = "frustrated" | "trust_question" | null;
@@ -115,8 +123,8 @@ export function buildFrustrationReply(
 
   if (kind === "trust_question") {
     const body =
-      "Wajar sekali Kakak ingin memastikan dulu 🙏 Pesan ini dibalas oleh asisten otomatis " +
-      "Pomah Guesthouse, bukan staf manusia.\n\n" +
+      "Ya Kak, ini WhatsApp resmi Pomah Guesthouse 🙏 Pesan ini dibalas oleh asisten otomatis, " +
+      "bukan staf manusia.\n\n" +
       TRUST_VERIFICATION +
       "\n\nKalau ingin bicara langsung dengan tim kami, balas \"admin\" ya.";
     return { reply: body, shouldHandoff: false };
@@ -152,6 +160,67 @@ export async function markHumanHandoff(
   } catch (e) {
     console.warn("[Frustration] failed to mark handoff:", e);
   }
+}
+
+/**
+ * Hapus flag context.handoff setelah staf mengembalikan percakapan ke AI.
+ * Tanpa ini, guard di wa-autoreply tetap melewatkan balasan bot meski tiket
+ * sudah resolved dan ai_paused_until sudah kosong.
+ */
+export async function clearHumanHandoff(supabase: any, phone: string): Promise<boolean> {
+  try {
+    const { data } = await supabase.rpc("get_active_booking_state", { p_phone: phone });
+    const row = (data as { state?: string; context?: Record<string, unknown> } | null) ?? null;
+    const context = row?.context;
+    if (!context || typeof context !== "object" || context.handoff !== true) return false;
+    const { handoff: _handoff, handoff_at: _handoffAt, ...rest } = context;
+    await supabase.rpc("update_booking_state", {
+      p_phone: phone,
+      p_state: row?.state ?? "IDLE",
+      p_context: { ...rest, handoff: false, handoff_cleared_at: new Date().toISOString() },
+    });
+    return true;
+  } catch (e) {
+    console.warn("[Frustration] failed to clear handoff:", e);
+    return false;
+  }
+}
+
+/** Sama seperti clearHumanHandoff, tetapi mulai dari thread_id (inbox / tiket). */
+export async function clearHumanHandoffForThread(supabase: any, threadId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from("whatsapp_threads")
+      .select("phone")
+      .eq("id", threadId)
+      .maybeSingle();
+    const phone = (data as { phone?: string } | null)?.phone;
+    if (!phone) return false;
+    return await clearHumanHandoff(supabase, phone);
+  } catch (e) {
+    console.warn("[Frustration] failed to clear handoff for thread:", e);
+    return false;
+  }
+}
+
+/**
+ * Guard handoff: flag context.handoff saja tidak cukup bila staf sudah
+ * menutup tiket dan mengakhiri jeda. Flag usang tidak boleh mematikan bot.
+ */
+export function shouldSkipForHumanHandoff(input: {
+  handoffFlag: boolean;
+  aiPausedUntil?: string | null;
+  hasOpenTicket?: boolean;
+  now?: Date;
+}): boolean {
+  if (!input.handoffFlag) return false;
+  if (input.hasOpenTicket) return true;
+  const until = input.aiPausedUntil;
+  if (until) {
+    const ts = Date.parse(until);
+    if (!Number.isNaN(ts) && ts > (input.now ?? new Date()).getTime()) return true;
+  }
+  return false;
 }
 
 // ─── Handoff ticket creation ──────────────────────────────────────────────

@@ -94,15 +94,30 @@ export const updateHandoffTicket = createServerFn({ method: "POST" })
     if (error) throw error;
     // Tiket ditutup → bot boleh membalas lagi di thread itu.
     const ticket = row as HandoffTicket;
-    if (ticket.status !== "open" && ticket.thread_id) {
-      try {
-        await (context.supabase as any)
-          .from("whatsapp_threads")
-          .update({ ai_paused_until: null })
-          .eq("id", ticket.thread_id)
-          .gt("ai_paused_until", new Date().toISOString());
-      } catch (e) {
-        console.warn("[Handoff] gagal mengakhiri jeda bot:", e);
+    if (ticket.status !== "open") {
+      if (ticket.thread_id) {
+        try {
+          await (context.supabase as any)
+            .from("whatsapp_threads")
+            .update({ ai_paused_until: null })
+            .eq("id", ticket.thread_id)
+            .gt("ai_paused_until", new Date().toISOString());
+        } catch (e) {
+          console.warn("[Handoff] gagal mengakhiri jeda bot:", e);
+        }
+        try {
+          const { clearHumanHandoffForThread } = await import("@/services/frustration-detector");
+          await clearHumanHandoffForThread(context.supabase as any, ticket.thread_id);
+        } catch (e) {
+          console.warn("[Handoff] gagal menghapus flag handoff booking:", e);
+        }
+      } else if (ticket.phone) {
+        try {
+          const { clearHumanHandoff } = await import("@/services/frustration-detector");
+          await clearHumanHandoff(context.supabase as any, ticket.phone);
+        } catch (e) {
+          console.warn("[Handoff] gagal menghapus flag handoff booking:", e);
+        }
       }
     }
     return { ticket };
