@@ -391,6 +391,7 @@ assert.ok(guideLinks.some((link) => link.href === "/explore/gedongsongo-festival
 assert.ok(guideLinks.some((link) => link.href === "/explore/lawang-sewu-short-film-festival-loff-2026"));
 assert.ok(guideLinks.some((link) => link.href === "/explore/rute-bus-trans-semarang-baru-resmi-dibuka"));
 assert.ok(guideLinks.some((link) => link.href === "/lp/penginapan-dekat-unnes"));
+assert.ok(guideLinks.some((link) => link.href === "/lp/penginapan-dekat-unnes" && link.label === "penginapan dekat UNNES"));
 
 const transformed = buildStorageImageUrl(
   "https://example.supabase.co/storage/v1/object/public/room-images/hero.png",

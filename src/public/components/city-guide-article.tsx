@@ -3,12 +3,20 @@ import { canonicalUrlForPath } from "@/public/lib/public-seo";
 import { faqPageGraph } from "@/public/lib/structured-data";
 
 function RichText({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g);
   return (
     <>
       {parts.map((part, index) => {
         if (part.startsWith("**") && part.endsWith("**")) {
           return <strong key={index}>{part.slice(2, -2)}</strong>;
+        }
+        const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
+        if (link) {
+          return (
+            <a key={index} href={link[2]} className="font-semibold text-emerald-800 hover:underline">
+              {link[1]}
+            </a>
+          );
         }
         return <span key={index}>{part}</span>;
       })}

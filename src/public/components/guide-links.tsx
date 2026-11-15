@@ -2,10 +2,10 @@
  * Crawlable City Guide links. Cards and this list use real <a href>
  * so Google can discover /explore/<slug> without executing onClick.
  */
-import { cityGuideArticleForSlug } from "@/public/content/approved-seo";
+import { cityGuideArticleForSlug, UNNES_HOME_ANCHOR, UNNES_LP_PATH } from "@/public/content/approved-seo";
 import { isRetiredExploreSlug, slugifyPlaceName } from "@/public/lib/seo-redirects";
 
-export const LP_PENGINAPAN_DEKAT_UNNES = "/lp/penginapan-dekat-unnes";
+export const LP_PENGINAPAN_DEKAT_UNNES = UNNES_LP_PATH;
 export const LP_PENGINAPAN_DEKAT_AKPELNI = "/lp/penginapan-dekat-akpelni";
 
 /** Pages that had zero inlinks in the 27 Sep 2026 audit. Always linked. */
@@ -19,7 +19,7 @@ export const ORPHAN_GUIDE_LINKS: Array<{ href: string; label: string }> = [
     href: "/explore/rute-bus-trans-semarang-baru-resmi-dibuka",
     label: "Rute Bus Trans Semarang",
   },
-  { href: LP_PENGINAPAN_DEKAT_UNNES, label: "Penginapan dekat UNNES" },
+  { href: LP_PENGINAPAN_DEKAT_UNNES, label: UNNES_HOME_ANCHOR },
   { href: LP_PENGINAPAN_DEKAT_AKPELNI, label: "Penginapan dekat Akpelni" },
 ];
 

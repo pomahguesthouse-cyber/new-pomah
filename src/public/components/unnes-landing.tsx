@@ -57,6 +57,17 @@ function roomPrice(href: string, fallback: string, rooms?: LandingRoom[] | null)
   return Number.isFinite(rate) && rate > 0 ? `${formatRupiah(rate)}/malam` : fallback;
 }
 
+/** Keep the cheapest-room FAQ amount in sync with live PMS rates when available. */
+function faqsWithLiveRates(faqs: FaqItem[], rooms?: LandingRoom[] | null): FaqItem[] {
+  const single = rooms?.find((room) => room.slug === "kamar-single") as { base_rate?: unknown } | undefined;
+  const rate = Number(single?.base_rate);
+  if (!Number.isFinite(rate) || rate <= 0) return faqs;
+  const price = formatRupiah(rate);
+  return faqs.map((faq) =>
+    /termurah/i.test(faq.question) ? { ...faq, answer: faq.answer.replace(/Rp\d{1,3}(?:\.\d{3})+/, price) } : faq,
+  );
+}
+
 function roomImage(href: string, rooms?: LandingRoom[] | null) {
   const slug = href.replace(/^\/rooms\//, "").replace(/\/$/, "");
   return rooms?.find((room) => room.slug === slug)?.hero_image_url ?? null;
@@ -93,13 +104,14 @@ export function UnnesLanding({
   const isUnnes = page.slug === APPROVED_LP.slug;
   const waDigits = String(property?.whatsapp_number || "6285190986169").replace(/\D/g, "") || "6285190986169";
   const waHref = `https://wa.me/${waDigits}`;
+  const faqs = faqsWithLiveRates(page.faq as FaqItem[], rooms);
   const graph = approvedLandingGraph({
     path: `/lp/${page.slug}`,
     breadcrumbName: page.breadcrumbName,
     rooms,
     property,
     reviews,
-    faqs: page.faq as FaqItem[],
+    faqs,
   });
   const heroConfig: HomepageConfig["hero"] | null = hero
     ? {
@@ -343,7 +355,7 @@ export function UnnesLanding({
           <SectionHeading>{page.faqTitle}</SectionHeading>
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(graph) }} />
           <dl className="mt-8 space-y-4">
-            {page.faq.map((item) => (
+            {faqs.map((item) => (
               <div key={item.question} className="rounded-2xl border border-stone-200 bg-white px-5 py-4 shadow-sm">
                 <dt className="font-semibold text-stone-900">{item.question}</dt>
                 <dd className="mt-1 text-sm leading-relaxed text-stone-600 md:text-base">{item.answer}</dd>
