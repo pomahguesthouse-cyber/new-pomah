@@ -46,7 +46,13 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { canonicalHeadTags, publicSeoMeta, resolveRoomPublicSeo } from "@/public/lib/public-seo";
-import { omitPublicHotWaterAmenities, publicRoomBlurb } from "@/public/content/approved-seo";
+import {
+  omitPublicHotWaterAmenities,
+  publicRoomBlurb,
+  UNNES_LP_PATH,
+  UNNES_ROOM_ANCHOR,
+  UNNES_ROOM_LINK_SLUGS,
+} from "@/public/content/approved-seo";
 import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
 import { roomPageGraph } from "@/public/lib/structured-data";
 
@@ -403,6 +409,15 @@ function RoomBookingPage() {
             {publicRoomBlurb(room.slug, room.description) && (
               <p className="mt-3 max-w-2xl leading-relaxed text-stone-500">
                 {publicRoomBlurb(room.slug, room.description)}
+              </p>
+            )}
+            {(UNNES_ROOM_LINK_SLUGS as readonly string[]).includes(room.slug) && (
+              <p className="mt-3 max-w-2xl leading-relaxed text-stone-500">
+                Cocok untuk tamu yang ingin{" "}
+                <a href={UNNES_LP_PATH} className="font-semibold text-amber-800 hover:underline">
+                  {UNNES_ROOM_ANCHOR}
+                </a>
+                .
               </p>
             )}
 

@@ -178,6 +178,13 @@ export const UNNES_SAMPANGAN_NEARBY: NearbyPlace = {
   time: "~8–10 menit",
 };
 
+/** Internal-link anchors approved 15 Nov 2026 for the UNNES landing. */
+export const UNNES_LP_PATH = "/lp/penginapan-dekat-unnes";
+export const UNNES_HOME_ANCHOR = "penginapan dekat UNNES";
+export const UNNES_ROOM_ANCHOR = "menginap dekat UNNES Sekaran";
+export const UNNES_ROOM_LINK_SLUGS = ["deluxe", "family-room-222"] as const;
+export const UNNES_WISUDA_GUIDE_SENTENCE = "Datang untuk wisuda UNNES? Lihat penginapan dekat UNNES";
+
 export type ApprovedLpRoom = {
   name: string;
   capacity: string;
@@ -189,14 +196,14 @@ export type ApprovedLpRoom = {
 
 export const APPROVED_LP = {
   slug: "penginapan-dekat-unnes",
-  title: "Penginapan Dekat UNNES Semarang – Pomah Guesthouse",
-  meta: `Penginapan & homestay dekat UNNES di Sampangan, Semarang. Cocok untuk wisuda, tes masuk, dan keluarga. Kamar mulai ${RP_FROM_MIN}/malam. Pesan langsung.`,
-  h1: "Penginapan Dekat UNNES untuk Orang Tua, Wisudawan & Peserta Tes",
+  title: "Homestay & Penginapan Dekat UNNES Semarang | Pomah",
+  meta: "Penginapan keluarga di Sampangan, sekitar 4,5 km dari UNNES Sekaran (±10–15 menit). Cocok untuk wisuda & tes masuk. Cek kamar dan pesan via WhatsApp.",
+  h1: "Homestay & Penginapan Dekat UNNES untuk Orang Tua dan Wisudawan",
   cardIntro:
     "Penginapan keluarga di Sampangan, sekitar 4,5 km dari kampus UNNES Sekaran. Pilihan tepat untuk orang tua wisudawan, peserta tes, dan keluarga yang ingin menginap tenang dekat kampus.",
   tagline: "Penginapan keluarga yang nyaman & terjangkau di Sampangan, Semarang.",
   intro:
-    'Datang ke Semarang untuk wisuda anak, mengantar tes masuk, atau urusan kampus lainnya? Pomah Guesthouse adalah penginapan keluarga di Jl. Dewi Sartika IV No. 71, Sampangan, Semarang, yang bisa dijangkau dengan mudah dari kampus UNNES di Sekaran maupun Sampangan. "Pomah" dalam bahasa Jawa berarti rumah, dan suasana itulah yang ingin kami hadirkan: tenang, bersih, dan hangat, seperti menginap di rumah keluarga sendiri.',
+    "Pomah Guesthouse adalah penginapan keluarga di Sampangan, Semarang, sekitar 4,5 km atau kurang lebih 10–15 menit berkendara dari kampus UNNES Sekaran. Banyak orang tua memilih menginap di sini saat wisuda, tes masuk, atau mengantar putra-putrinya kuliah.",
   why: {
     heading: "Kenapa memilih Pomah sebagai penginapan dekat UNNES",
     paragraphs: [
@@ -314,6 +321,11 @@ export const APPROVED_LP = {
     {
       question: "Berapa harga kamar termurah?",
       answer: `Kamar Single mulai ${rp("kamar-single")} per malam.`,
+    },
+    {
+      question: "Apakah Pomah termasuk hotel dekat UNNES?",
+      answer:
+        "Pomah adalah guesthouse keluarga di Sampangan, sekitar 4,5 km dari UNNES Sekaran (±10–15 menit berkendara). Pilihan kamarnya mulai dari Single sampai Family Room dengan 2 kamar tidur untuk maksimal 4 tamu.",
     },
   ] satisfies ApprovedFaq[],
 };
@@ -514,6 +526,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
         heading: "Menginap di Pomah setelah ke Lawang Sewu",
         paragraphs: [
           `Setelah seharian keliling kota, kembali ke tempat yang tenang itu terasa melegakan. Pomah Guesthouse ada di Sampangan, di sisi kota yang lebih teduh, dan Lawang Sewu hanya sekitar 6 km atau 15–25 menit berkendara. Untuk rombongan keluarga, **Family Room 222** punya dua kamar tidur dan dua kamar mandi untuk hingga empat tamu, mulai ${rp("family-room-222")}/malam. Kalau datang sendiri, ada **Kamar Single** mulai ${rp("kamar-single")}/malam. Check-in mulai pukul 14.00, jadi setelah menaruh barang masih sempat ke Lawang Sewu sore harinya. Cek ketersediaan dan pesan langsung lewat halaman kamar atau WhatsApp kami.`,
+          "Datang untuk wisuda UNNES? Lihat [penginapan dekat UNNES](/lp/penginapan-dekat-unnes).",
         ],
       },
     ],
@@ -616,6 +629,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
         heading: "Menginap di Pomah setelah kulineran malam",
         paragraphs: [
           `Nasi Ayam Bu Wido baru buka sore, jadi jadwalnya pas dengan check-in di Pomah Guesthouse yang mulai pukul 14.00. Taruh barang, istirahat sebentar, lalu berangkat makan malam. Pomah ada di Sampangan, di sisi kota yang lebih tenang, sekitar 8 km atau 20–30 menit dari Jl. Melati Selatan. Untuk berdua ada **Kamar Deluxe** mulai ${rp("deluxe")}/malam. Untuk keluarga, **Family Room 222** adalah unit 50 m² di lantai 2 dengan dua kamar tidur, dua kamar mandi, dan ruang keluarga untuk hingga empat tamu, mulai ${rp("family-room-222")}/malam. Kalau datang sendiri, ada **Kamar Single** mulai ${rp("kamar-single")}/malam. Check-out sampai pukul 12.00, jadi besok paginya tidak perlu terburu-buru. Cek ketersediaan dan pesan langsung lewat halaman kamar atau WhatsApp kami.`,
+          "Datang untuk wisuda UNNES? Lihat [penginapan dekat UNNES](/lp/penginapan-dekat-unnes).",
         ],
       },
     ],

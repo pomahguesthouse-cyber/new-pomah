@@ -61,7 +61,10 @@ const NAME_TO_SLUG: Array<[RegExp, string]> = [
 ];
 const minRp = formatRupiah(Math.min(...Object.values(DB_BASE_RATES)));
 assert.match(APPROVED_HOME.meta, new RegExp(`mulai ${minRp}`));
-assert.match(APPROVED_LP.meta, new RegExp(`mulai ${minRp}`));
+assert.doesNotMatch(APPROVED_LP.meta, /Rp\d|mulai Rp/i);
+assert.doesNotMatch(APPROVED_LP.title, /Rp\d/);
+assert.doesNotMatch(APPROVED_LP.h1, /Rp\d/);
+assert.doesNotMatch(APPROVED_LP.intro, /Rp\d/);
 for (const [slug, seo] of Object.entries(APPROVED_ROOMS)) {
   const rp = formatRupiah(DB_BASE_RATES[slug]!);
   for (const text of [seo.title, seo.meta]) {
