@@ -1,3 +1,4 @@
+import { compactPlaceLocation } from "@/public/lib/city-guide";
 // LOCKED: Halaman utama "/" WAJIB merender landing Pomah Guesthouse.
 // JANGAN mengganti file ini dengan landing lain (mis. Baboo / template generik)
 // kecuali diminta eksplisit oleh pemilik. Lihat mem://constraints/homepage-pomah-lock.
@@ -340,7 +341,7 @@ export function PomahHomeView({
     [];
 
   const destinationItems = (exploreCfg.destinations ?? []).map((d: any) => ({
-    date: d.nearby_distance || d.address || "",
+    date: compactPlaceLocation({ address: d.address, distanceFromPomah: d.nearby_distance }),
     category: "Wisata",
     title: d.name,
     excerpt: cardIntroForName(d.name, d.desc ?? ""),
@@ -350,7 +351,7 @@ export function PomahHomeView({
   }));
 
   const culinaryItems = (exploreCfg.culinary ?? []).map((c: any) => ({
-    date: c.address || "",
+    date: compactPlaceLocation({ address: c.address, distanceFromPomah: c.nearby_distance }),
     category: c.category ? `Kuliner • ${c.category}` : "Kuliner",
     title: c.name,
     excerpt: cardIntroForName(c.name, c.desc ?? ""),

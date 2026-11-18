@@ -71,6 +71,7 @@
     "test:lp-blocks": "tsx scripts/test-lp-blocks.ts",
     "test:auth-return": "tsx scripts/test-auth-return.ts",
     "test:city-guide": "tsx scripts/test-city-guide.ts",
+    "test:city-guide-labels": "tsx scripts/test-city-guide-location-labels.ts",
     "test:explore-events": "tsx scripts/test-explore-event-filter.ts",
     "test:room-change-quote": "tsx scripts/test-room-change-quote.ts",
     "test:lunas-policy": "tsx scripts/test-lunas-policy.ts",

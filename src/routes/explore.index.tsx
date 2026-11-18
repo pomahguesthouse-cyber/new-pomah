@@ -1,3 +1,4 @@
+import { PLACE_ADDRESS_LABEL, PLACE_DISTANCE_LABEL } from "@/public/lib/city-guide";
 import { useState, useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -616,7 +617,7 @@ function ExploreSemarang() {
                                 <div className="mt-1 flex">
                                   <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold border border-emerald-100/50">
                                     <Navigation className="h-2.5 w-2.5 shrink-0" />
-                                    {dest.nearby_distance} dari Pomah
+                                    {PLACE_DISTANCE_LABEL} {dest.nearby_distance}
                                   </span>
                                 </div>
                               )}
@@ -712,16 +713,16 @@ function ExploreSemarang() {
                                 </h3>
                               </div>
                               <p className="text-[10px] font-semibold text-emerald-600 mt-0.5">{cul.category}</p>
-                              {cul.address && (
-                                <p className="text-[10px] text-stone-400 mt-1 flex items-start gap-1 leading-snug">
-                                  <MapPin className="h-3 w-3 shrink-0 mt-0.5" />
-                                  <span className="truncate">{cul.address}</span>
-                                </p>
-                              )}
                               {cul.nearby_distance && (
                                 <p className="text-[10px] text-emerald-600 font-semibold mt-1 flex items-center gap-1 leading-snug">
                                   <Navigation className="h-3 w-3 shrink-0" />
-                                  <span>Nearby: {cul.nearby_distance}</span>
+                                  <span>{PLACE_DISTANCE_LABEL} {cul.nearby_distance}</span>
+                                </p>
+                              )}
+                              {cul.address && (
+                                <p className="text-[10px] text-stone-400 mt-1 flex items-start gap-1 leading-snug">
+                                  <MapPin className="h-3 w-3 shrink-0 mt-0.5" />
+                                  <span className="truncate">{PLACE_ADDRESS_LABEL} {cul.address}</span>
                                 </p>
                               )}
                               <p className="mt-2 text-[11px] text-stone-500 leading-relaxed line-clamp-2">
@@ -815,7 +816,7 @@ function ExploreSemarang() {
                               <div className="mt-1 flex">
                                 <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold border border-emerald-100/50">
                                   <Navigation className="h-2.5 w-2.5 shrink-0" />
-                                  {dest.nearby_distance} dari Pomah
+                                  {PLACE_DISTANCE_LABEL} {dest.nearby_distance}
                                 </span>
                               </div>
                             )}
@@ -866,10 +867,16 @@ function ExploreSemarang() {
                               <PlaceNameLink name={cul.name} />
                             </h3>
                             <p className="text-[10px] font-semibold text-emerald-600 mt-0.5">{cul.category}</p>
+                            {cul.nearby_distance && (
+                              <p className="text-[10px] text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+                                <Navigation className="h-3 w-3 shrink-0" />
+                                <span>{PLACE_DISTANCE_LABEL} {cul.nearby_distance}</span>
+                              </p>
+                            )}
                             {cul.address && (
                               <p className="text-[10px] text-stone-400 mt-1 flex items-start gap-1">
                                 <MapPin className="h-3 w-3 shrink-0 mt-0.5" />
-                                <span className="truncate">{cul.address}</span>
+                                <span className="truncate">{PLACE_ADDRESS_LABEL} {cul.address}</span>
                               </p>
                             )}
                             <p className="mt-2 text-[11px] text-stone-500 leading-relaxed line-clamp-3">

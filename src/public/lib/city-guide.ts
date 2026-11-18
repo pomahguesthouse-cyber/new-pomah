@@ -24,6 +24,10 @@ export type CityGuidePlace = {
   imageUrl: string | null;
   category: CityGuideCategory;
   location: string | null;
+  /** Alamat tempat itu sendiri (bukan alamat Pomah). */
+  address: string | null;
+  /** Jarak dari Pomah, dari nearby_distance. */
+  distanceFromPomah: string | null;
   rating: string | null;
   dateText: string | null;
   updatedAt: string | null;
@@ -63,6 +67,7 @@ export type CityGuideSource = {
     image?: string | null;
     rating?: string | null;
     address?: string | null;
+    nearby_distance?: string | null;
     category?: string | null;
   }> | null;
   events?: Array<{
@@ -160,6 +165,8 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
       imageUrl: orNull(row.image),
       category: "destinasi",
       location: orNull(row.address) || orNull(row.nearby_distance),
+      address: orNull(row.address),
+      distanceFromPomah: orNull(row.nearby_distance),
       rating: orNull(row.rating),
       dateText: null,
       updatedAt: configUpdated,
@@ -177,6 +184,8 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
       imageUrl: orNull(row.image),
       category: "kuliner",
       location: orNull(row.address),
+      address: orNull(row.address),
+      distanceFromPomah: orNull(row.nearby_distance),
       rating: orNull(row.rating),
       dateText: null,
       updatedAt: configUpdated,
@@ -195,6 +204,8 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
       imageUrl: orNull(row.image),
       category: "event",
       location: orNull(row.location),
+      address: orNull(row.location),
+      distanceFromPomah: null,
       rating: null,
       dateText,
       updatedAt: configUpdated,
@@ -212,6 +223,8 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
       imageUrl: orNull(row.image),
       category: "berita",
       location: orNull(row.location),
+      address: orNull(row.location),
+      distanceFromPomah: null,
       rating: null,
       dateText: orNull(row.date),
       updatedAt: configUpdated,
@@ -234,6 +247,8 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
       imageUrl: orNull(row.image_url),
       category,
       location: orNull(row.location_text),
+      address: orNull(row.location_text),
+      distanceFromPomah: null,
       rating,
       dateText,
       updatedAt: orNull(row.updated_at) || orNull(row.created_at),
@@ -254,6 +269,8 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
       metaDescription: existing.metaDescription || draft.metaDescription,
       imageUrl: existing.imageUrl || draft.imageUrl,
       location: existing.location || draft.location,
+      address: existing.address || draft.address,
+      distanceFromPomah: existing.distanceFromPomah || draft.distanceFromPomah,
       rating: existing.rating || draft.rating,
       dateText: existing.dateText || draft.dateText,
       updatedAt: laterStamp(existing.updatedAt, draft.updatedAt),
@@ -273,6 +290,8 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
         existing.metaDescription = existing.metaDescription || draft.metaDescription;
         existing.imageUrl = existing.imageUrl || draft.imageUrl;
         existing.location = article?.displayAddress || existing.location || draft.location;
+        existing.address = article?.displayAddress || existing.address || draft.address;
+        existing.distanceFromPomah = existing.distanceFromPomah || draft.distanceFromPomah;
         existing.rating = existing.rating || draft.rating;
         existing.dateText = existing.dateText || draft.dateText;
         existing.updatedAt = laterStamp(existing.updatedAt, draft.updatedAt);
@@ -291,6 +310,8 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
       imageUrl: draft.imageUrl,
       category: draft.category,
       location: article?.displayAddress || draft.location,
+      address: article?.displayAddress || draft.address,
+      distanceFromPomah: draft.distanceFromPomah,
       rating: draft.rating,
       dateText: draft.dateText,
       updatedAt: draft.updatedAt,
@@ -313,6 +334,8 @@ export function approvedCityGuidePlace(
     imageUrl: catalog?.imageUrl ?? null,
     category: catalog?.category ?? (article.restaurant ? "kuliner" : "destinasi"),
     location: article.displayAddress || catalog?.location || null,
+    address: article.displayAddress || catalog?.address || null,
+    distanceFromPomah: catalog?.distanceFromPomah ?? null,
     rating: catalog?.rating ?? null,
     dateText: catalog?.dateText ?? null,
     updatedAt: catalog?.updatedAt ?? null,
@@ -395,4 +418,37 @@ export function renderSitemapXml(entries: readonly SitemapUrl[]): string {
     lines.push(`  <url><loc>${xmlEscape(entry.loc)}</loc>${last}</url>`);
   }
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${lines.join("\n")}\n</urlset>`;
+}
+
+export const PLACE_ADDRESS_LABEL = "Alamat tempat:";
+export const PLACE_DISTANCE_LABEL = "Jarak dari Pomah:";
+
+export type PlaceLocationLine = { kind: "distance" | "address"; label: string; value: string };
+
+/**
+ * Baris lokasi berlabel untuk sebuah tempat: jarak dari Pomah lebih dulu,
+ * lalu alamat tempat. Alamat tidak pernah tampil tanpa label agar tidak
+ * dikira alamat Pomah.
+ */
+export function placeLocationLines(place: {
+  address?: string | null;
+  distanceFromPomah?: string | null;
+}): PlaceLocationLine[] {
+  const lines: PlaceLocationLine[] = [];
+  const distance = text(place.distanceFromPomah);
+  const address = text(place.address);
+  if (distance) lines.push({ kind: "distance", label: PLACE_DISTANCE_LABEL, value: distance });
+  if (address && address !== distance) {
+    lines.push({ kind: "address", label: PLACE_ADDRESS_LABEL, value: address });
+  }
+  return lines;
+}
+
+/** Satu baris ringkas untuk kartu: prioritaskan jarak dari Pomah. */
+export function compactPlaceLocation(place: {
+  address?: string | null;
+  distanceFromPomah?: string | null;
+}): string {
+  const first = placeLocationLines(place)[0];
+  return first ? `${first.label} ${first.value}` : "";
 }

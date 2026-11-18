@@ -3,7 +3,7 @@
  * Unknown slugs 404. Equivalent legacy slugs 301 to the canonical slug.
  */
 import { createFileRoute, Link, notFound, redirect } from "@tanstack/react-router";
-import { MapPin, Star } from "lucide-react";
+import { MapPin, Navigation, Star } from "lucide-react";
 import { PublicFooter, PublicNav } from "@/public/components/public-shell";
 import { StayNearby } from "@/public/components/guide-links";
 import { CityGuideArticleBody } from "@/public/components/city-guide-article";
@@ -14,6 +14,7 @@ import {
   cityGuideMetaContent,
   findCityGuidePlace,
   type CityGuidePlace,
+  placeLocationLines,
 } from "@/public/lib/city-guide";
 import { buildStorageImageUrl } from "@/lib/storage-image";
 import { canonicalHeadTags, explorePlaceSeoMeta, preferredOgImage } from "@/public/lib/public-seo";
@@ -156,14 +157,24 @@ function ExplorePlacePage() {
               {place.rating}
             </span>
           )}
-          {place.location && (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-4 w-4 text-emerald-600" />
-              {place.location}
-            </span>
-          )}
           {place.dateText && <span>{place.dateText}</span>}
         </div>
+        {placeLocationLines(place).length > 0 && (
+          <div className="mt-2 space-y-1 text-sm text-stone-600">
+            {placeLocationLines(place).map((line) => (
+              <p key={line.kind} className="flex items-start gap-1">
+                {line.kind === "distance" ? (
+                  <Navigation className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                )}
+                <span>
+                  <span className="font-semibold text-stone-800">{line.label}</span> {line.value}
+                </span>
+              </p>
+            ))}
+          </div>
+        )}
         {image && (
           <img
             src={image}
