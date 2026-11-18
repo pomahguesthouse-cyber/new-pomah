@@ -1,3 +1,4 @@
+import { PromoSection } from "@/public/components/promo-section";
 import { roomSpecLabel } from "@/public/lib/room-spec-label";
 import { compactPlaceLocation } from "@/public/lib/city-guide";
 // LOCKED: Halaman utama "/" WAJIB merender landing Pomah Guesthouse.
@@ -943,6 +944,7 @@ export function PomahHomeView({
         );
       case "rooms":
         return (
+          <>
           <PbZone id="carousel" label="Our Room" pb={pb} layout={cfg.sectionLayouts?.carousel}>
             <section
               id="rooms"
@@ -1069,6 +1071,8 @@ export function PomahHomeView({
               </div>
             </section>
           </PbZone>
+          <PromoSection compact whatsappNumber={property?.whatsapp_number} />
+          </>
         );
       case "facilities": {
         const fac = cfg.facilities;

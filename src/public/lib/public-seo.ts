@@ -362,7 +362,7 @@ export function collectSitemapPaths(input: {
   landingSlugs?: Array<string | null | undefined>;
   exploreSlugs?: Array<string | null | undefined>;
 }): string[] {
-  const urls = new Set<string>(["/", "/book", "/explore", ROOMS_INDEX_PATH]);
+  const urls = new Set<string>(["/", "/book", "/explore", "/promo", ROOMS_INDEX_PATH]);
   const consider = (path: string | null) => {
     if (!path || !isIndexableSitemapPath(path)) return;
     const normalized = path.length > 1 ? path.replace(/\/+$/, "") : path;

@@ -18,6 +18,7 @@ import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as NativeOauthReturnRouteImport } from './routes/native-oauth-return'
+import { Route as PromoRouteImport } from './routes/promo'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
@@ -129,6 +130,11 @@ const McpRoute = McpRouteImport.update({
 const NativeOauthReturnRoute = NativeOauthReturnRouteImport.update({
   id: '/native-oauth-return',
   path: '/native-oauth-return',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PromoRoute = PromoRouteImport.update({
+  id: '/promo',
+  path: '/promo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
@@ -490,6 +496,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/native-oauth-return': typeof NativeOauthReturnRoute
+  '/promo': typeof PromoRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -566,6 +573,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/native-oauth-return': typeof NativeOauthReturnRoute
+  '/promo': typeof PromoRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -645,6 +653,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/native-oauth-return': typeof NativeOauthReturnRoute
+  '/promo': typeof PromoRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -725,6 +734,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/mcp'
     | '/native-oauth-return'
+    | '/promo'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/.mcp/list-tools'
@@ -801,6 +811,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/mcp'
     | '/native-oauth-return'
+    | '/promo'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/.mcp/list-tools'
@@ -879,6 +890,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/mcp'
     | '/native-oauth-return'
+    | '/promo'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/.mcp/list-tools'
@@ -958,6 +970,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   McpRoute: typeof McpRoute
   NativeOauthReturnRoute: typeof NativeOauthReturnRoute
+  PromoRoute: typeof PromoRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
@@ -1056,6 +1069,13 @@ declare module '@tanstack/react-router' {
       path: '/native-oauth-return'
       fullPath: '/native-oauth-return'
       preLoaderRoute: typeof NativeOauthReturnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/promo': {
+      id: '/promo'
+      path: '/promo'
+      fullPath: '/promo'
+      preLoaderRoute: typeof PromoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/robots.txt': {
@@ -1643,6 +1663,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   McpRoute: McpRoute,
   NativeOauthReturnRoute: NativeOauthReturnRoute,
+  PromoRoute: PromoRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
