@@ -1,3 +1,4 @@
+import { roomSpecLabel } from "@/public/lib/room-spec-label";
 /**
  * /rooms — daftar tipe kamar (SSR). Target item breadcrumb "Kamar" di halaman
  * kamar dan masuk sitemap. Harga = room_types.base_rate (sumber kebenaran).
@@ -17,6 +18,8 @@ type ListedRoom = {
   capacity: number | null;
   size_sqm: number | null;
   bedrooms?: number | null;
+  bathrooms?: number | null;
+  bed_type?: string | null;
   hero_image_url?: string | null;
 };
 
@@ -121,6 +124,9 @@ function RoomsIndexPage() {
                       <dd className="text-stone-700">{room.size_sqm ? `${room.size_sqm} m²` : "-"}</dd>
                     </div>
                   </dl>
+                  {roomSpecLabel(room) && (
+                    <p className="mt-2 text-xs text-stone-500">{roomSpecLabel(room)}</p>
+                  )}
                   <a href={href} className="mt-5 inline-flex items-center justify-center rounded-full border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-700 hover:text-white">
                     Lihat kamar
                   </a>

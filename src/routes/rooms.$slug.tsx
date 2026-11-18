@@ -1,3 +1,4 @@
+import { isMultiBedroom, roomBedLine, roomSpecLabel, roomSpecParts } from "@/public/lib/room-spec-label";
 /**
  * /rooms/$slug — dedicated booking page for one room type.
  *
@@ -133,6 +134,8 @@ export type RoomRow = {
   standard_rate?: number | null;
   capacity: number | null;
   bed_type: string | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
   floor_info: string | null;
   size_sqm: number | null;
   amenities: string[] | null;
@@ -488,6 +491,13 @@ function RoomBookingPage() {
                   label="Ukuran Kamar"
                   value={room.size_sqm ? `${room.size_sqm} m²` : "—"}
                 />
+                {roomBedLine(room) && (
+                  <Spec
+                    icon={<BedDouble className="h-4 w-4" />}
+                    label={isMultiBedroom(room) ? `${roomSpecParts(room).filter((p) => /kamar (tidur|mandi)/.test(p)).join(" · ")}` : "Kasur"}
+                    value={roomBedLine(room) ?? ""}
+                  />
+                )}
                 <Spec
                   icon={<BedDouble className="h-4 w-4" />}
                   label="Kamar Tersedia"
@@ -623,6 +633,9 @@ function RoomBookingPage() {
                           {formatIDR(Number(effectivePublicRate(o) ?? 0), "text-sm", "font-sans font-bold text-amber-700 tabular-nums")}
                         </span>
                       </div>
+                      {roomSpecLabel(o) && (
+                        <p className="mt-1 text-xs text-stone-500">{roomSpecLabel(o)}</p>
+                      )}
                       {publicRoomBlurb(o.slug, o.description) && (
                         <p className="mt-2 line-clamp-2 text-sm text-stone-500">
                           {publicRoomBlurb(o.slug, o.description)}

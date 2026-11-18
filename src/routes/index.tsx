@@ -1,3 +1,4 @@
+import { roomSpecLabel } from "@/public/lib/room-spec-label";
 import { compactPlaceLocation } from "@/public/lib/city-guide";
 // LOCKED: Halaman utama "/" WAJIB merender landing Pomah Guesthouse.
 // JANGAN mengganti file ini dengan landing lain (mis. Baboo / template generik)
@@ -1619,6 +1620,9 @@ type RoomType = {
   standard_rate?: number | null;
   capacity?: number | null;
   size_sqm?: number | null;
+  bed_type?: string | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
   hero_image_url?: string | null;
   extrabed_rate?: number | string | null;
   extrabed_capacity?: number | null;
@@ -2378,13 +2382,7 @@ function RoomCarousel({
                     <div>
                       <h3 className={`font-serif font-semibold text-stone-900 ${cartOpen ? "text-base" : "text-xl"}`}>{rt.name}</h3>
                       <p className={`mt-1 font-mono uppercase tracking-wider text-stone-400 ${cartOpen ? "text-[9px]" : "text-[11px]"}`}>
-                        {[
-                          rt.capacity && `${rt.capacity} TAMU`,
-                          rt.size_sqm && `${rt.size_sqm} M²`,
-                          (rt as any).bed_type,
-                        ]
-                           .filter(Boolean)
-                           .join(" · ")}
+                        {roomSpecLabel(rt)}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">

@@ -1,3 +1,4 @@
+import { roomSpecLabel } from "@/public/lib/room-spec-label";
 /**
  * Public landing page route: /lp/[slug]
  * Serves SEO-optimised landing pages created in the AI SEO Control Room.
@@ -1322,6 +1323,7 @@ type LPRoomType = {
   description?: string | null; base_rate: number | string;
   today_rate?: number | null; standard_rate?: number | null;
   capacity?: number | null; size_sqm?: number | null; hero_image_url?: string | null;
+  bed_type?: string | null; bedrooms?: number | null; bathrooms?: number | null;
 };
 
 function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
@@ -1417,7 +1419,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
                           <div>
                             <h3 className="font-serif text-xl font-semibold text-stone-900">{rt.name}</h3>
                             <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-stone-400">
-                              {[rt.capacity && `${rt.capacity} TAMU`, rt.size_sqm && `${rt.size_sqm} M²`].filter(Boolean).join(" · ")}
+                              {roomSpecLabel(rt)}
                             </p>
                           </div>
                           <div className="shrink-0 text-right">
