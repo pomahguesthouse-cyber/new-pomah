@@ -11,6 +11,7 @@ import {
   APPROVED_HOME,
   formatRupiah,
   approvedRoomSeo,
+  fillRoomPrices,
   containsPublicHotWaterClaim,
   isLegacyHomepageH1,
   isLegacyHomepageMeta,
@@ -186,13 +187,13 @@ export function defaultRoomSeoTitle(name: string): string {
 const FROM_PRICE_RE = /\b(mulai)\s+Rp\s?\d{1,3}(?:[.,]\d{3})+/gi;
 
 /**
- * Keep "mulai RpX" in room copy equal to the live `room_types.base_rate`
- * (the price shown in the Offer JSON-LD). Text without a "mulai" price is unchanged.
+ * Samakan "mulai RpX" (literal tersimpan atau penanda {harga:slug}) dengan harga live.
+ * Bila harga tidak tersedia, frasa harga dihapus — tanpa angka cadangan.
  */
 export function syncFromPrice(text: string, baseRate: number | string | null | undefined): string {
-  const rate = Number(baseRate);
-  if (!text || !Number.isFinite(rate) || rate <= 0) return text;
-  return text.replace(FROM_PRICE_RE, (_m, word: string) => `${word} ${formatRupiah(rate)}`);
+  if (!text) return text;
+  const normalized = text.replace(FROM_PRICE_RE, (_m, word: string) => `${word} {harga:room}`);
+  return fillRoomPrices(normalized, () => baseRate);
 }
 
 /** Resolve a room page's H1 / title / meta from saved room_types SEO columns. */

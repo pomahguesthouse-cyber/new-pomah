@@ -70,25 +70,42 @@ export type CityGuideArticle = {
 };
 
 
-/**
- * Public "mulai" rates per room slug. Must equal `room_types.base_rate`
- * (single source of truth; checked by scripts/test-seo-room-prices.ts).
- * Room pages also re-sync "mulai RpX" in title/meta to the live DB rate.
- */
-export const ROOM_FROM_RATES = {
-  "kamar-single": 150000,
-  deluxe: 230000,
-  "grand-deluxe": 300000,
-  "family-room-222": 500000,
-  "family-suite-100": 500000,
-} as const satisfies Record<string, number>;
-
 export function formatRupiah(amount: number): string {
   return `Rp${Math.round(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
 }
 
-function rp(slug: keyof typeof ROOM_FROM_RATES): string {
-  return formatRupiah(ROOM_FROM_RATES[slug]);
+/**
+ * Penanda harga kamar di copy approved. Tidak ada angka harga di kode:
+ * penanda diisi harga live (today_rate ?? base_rate) atau kalimatnya dihapus.
+ */
+function rp(slug: string): string {
+  return `{harga:${slug}}`;
+}
+
+type RoomRateLookup = (slug: string) => number | string | null | undefined;
+
+function validRate(value: number | string | null | undefined): number | null {
+  const rate = Number(value);
+  return value != null && Number.isFinite(rate) && rate > 0 ? rate : null;
+}
+
+const PRICE_PHRASE_RE = /(\s*[,.]?\s*\b[Mm]ulai(?: dari)?\s+)\{harga:([a-z0-9_-]+)\}((?:\/malam| per malam)?)/g;
+const PRICE_TOKEN_RE = /\{harga:([a-z0-9_-]+)\}((?:\/malam| per malam)?)/g;
+
+/** Isi penanda harga dengan harga live; bila tidak ada harga, frasa harga dihapus rapi. */
+export function fillRoomPrices(text: string, rateFor: RoomRateLookup): string {
+  if (!text || !text.includes("{harga:")) return text;
+  return text
+    .replace(PRICE_PHRASE_RE, (_m, pre: string, slug: string, suffix: string) => {
+      const rate = validRate(rateFor(slug));
+      return rate ? `${pre}${formatRupiah(rate)}${suffix}` : "";
+    })
+    .replace(PRICE_TOKEN_RE, (_m, slug: string, suffix: string) => {
+      const rate = validRate(rateFor(slug));
+      return rate ? `${formatRupiah(rate)}${suffix}` : "";
+    })
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 /**
@@ -332,7 +349,7 @@ export const APPROVED_LP = {
     },
     {
       question: "Berapa harga kamar termurah?",
-      answer: `Kamar Single mulai ${rp("kamar-single")} per malam.`,
+      answer: `Kamar termurah adalah Kamar Single, mulai ${rp("kamar-single")} per malam.`,
     },
     {
       question: "Apakah Pomah termasuk hotel dekat UNNES?",
@@ -362,7 +379,7 @@ export type ApprovedLandingContent = Omit<typeof APPROVED_LP, "slug" | "booking"
  * /lp/penginapan-dekat-akpelni. Approved 25 Oct 2026 from
  * drafts/lp-akpelni-2026-10-23.md (Hero through CTA only; the
  * unverified and keyword sections are not included). Room prices come
- * from ROOM_FROM_RATES / live room_types.base_rate, never hardcoded.
+ * from live room_types rates via fillRoomPrices, never hardcoded.
  */
 export const APPROVED_AKPELNI_LP: ApprovedLandingContent = {
   slug: "penginapan-dekat-akpelni",
@@ -1025,9 +1042,9 @@ export function stripPublicHotWaterClaim(value: string | null | undefined): stri
       "Grand Deluxe Lantai 1 dengan Air Panas | Pomah Semarang",
       "Grand Deluxe Lantai 1 Lebih Lega | Pomah Semarang",
     )
-    .replaceAll(
-      "Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double, air panas, AC, dan WiFi. Kamar lebih lega untuk berdua, mulai Rp300.000/malam.",
-      "Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double, AC, dan WiFi. Kamar lebih lega untuk berdua, mulai Rp300.000/malam.",
+    .replace(
+      /(Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double), air panas, (AC, dan WiFi\. Kamar lebih lega untuk berdua, mulai Rp\s?\d{1,3}(?:[.,]\d{3})+\/malam\.)/g,
+      "$1, $2",
     )
     .replaceAll(
       "Kamar di lantai satu dengan kasur double dan air panas, untuk yang ingin sedikit lebih lega.",

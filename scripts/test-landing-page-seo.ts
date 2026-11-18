@@ -325,7 +325,11 @@ console.log("test-landing-page-seo: ok");
   assert.doesNotMatch(text, /2[–-]3 menit/);
   assert.doesNotMatch(text, /4,7 km|10–12 menit/);
   assert.match(text, /4,5 km, kurang lebih 10–15 menit/);
-  assert.match(text, new RegExp(seo.formatRupiah(seo.ROOM_FROM_RATES["kamar-single"])));
+  // Harga fixture: copy memakai angka yang diberikan, tanpa literal harga di konten.
+  assert.doesNotMatch(text, /mulai Rp\d|"price":"Rp/i);
+  const singleFaq = ak!.faq.find((f) => /Single/.test(f.answer));
+  assert.ok(singleFaq);
+  assert.match(seo.fillRoomPrices(singleFaq!.answer, (slug) => (slug === "kamar-single" ? 111000 : 222000)), /Rp111\.000/);
   const graph = JSON.stringify(sd.approvedLandingGraph({ path: "/lp/penginapan-dekat-akpelni", breadcrumbName: ak!.breadcrumbName, faqs: ak!.faq }));
   assert.match(graph, /FAQPage/);
   assert.match(graph, /LodgingBusiness/);

@@ -11,7 +11,7 @@ import {
   Wifi,
   Wind,
 } from "lucide-react";
-import { APPROVED_LANDINGS, APPROVED_LP, formatRupiah, type ApprovedLandingContent } from "@/public/content/approved-seo";
+import { APPROVED_LANDINGS, APPROVED_LP, fillRoomPrices, type ApprovedLandingContent } from "@/public/content/approved-seo";
 import { HeroSlider } from "@/public/components/public-shell";
 import type { HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { buildStorageImageUrl } from "@/lib/storage-image";
@@ -50,23 +50,29 @@ const FACILITY_ICONS = [Wifi, Wind, Car, Utensils, Building2, Clock] as const;
 
 type LandingRoom = SchemaRoom & { hero_image_url?: string | null };
 
-/** Live "mulai" price from room_types.base_rate; approved copy is the fallback. */
-function roomPrice(href: string, fallback: string, rooms?: LandingRoom[] | null): string {
-  const slug = href.replace(/^\/rooms\//, "").replace(/\/$/, "");
-  const found = (rooms?.find((room) => room.slug === slug) as { base_rate?: unknown; today_rate?: unknown } | undefined);
-  const rate = Number(found?.today_rate ?? found?.base_rate);
-  return Number.isFinite(rate) && rate > 0 ? `${formatRupiah(rate)}/malam` : fallback;
+function liveRate(slug: string, rooms?: LandingRoom[] | null): unknown {
+  const found = rooms?.find((room) => room.slug === slug) as { base_rate?: unknown; today_rate?: unknown } | undefined;
+  return found?.today_rate ?? found?.base_rate;
 }
 
-/** Keep the cheapest-room FAQ amount in sync with live PMS rates when available. */
+function rateLookup(rooms?: LandingRoom[] | null) {
+  return (slug: string) => {
+    const value = liveRate(slug, rooms);
+    return typeof value === "number" || typeof value === "string" ? value : null;
+  };
+}
+
+/** Harga "mulai" live (today_rate ?? base_rate); null bila tidak tersedia (tanpa angka cadangan). */
+function roomPrice(href: string, priceCopy: string, rooms?: LandingRoom[] | null): string | null {
+  const slug = href.replace(/^\/rooms\//, "").replace(/\/$/, "");
+  const text = fillRoomPrices(priceCopy.replace(/\{harga:[a-z0-9_-]+\}/g, `{harga:${slug}}`), rateLookup(rooms));
+  return /Rp\d/.test(text) ? text : null;
+}
+
+/** Isi harga live di jawaban FAQ; frasa harga dihapus bila harga tidak tersedia. */
 function faqsWithLiveRates(faqs: FaqItem[], rooms?: LandingRoom[] | null): FaqItem[] {
-  const single = rooms?.find((room) => room.slug === "kamar-single") as { base_rate?: unknown; today_rate?: unknown } | undefined;
-  const rate = Number(single?.today_rate ?? single?.base_rate);
-  if (!Number.isFinite(rate) || rate <= 0) return faqs;
-  const price = formatRupiah(rate);
-  return faqs.map((faq) =>
-    /termurah/i.test(faq.question) ? { ...faq, answer: faq.answer.replace(/Rp\d{1,3}(?:\.\d{3})+/, price) } : faq,
-  );
+  const lookup = rateLookup(rooms);
+  return faqs.map((faq) => ({ ...faq, answer: fillRoomPrices(faq.answer, lookup) }));
 }
 
 function roomImage(href: string, rooms?: LandingRoom[] | null) {
@@ -252,10 +258,12 @@ export function UnnesLanding({
                             </a>
                           </h3>
                         </div>
-                        <div className="shrink-0 text-right">
-                          <p className="text-[11px] font-medium text-stone-400">Harga mulai dari</p>
-                          <p className="text-lg font-bold text-amber-700">{roomPrice(room.href, room.price, rooms)}</p>
-                        </div>
+                        {roomPrice(room.href, room.price, rooms) ? (
+                          <div className="shrink-0 text-right">
+                            <p className="text-[11px] font-medium text-stone-400">Harga mulai dari</p>
+                            <p className="text-lg font-bold text-amber-700">{roomPrice(room.href, room.price, rooms)}</p>
+                          </div>
+                        ) : null}
                       </div>
                       <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-stone-100 pt-3 text-sm">
                         <div>

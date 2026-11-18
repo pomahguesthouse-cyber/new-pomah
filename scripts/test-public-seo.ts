@@ -44,6 +44,7 @@ import {
   APPROVED_HOME,
   APPROVED_LP,
   APPROVED_ROOMS,
+  fillRoomPrices,
   CITY_GUIDE_ARTICLES,
   FAMILY_SUITE_DESCRIPTION_NEW,
   FAMILY_SUITE_DESCRIPTION_OLD,
@@ -255,7 +256,7 @@ const legacy = resolveRoomPublicSeo({
   meta_description: "Deskripsi kustom yang tetap dipakai.",
 });
 assert.equal(legacy.h1, APPROVED_ROOMS["kamar-single"].h1);
-assert.equal(legacy.title, APPROVED_ROOMS["kamar-single"].title);
+assert.equal(legacy.title, fillRoomPrices(APPROVED_ROOMS["kamar-single"].title, () => null));
 assert.equal(legacy.description, "Deskripsi kustom yang tetap dipakai.");
 assert.doesNotMatch(legacy.title + legacy.h1, /Penginapan Dekat UNNES/);
 
@@ -264,7 +265,7 @@ const grandDeluxeNote = APPROVED_LP.rooms.find((room) => room.href === "/rooms/g
 assert.equal(grandDeluxe.title, "Grand Deluxe Lantai 1 Lebih Lega | Pomah Semarang");
 assert.equal(
   grandDeluxe.meta,
-  "Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double, AC, dan WiFi. Kamar lebih lega untuk berdua, mulai Rp300.000/malam.",
+  "Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double, AC, dan WiFi. Kamar lebih lega untuk berdua, mulai {harga:grand-deluxe}/malam.",
 );
 assert.equal(grandDeluxeNote, "kamar di lantai satu dengan kasur double dan ruang yang sedikit lebih lega.");
 assert.equal(
@@ -284,9 +285,11 @@ const storedHotWater = resolveRoomPublicSeo({
   meta_description:
     "Grand Deluxe 20 m² di lantai 1 Pomah Guesthouse Semarang: kasur double, air panas, AC, dan WiFi. Kamar lebih lega untuk berdua, mulai Rp300.000/malam.",
   description: "Kamar lantai 1 dengan air panas",
+  base_rate: 345000,
 });
 assert.equal(storedHotWater.title, grandDeluxe.title);
-assert.equal(storedHotWater.description, grandDeluxe.meta);
+assert.equal(storedHotWater.description, fillRoomPrices(grandDeluxe.meta, () => 345000));
+assert.match(storedHotWater.description, /mulai Rp345\.000\/malam\.$/);
 assert.equal(storedHotWater.h1, "Grand Deluxe: Kamar Lebih Lega di Lantai Satu");
 const storedOg = publicSeoMeta(
   { title: storedHotWater.title, description: storedHotWater.description, twitterTitle: storedHotWater.twitterTitle, twitterDescription: storedHotWater.twitterDescription },
@@ -298,7 +301,7 @@ assert.deepEqual(storedOg.find((tag) => "property" in tag && tag.property === "o
 });
 assert.deepEqual(storedOg.find((tag) => "property" in tag && tag.property === "og:description"), {
   property: "og:description",
-  content: grandDeluxe.meta,
+  content: storedHotWater.description,
 });
 assert.equal(
   stripPublicHotWaterClaim(
@@ -333,9 +336,10 @@ const hotWaterRoomSchema = JSON.stringify(
 assert.doesNotMatch(hotWaterRoomSchema, /air panas|air hangat|hot water|hot shower|water heater|amenityFeature/i);
 
 const emptyRoom = resolveRoomPublicSeo({ name: "Family Suite 100", slug: "family-suite-100" });
-assert.equal(emptyRoom.title, APPROVED_ROOMS["family-suite-100"].title);
+assert.equal(emptyRoom.title, fillRoomPrices(APPROVED_ROOMS["family-suite-100"].title, () => null));
 assert.equal(emptyRoom.h1, APPROVED_ROOMS["family-suite-100"].h1);
-assert.equal(emptyRoom.description, APPROVED_ROOMS["family-suite-100"].meta);
+assert.equal(emptyRoom.description, fillRoomPrices(APPROVED_ROOMS["family-suite-100"].meta, () => null));
+assert.doesNotMatch(emptyRoom.description, /Rp|\{harga/);
 
 const rooms: Array<{ slug: string; name: string; h1: string; title: string; description: string }> = [
   {

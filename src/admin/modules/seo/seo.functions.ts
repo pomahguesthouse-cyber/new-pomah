@@ -776,6 +776,22 @@ export const generateAndSaveLocalBusinessSchema = createServerFn({ method: "POST
     const logoUrl = prop?.logo_url || `https://${domain}/logo.png`;
     const tagline = prop?.tagline || "Boutique Guesthouse Semarang Gunungpati dekat UNNES";
 
+    // priceRange dihitung dari base_rate kamar yang tayang; dihilangkan bila tidak tersedia.
+    const { data: rateRows } = await client
+      .from("room_types")
+      .select("base_rate")
+      .eq("is_published", true)
+      .eq("is_active", true);
+    const rates = ((rateRows ?? []) as Array<{ base_rate: unknown }>)
+      .map((row) => Number(row.base_rate))
+      .filter((rate) => Number.isFinite(rate) && rate > 0);
+    const rupiah = (n: number) => `Rp${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
+    const priceRange = rates.length
+      ? Math.min(...rates) === Math.max(...rates)
+        ? rupiah(Math.min(...rates))
+        : `${rupiah(Math.min(...rates))} - ${rupiah(Math.max(...rates))}`
+      : null;
+
     const jsonLd = {
       "@context": "https://schema.org",
       "@type": "Hotel",
@@ -786,7 +802,7 @@ export const generateAndSaveLocalBusinessSchema = createServerFn({ method: "POST
       "image": logoUrl,
       "description": tagline,
       "telephone": phone,
-      "priceRange": "Rp150.000 - Rp450.000",
+      ...(priceRange ? { "priceRange": priceRange } : {}),
       "address": {
         "@type": "PostalAddress",
         "streetAddress": address,
