@@ -65,4 +65,37 @@ assert.ok(!/76 ulasan/.test(home), "tidak ada angka ulasan hardcoded");
 assert.ok(!/\?\? 76\b|\?\? 4\.8\b/.test(home), "tidak ada fallback rating palsu");
 assert.ok(!/REVIEWS\.map/.test(home), "fallback ulasan statis dihapus");
 
+// Urutan ulasan: terbaru dulu, tanpa tanggal di belakang dengan urutan asli.
+{
+  const { sortReviewsNewestFirst, sortNewestFirst } = await import("../src/public/lib/review-display");
+  const fixture = parseStoredReviews([
+    { author: "Tanpa Tanggal A", text: "a" },
+    { author: "Irza A.", text: "b", date: "2025-11-02" },
+    { author: "Tanpa Tanggal B", text: "c" },
+    { author: "Wahyu A.", text: "d", date: "2025-12-07" },
+    { author: "Tamu Google", text: "e", date: "2025-11-25" },
+    { author: "Irdesmiati I.", text: "f", date: "2025-12-08" },
+    { author: "Tanpa Tanggal C", text: "g", date: "bukan tanggal" },
+  ]);
+  const sorted = sortReviewsNewestFirst(fixture);
+  assert.deepEqual(
+    sorted.map((r) => r.author),
+    ["Irdesmiati I.", "Wahyu A.", "Tamu Google", "Irza A.", "Tanpa Tanggal A", "Tanpa Tanggal B", "Tanpa Tanggal C"],
+  );
+  assert.deepEqual(sorted.find((r) => r.author === "Irza A."), fixture[1], "isi ulasan tidak berubah");
+  assert.equal(fixture[0].author, "Tanpa Tanggal A", "input tidak dimutasi");
+  // Tanggal sama: urutan asli dipertahankan (stabil).
+  const tie = sortReviewsNewestFirst([
+    { author: "X", date: "2025-12" },
+    { author: "Y", date: "2025-12-01" },
+  ]);
+  assert.deepEqual(tie.map((r) => r.author), ["X", "Y"]);
+  // Ulasan live Google: urut berdasarkan `time` (detik unix).
+  const live = sortNewestFirst(
+    [{ n: "lama", time: 100 }, { n: "tanpa" }, { n: "baru", time: 300 }] as { n: string; time?: number }[],
+    (r) => (typeof r.time === "number" ? r.time : null),
+  );
+  assert.deepEqual(live.map((r) => r.n), ["baru", "lama", "tanpa"]);
+}
+
 console.log("test-review-display: OK");

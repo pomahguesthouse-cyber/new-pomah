@@ -72,6 +72,35 @@ export function parseStoredReviews(raw: unknown): DisplayReview[] {
     .filter((r) => r.text.length > 0);
 }
 
+/** Kunci urut dari tanggal "YYYY-MM" / "YYYY-MM-DD"; null bila tidak valid. */
+export function reviewDateSortKey(raw: string | null | undefined): number | null {
+  const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(String(raw ?? "").trim());
+  if (!m) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, m[3] ? Number(m[3]) : 1);
+  return Number.isNaN(t) ? null : t;
+}
+
+/**
+ * Urut stabil terbaru dulu. Item tanpa kunci tanggal ditaruh di belakang
+ * dengan urutan aslinya. Isi ulasan tidak diubah.
+ */
+export function sortNewestFirst<T>(items: readonly T[], keyOf: (item: T) => number | null): T[] {
+  return items
+    .map((item, index) => ({ item, index, key: keyOf(item) }))
+    .sort((a, b) => {
+      if (a.key !== null && b.key !== null && a.key !== b.key) return b.key - a.key;
+      if (a.key === null && b.key !== null) return 1;
+      if (a.key !== null && b.key === null) return -1;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.item);
+}
+
+/** Ulasan tersimpan: terbaru dulu berdasarkan `date`. */
+export function sortReviewsNewestFirst<T extends { date?: string | null }>(reviews: readonly T[]): T[] {
+  return sortNewestFirst(reviews, (review) => reviewDateSortKey(review.date));
+}
+
 export function parseSourceBadges(raw: unknown): SourceBadge[] {
   if (!Array.isArray(raw)) return [];
   const out: SourceBadge[] = [];

@@ -3,6 +3,8 @@ import { supabaseAdmin, supabasePublic } from "@/integrations/supabase/client.se
 import {
   parseSourceBadges,
   parseStoredReviews,
+  sortNewestFirst,
+  sortReviewsNewestFirst,
   type ReviewSource,
   type SourceBadge,
 } from "@/public/lib/review-display";
@@ -94,7 +96,9 @@ async function fetchGoogleReviews(): Promise<GoogleReviewsResult> {
   const customRating = row.custom_google_rating !== null && row.custom_google_rating !== undefined ? Number(row.custom_google_rating) : null;
   const customTotal = row.custom_google_reviews_total !== null && row.custom_google_reviews_total !== undefined ? Number(row.custom_google_reviews_total) : null;
   // Kolom baru (migration 20261014090000) — boleh belum ada.
-  const customReviews: GoogleReview[] = parseStoredReviews(row.custom_google_reviews_json);
+  const customReviews: GoogleReview[] = sortReviewsNewestFirst(
+    parseStoredReviews(row.custom_google_reviews_json),
+  );
   const checkedAtRaw = row.custom_google_reviews_checked_at;
   const checkedAt = typeof checkedAtRaw === "string" && checkedAtRaw ? checkedAtRaw : null;
   const sourceBadges = parseSourceBadges(row.review_source_badges);
@@ -131,7 +135,7 @@ async function fetchGoogleReviews(): Promise<GoogleReviewsResult> {
       result?: {
         rating?: number;
         user_ratings_total?: number;
-        reviews?: { author_name?: string; text?: string; rating?: number }[];
+        reviews?: { author_name?: string; text?: string; rating?: number; time?: number }[];
       };
     };
 
@@ -143,7 +147,9 @@ async function fetchGoogleReviews(): Promise<GoogleReviewsResult> {
 
     const result = json.result ?? {};
     const reviews: GoogleReview[] = Array.isArray(result.reviews)
-      ? result.reviews
+      ? sortNewestFirst(result.reviews, (review) =>
+          typeof review.time === "number" && Number.isFinite(review.time) ? review.time : null,
+        )
           .slice(0, 6)
           .map((review) => ({
             author: String(review.author_name ?? "Tamu"),
