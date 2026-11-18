@@ -99,6 +99,8 @@ import {
 } from "@/services/wa-outbound-attachment";
 import { ReplyComposer } from "@/admin/modules/whatsapp/wa-reply-composer";
 import { canSendBrochure } from "@/admin/modules/whatsapp/wa-brochure-send";
+import { canSendThreadInvoice } from "@/admin/modules/whatsapp/wa-invoice-message";
+import { SendInvoiceDialog } from "@/admin/modules/whatsapp/wa-send-invoice-dialog";
 import {
   isWaChatFixtureRequest,
   waChatFixtureThread,
@@ -389,6 +391,7 @@ export function WhatsAppPage({
   const sendBrochureFn = useServerFn(sendBrochure);
   const [brochureSending, setBrochureSending] = useState(false);
   const brochureInflight = useRef(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
   const markReadFn = useServerFn(markRead);
   const pinFn = useServerFn(togglePinned);
 
@@ -578,6 +581,10 @@ export function WhatsAppPage({
   // benar-benar dibuka; dulu thread pertama ikut diunduh & ditandai terbaca walau
   // yang tampil daftar.
   const current = activeId ?? (isDesktop ? (filteredThreads[0]?.id ?? null) : null);
+
+  useEffect(() => {
+    setInvoiceOpen(false);
+  }, [current]);
 
   const threadOptions = threadQueryOptions(current ?? "", isDesktop);
   const { data: thread, isPending: threadPending, dataUpdatedAt: threadUpdatedAt } = useQuery({
@@ -1365,7 +1372,20 @@ export function WhatsAppPage({
               fileAccept={WA_FILE_INPUT_ACCEPT}
               onSendBrochure={onSendBrochure}
               brochureSending={brochureSending}
+              onSendInvoice={() => setInvoiceOpen(true)}
+              invoiceDisabled={!canSendThreadInvoice({ hasThread: !!current, metaWindowClosed, sending: false })}
             />
+            {current && (
+              <SendInvoiceDialog
+                threadId={current}
+                open={invoiceOpen}
+                onOpenChange={setInvoiceOpen}
+                onSent={() => {
+                  void qc.invalidateQueries({ queryKey: ["wa-thread", current] });
+                  void qc.invalidateQueries({ queryKey: ["wa-threads"] });
+                }}
+              />
+            )}
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">
