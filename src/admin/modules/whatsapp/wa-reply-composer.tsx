@@ -1,6 +1,6 @@
 import { memo, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { WA_KEYBOARD_TEXT_PROPS } from "./wa-keyboard";
-import { BookOpen, FileText, Loader2, Paperclip, Send, X } from "lucide-react";
+import { BookOpen, FileText, Loader2, Paperclip, Receipt, Send, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { formatFileSize } from "@/services/wa-outbound-attachment";
@@ -31,6 +31,8 @@ type ReplyComposerProps = {
   fileAccept: string;
   onSendBrochure?: () => void;
   brochureSending?: boolean;
+  onSendInvoice?: () => void;
+  invoiceDisabled?: boolean;
 };
 
 /**
@@ -50,6 +52,8 @@ export const ReplyComposer = memo(function ReplyComposer({
   fileAccept,
   onSendBrochure,
   brochureSending = false,
+  onSendInvoice,
+  invoiceDisabled = false,
 }: ReplyComposerProps) {
     const [draft, setDraft] = useState("");
     const draftRef = useRef("");
@@ -227,6 +231,13 @@ export const ReplyComposer = memo(function ReplyComposer({
                 onSend={onSendBrochure}
               />
             )}
+            {onSendInvoice && (
+              <InvoiceButton
+                disabled={metaWindowClosed || invoiceDisabled}
+                title={metaWindowClosed ? metaWindowMessage : "Kirim Invoice"}
+                onSend={onSendInvoice}
+              />
+            )}
             <Textarea
               ref={textareaRef}
               placeholder="Ketik balasan…"
@@ -285,6 +296,13 @@ export const ReplyComposer = memo(function ReplyComposer({
                   sending={brochureSending}
                   title={metaWindowClosed ? metaWindowMessage : "Kirim Brosur"}
                   onSend={onSendBrochure}
+                />
+              )}
+              {onSendInvoice && (
+                <InvoiceButton
+                  disabled={metaWindowClosed || invoiceDisabled}
+                  title={metaWindowClosed ? metaWindowMessage : "Kirim Invoice"}
+                  onSend={onSendInvoice}
                 />
               )}
               <p className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted-foreground">
@@ -351,6 +369,31 @@ function BrochureButton({
       onClick={onSend}
     >
       {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <BookOpen className="h-5 w-5" />}
+    </button>
+  );
+}
+
+function InvoiceButton({
+  disabled,
+  title,
+  onSend,
+}: {
+  disabled: boolean;
+  title: string;
+  onSend: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="inline-flex h-11 w-11 min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-full text-[#0e7490] hover:bg-accent disabled:opacity-40 dark:text-cyan-400"
+      style={{ touchAction: "manipulation" }}
+      aria-label="Kirim Invoice"
+      title={title}
+      disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onSend}
+    >
+      <Receipt className="h-5 w-5" />
     </button>
   );
 }
