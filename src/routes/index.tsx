@@ -79,7 +79,7 @@ import { BrandLogo, PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/c
 import { GuideTextLinks, exploreHrefForName } from "@/public/components/guide-links";
 import { AreaNeedsSection } from "@/public/components/area-needs";
 import type { IndexableLandingLink } from "@/public/lib/lp-dynamic";
-import { cardIntroForName, omitPublicHotWaterAmenities, publicRoomBlurb } from "@/public/content/approved-seo";
+import { APPROVED_HOME, cardIntroForName, omitPublicHotWaterAmenities, publicRoomBlurb } from "@/public/content/approved-seo";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 import { DateRangePickerID } from "@/public/components/lazy-public-widgets";
 
@@ -700,6 +700,10 @@ export function PomahHomeView({
           </div>
         </PbZone>
       )}
+
+      <section className="mx-auto max-w-3xl px-6 pb-4 pt-10 md:pt-14" aria-label="Tentang Pomah Guesthouse">
+        <p className="text-base leading-relaxed text-stone-700 md:text-lg">{APPROVED_HOME.intro}</p>
+      </section>
 
       {cfg.sectionOrder.map((key) => (
         <Fragment key={key}>{renderHomeSection(key)}</Fragment>

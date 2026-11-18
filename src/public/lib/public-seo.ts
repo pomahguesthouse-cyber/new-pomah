@@ -33,13 +33,15 @@ export function resolveHomepageTitle(stored?: string | null): string {
 }
 
 /**
- * Stored homepage meta, with any "mulai RpX" re-synced to the cheapest live
- * room rate (`room_types.base_rate`), so saved copy cannot drift from prices.
+ * Stored homepage meta. The homepage meta carries no static price any more
+ * (prices come from the PMS on room cards / booking), so stored copy that
+ * still says "mulai RpX" is treated as legacy and replaced in full by the
+ * approved meta. `minBaseRate` is kept for call-site compatibility.
  */
-export function resolveHomepageMeta(stored?: string | null, minBaseRate?: number | null): string {
+export function resolveHomepageMeta(stored?: string | null, _minBaseRate?: number | null): string {
   const value = stored?.trim() ?? "";
-  if (!value || isLegacyHomepageMeta(value)) return syncFromPrice(HOME_SEO.description, minBaseRate);
-  return syncFromPrice(value, minBaseRate);
+  if (!value || isLegacyHomepageMeta(value)) return HOME_SEO.description;
+  return value;
 }
 
 /** Cheapest positive base_rate among listed rooms, or null. */

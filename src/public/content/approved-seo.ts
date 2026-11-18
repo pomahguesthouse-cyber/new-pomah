@@ -91,8 +91,6 @@ function rp(slug: keyof typeof ROOM_FROM_RATES): string {
   return formatRupiah(ROOM_FROM_RATES[slug]);
 }
 
-const RP_FROM_MIN = formatRupiah(Math.min(...Object.values(ROOM_FROM_RATES)));
-
 /**
  * Hand-trimmed meta descriptions (150–160 chars) for explore places whose
  * stored description is too long for a SERP snippet. Slug = /explore/<slug>.
@@ -117,10 +115,24 @@ export const CITY_GUIDE_META_OVERRIDES: Record<string, string> = {
 export type ApprovedRoomSeo = { title: string; meta: string; h1: string };
 
 export const APPROVED_HOME = {
-  title: "Pomah Guesthouse – Guesthouse Keluarga & Penginapan Semarang",
-  meta: `Guesthouse keluarga di Sampangan, Semarang. Kamar bersih mulai ${RP_FROM_MIN}, family room 2 kamar tidur, WiFi & parkir gratis. Dekat kampus UNNES.`,
-  h1: "Guesthouse Keluarga di Semarang yang Terasa Seperti Rumah",
+  title: "Guest House Semarang | Pomah Guesthouse",
+  meta: "Guest house keluarga di Sampangan, Semarang. WiFi & parkir gratis, family room 2 kamar tidur. Cocok untuk wisata dan wisuda. Pesan via WhatsApp.",
+  h1: "Guest House Keluarga di Semarang yang Terasa Seperti Rumah",
+  intro:
+    "Pomah adalah guest house keluarga di Semarang, tepatnya di Jl. Dewi Sartika IV No. 71, Sampangan. Lokasinya sekitar 4,5 km dari UNNES Sekaran (kurang lebih 10–15 menit) dan sekitar 1,2 km dari Akpelni (kurang lebih 5 menit). Tersedia WiFi dan parkir gratis, serta Family Room dan Family Suite dengan dua kamar tidur untuk maksimal empat tamu.",
+  heroSubheading: "Guest house keluarga di Sampangan",
 } as const;
+
+/** Homepage copy that was live before the "guest house semarang" revision (18 Nov 2026). */
+const LIVE_2026_11_HOME_TITLE = "Pomah Guesthouse – Guesthouse Keluarga & Penginapan Semarang";
+const LIVE_2026_11_HOME_H1 = "Guesthouse Keluarga di Semarang yang Terasa Seperti Rumah";
+/** Old meta with any "mulai RpX" price (syncFromPrice rewrote the number). */
+const LIVE_2026_11_HOME_META_RE =
+  /^Guesthouse keluarga di Sampangan, Semarang\. Kamar bersih mulai Rp\s?\d{1,3}(?:[.,]\d{3})+, family room 2 kamar tidur, WiFi & parkir gratis\. Dekat kampus UNNES\.$/;
+/** Homepage meta must not carry a static price any more; stored copy with "mulai Rp…" is replaced. */
+const HOME_META_STATIC_PRICE_RE = /\bmulai\s+Rp\s?\d/i;
+/** Older CMS default hero subheading (claims a price level). */
+const LEGACY_HOME_HERO_SUBHEADINGS = new Set(["Penginapan Murah di Kota Semarang"]);
 
 const PREVIOUS_HOME_H1 = "Guesthouse Keluarga di Semarang, Dekat UNNES";
 const PREVIOUS_HOME_TITLE = "Pomah Guesthouse | Penginapan Dekat UNNES Semarang";
@@ -525,7 +537,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
       {
         heading: "Menginap di Pomah setelah ke Lawang Sewu",
         paragraphs: [
-          `Setelah seharian keliling kota, kembali ke tempat yang tenang itu terasa melegakan. Pomah Guesthouse ada di Sampangan, di sisi kota yang lebih teduh, dan Lawang Sewu hanya sekitar 6 km atau 15–25 menit berkendara. Untuk rombongan keluarga, **Family Room 222** punya dua kamar tidur dan dua kamar mandi untuk hingga empat tamu, mulai ${rp("family-room-222")}/malam. Kalau datang sendiri, ada **Kamar Single** mulai ${rp("kamar-single")}/malam. Check-in mulai pukul 14.00, jadi setelah menaruh barang masih sempat ke Lawang Sewu sore harinya. Cek ketersediaan dan pesan langsung lewat halaman kamar atau WhatsApp kami.`,
+          "Setelah seharian keliling kota, istirahat di [guest house di Semarang](/) yang tenang terasa melegakan. Pomah Guesthouse ada di Sampangan; Lawang Sewu hanya sekitar 6 km atau 15–25 menit berkendara, dan check-in mulai pukul 14.00, jadi setelah menaruh barang masih sempat berkunjung sore harinya. Cek ketersediaan lalu pesan lewat situs atau WhatsApp 0851-9098-6169.",
           "Datang untuk wisuda UNNES? Lihat [penginapan dekat UNNES](/lp/penginapan-dekat-unnes).",
         ],
       },
@@ -547,6 +559,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
       },
     ],
     links: [
+      { anchor: "guest house di Semarang", href: "/" },
       { anchor: "Family Room 222 untuk keluarga", href: "/rooms/family-room-222" },
       { anchor: "Kamar Single", href: "/rooms/kamar-single" },
       { anchor: "jalan kaki keliling Kota Lama Semarang", href: "/explore/kota-lama-semarang" },
@@ -628,7 +641,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
       {
         heading: "Menginap di Pomah setelah kulineran malam",
         paragraphs: [
-          `Nasi Ayam Bu Wido baru buka sore, jadi jadwalnya pas dengan check-in di Pomah Guesthouse yang mulai pukul 14.00. Taruh barang, istirahat sebentar, lalu berangkat makan malam. Pomah ada di Sampangan, di sisi kota yang lebih tenang, sekitar 8 km atau 20–30 menit dari Jl. Melati Selatan. Untuk berdua ada **Kamar Deluxe** mulai ${rp("deluxe")}/malam. Untuk keluarga, **Family Room 222** adalah unit 50 m² di lantai 2 dengan dua kamar tidur, dua kamar mandi, dan ruang keluarga untuk hingga empat tamu, mulai ${rp("family-room-222")}/malam. Kalau datang sendiri, ada **Kamar Single** mulai ${rp("kamar-single")}/malam. Check-out sampai pukul 12.00, jadi besok paginya tidak perlu terburu-buru. Cek ketersediaan dan pesan langsung lewat halaman kamar atau WhatsApp kami.`,
+          "Nasi Ayam Bu Wido baru buka sore, jadi jadwalnya pas dengan check-in di Pomah yang mulai pukul 14.00. Taruh barang, istirahat sebentar, lalu berangkat makan malam di warung Jl. Melati Selatan; pulangnya ke [penginapan keluarga di Semarang](/) di Sampangan, sekitar 8 km atau 20–30 menit berkendara. Cek ketersediaan dan pesan lewat situs resmi atau WhatsApp 0851-9098-6169.",
           "Datang untuk wisuda UNNES? Lihat [penginapan dekat UNNES](/lp/penginapan-dekat-unnes).",
         ],
       },
@@ -651,6 +664,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
       },
     ],
     links: [
+      { anchor: "penginapan keluarga di Semarang", href: "/" },
       { anchor: "Kamar Deluxe untuk berdua", href: "/rooms/deluxe" },
       { anchor: "Family Room 222 untuk keluarga", href: "/rooms/family-room-222" },
       { anchor: "Kamar Single", href: "/rooms/kamar-single" },
@@ -972,15 +986,19 @@ export function approvedRoomSeo(slug: string | null | undefined): ApprovedRoomSe
 }
 
 export function isLegacyHomepageH1(value: string): boolean {
-  return value === "Penginapan Dekat UNNES Semarang" || value === PREVIOUS_HOME_H1;
+  return value === "Penginapan Dekat UNNES Semarang" || value === PREVIOUS_HOME_H1 || value === LIVE_2026_11_HOME_H1;
 }
 
 export function isLegacyHomepageTitle(value: string): boolean {
-  return value === PREVIOUS_HOME_TITLE;
+  return value === PREVIOUS_HOME_TITLE || value === LIVE_2026_11_HOME_TITLE;
 }
 
 export function isLegacyHomepageMeta(value: string): boolean {
-  return value === PREVIOUS_HOME_META;
+  return value === PREVIOUS_HOME_META || LIVE_2026_11_HOME_META_RE.test(value) || HOME_META_STATIC_PRICE_RE.test(value);
+}
+
+export function isLegacyHomepageHeroSubheading(value: string): boolean {
+  return LEGACY_HOME_HERO_SUBHEADINGS.has(value.trim());
 }
 
 /** Public claim that a room has hot water. Denial copy ("belum menyediakan") is not a claim. */
@@ -1176,6 +1194,19 @@ export function applyApprovedHomepageSeo<T>(config: T): T {
     seo.targetKeyword = "";
   }
   cloned.seo = seo;
+  const hero = cloned.hero && typeof cloned.hero === "object" ? (cloned.hero as Record<string, unknown>) : null;
+  if (hero && Array.isArray(hero.slides)) {
+    cloned.hero = {
+      ...hero,
+      slides: hero.slides.map((slide) => {
+        if (!slide || typeof slide !== "object") return slide;
+        const row = slide as Record<string, unknown>;
+        return typeof row.subheading === "string" && isLegacyHomepageHeroSubheading(row.subheading)
+          ? { ...row, subheading: APPROVED_HOME.heroSubheading }
+          : row;
+      }),
+    };
+  }
   return cloned as T;
 }
 

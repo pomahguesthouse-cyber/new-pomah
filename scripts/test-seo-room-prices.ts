@@ -59,8 +59,11 @@ const NAME_TO_SLUG: Array<[RegExp, string]> = [
   [/Family Room 222/, "family-room-222"],
   [/Family Suite 100/, "family-suite-100"],
 ];
-const minRp = formatRupiah(Math.min(...Object.values(DB_BASE_RATES)));
-assert.match(APPROVED_HOME.meta, new RegExp(`mulai ${minRp}`));
+// Homepage meta (18 Nov 2026, "guest house semarang"): no static price at all.
+assert.doesNotMatch(APPROVED_HOME.meta, /Rp/);
+assert.doesNotMatch(APPROVED_HOME.title, /Rp/);
+assert.doesNotMatch(APPROVED_HOME.h1, /Rp/);
+assert.doesNotMatch(APPROVED_HOME.intro, /Rp/);
 assert.doesNotMatch(APPROVED_LP.meta, /Rp\d|mulai Rp/i);
 assert.doesNotMatch(APPROVED_LP.title, /Rp\d/);
 assert.doesNotMatch(APPROVED_LP.h1, /Rp\d/);
@@ -104,11 +107,13 @@ assert.equal(syncFromPrice("Tanpa harga.", 150000), "Tanpa harga.");
 assert.equal(syncFromPrice("mulai Rp1.234.000/malam", 500000), "mulai Rp500.000/malam");
 assert.equal(syncFromPrice("mulai Rp175.000", null), "mulai Rp175.000");
 
-// Homepage stored meta (DB homepage_config) re-synced to cheapest live rate.
+// Homepage stored meta (DB homepage_config) that still carries "mulai RpX" is legacy:
+// replaced in full by the approved price-free meta, not just re-synced.
 const stored = "Guesthouse keluarga di Sampangan, Semarang. Kamar bersih mulai Rp175.000, family room 2 kamar tidur.";
 const rooms = Object.values(DB_BASE_RATES).map((base_rate) => ({ base_rate }));
 assert.equal(minRoomBaseRate(rooms), 150000);
-assert.match(resolveHomepageMeta(stored, minRoomBaseRate(rooms)), /mulai Rp150\.000,/);
+assert.equal(resolveHomepageMeta(stored, minRoomBaseRate(rooms)), APPROVED_HOME.meta);
+assert.doesNotMatch(resolveHomepageMeta(stored, minRoomBaseRate(rooms)), /Rp/);
 assert.equal(resolveHomepageMeta("Meta kustom Dewi", 150000), "Meta kustom Dewi");
 
 // 5) /rooms index: indexable, in sitemap, breadcrumb "Kamar" points to it.
