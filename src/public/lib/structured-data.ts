@@ -38,24 +38,34 @@ export type FaqItem = { question: string; answer: string };
 
 export const HOMEPAGE_FAQS: FaqItem[] = [
   {
-    question: "Di mana lokasi Pomah Guesthouse?",
-    answer: "Pomah Guesthouse berlokasi di Jl. Dewi Sartika IV No. 71, Sampangan, Semarang, Jawa Tengah.",
+    question: "Di mana lokasi guest house ini di Semarang?",
+    answer:
+      "Pomah Guesthouse berada di Jl. Dewi Sartika IV No. 71, Sampangan, Semarang 50221.",
+  },
+  {
+    question: "Apakah Pomah cocok untuk keluarga?",
+    answer:
+      "Ya. Pomah adalah guest house keluarga di Sampangan, Semarang. Family Room 222 dan Family Suite 100 masing-masing punya dua kamar tidur dan menampung maksimal empat tamu.",
   },
   {
     question: "Jam berapa check-in dan check-out?",
-    answer: "Check-in mulai pukul 14.00 WIB dan check-out maksimal pukul 12.00 WIB.",
+    answer:
+      "Check-in mulai pukul 14.00 dan check-out pukul 12.00.",
   },
   {
-    question: "Apakah tersedia WiFi gratis?",
-    answer: "Ya, Pomah Guesthouse menyediakan WiFi gratis untuk tamu.",
+    question: "Apakah tersedia WiFi dan parkir gratis?",
+    answer:
+      "Ya, Pomah Guesthouse menyediakan WiFi gratis dan parkir gratis untuk tamu.",
   },
   {
-    question: "Apakah tersedia parkir?",
-    answer: "Ya, tersedia area parkir untuk tamu Pomah Guesthouse.",
+    question: "Seberapa dekat Pomah dengan UNNES dan Akpelni?",
+    answer:
+      "Dari UNNES Sekaran sekitar 4,5 km, kurang lebih 10–15 menit. Dari Akpelni sekitar 1,2 km, kurang lebih 5 menit.",
   },
   {
-    question: "Bagaimana cara booking kamar?",
-    answer: "Tamu dapat memesan lewat situs resmi Pomah Guesthouse atau WhatsApp yang tertera di halaman.",
+    question: "Bagaimana cara pesan kamar di Pomah Guesthouse?",
+    answer:
+      "Tamu bisa memesan lewat situs resmi pomahguesthouse.com atau WhatsApp 0851-9098-6169.",
   },
 ];
 
@@ -196,7 +206,7 @@ export function homepageLodgingGraph(input: {
   ];
   const faqs = input.faqs ?? [];
   if (faqs.length > 0) {
-    graph.push(faqPageNode(`${CANONICAL_ORIGIN}/#faq`, faqs));
+    graph.push(faqPageNode(`${CANONICAL_ORIGIN}/`, faqs));
   }
   return { "@context": "https://schema.org", "@graph": graph };
 }

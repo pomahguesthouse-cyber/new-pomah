@@ -13,7 +13,7 @@ import { DEFAULT_EXPLORE_CONFIG, mergeExploreConfig } from "../src/admin/modules
 import { buildStorageImageUrl, heroImageSrcSet, heroImageUrlForViewport, heroImageVariants, heroPreloadLinks } from "../src/lib/storage-image";
 import { isAnalyticsSnippet } from "../src/public/lib/defer-analytics";
 import { approvedCityGuidePlace } from "../src/public/lib/city-guide";
-import { cityGuideGraph, cityGuidePageGraph, faqPageGraph, homepageLodgingGraph, postalAddress, roomPageGraph, unnesLandingGraph } from "../src/public/lib/structured-data";
+import { cityGuideGraph, cityGuidePageGraph, faqPageGraph, HOMEPAGE_FAQS, homepageLodgingGraph, postalAddress, roomPageGraph, unnesLandingGraph } from "../src/public/lib/structured-data";
 import { CityGuideArticleBody } from "../src/public/components/city-guide-article";
 import { POMAH_NAP_ADDRESS, POMAH_NAP_LINE, POMAH_POSTAL_CODE } from "../src/public/lib/site-identity";
 import { PUBLIC_HTML_CACHE_CONTROL, publicHtmlCacheControl } from "../src/public/lib/public-cache";
@@ -47,6 +47,7 @@ import {
   CITY_GUIDE_ARTICLES,
   FAMILY_SUITE_DESCRIPTION_NEW,
   FAMILY_SUITE_DESCRIPTION_OLD,
+  applyApprovedHomepageSeo,
   applyGuideCardIntros,
   cardIntroForName,
   cityGuideArticleForSlug,
@@ -85,6 +86,98 @@ assert.equal(
   HOME_SEO.description,
 );
 assert.equal(resolveHomepageMeta("Meta kustom Dewi"), "Meta kustom Dewi");
+
+// 18 Nov 2026 — "guest house semarang": approved homepage copy + previously-live copy is legacy.
+assert.equal(APPROVED_HOME.title, "Guest House Semarang | Pomah Guesthouse");
+assert.equal(
+  APPROVED_HOME.meta,
+  "Guest house keluarga di Sampangan, Semarang. WiFi & parkir gratis, family room 2 kamar tidur. Cocok untuk wisata dan wisuda. Pesan via WhatsApp.",
+);
+assert.equal(APPROVED_HOME.h1, "Guest House Keluarga di Semarang yang Terasa Seperti Rumah");
+assert.ok(APPROVED_HOME.title.length <= 60);
+assert.ok(APPROVED_HOME.meta.length <= 155);
+assert.doesNotMatch(APPROVED_HOME.meta, /Rp/);
+assert.match(APPROVED_HOME.intro, /^Pomah adalah guest house keluarga di Semarang/);
+assert.equal(
+  resolveHomepageTitle("Pomah Guesthouse – Guesthouse Keluarga & Penginapan Semarang"),
+  HOME_SEO.title,
+);
+assert.equal(resolveHomepageH1("Guesthouse Keluarga di Semarang yang Terasa Seperti Rumah"), HOME_SEO.h1);
+for (const oldMeta of [
+  "Guesthouse keluarga di Sampangan, Semarang. Kamar bersih mulai Rp150.000, family room 2 kamar tidur, WiFi & parkir gratis. Dekat kampus UNNES.",
+  "Guesthouse keluarga di Sampangan, Semarang. Kamar bersih mulai Rp175.000, family room 2 kamar tidur, WiFi & parkir gratis. Dekat kampus UNNES.",
+]) {
+  assert.equal(resolveHomepageMeta(oldMeta, 150000), HOME_SEO.description);
+  assert.equal(resolveHomepageMeta(oldMeta), HOME_SEO.description);
+}
+const patchedHome = applyApprovedHomepageSeo({
+  seo: {
+    h1: "Guesthouse Keluarga di Semarang yang Terasa Seperti Rumah",
+    metaTitle: "Pomah Guesthouse – Guesthouse Keluarga & Penginapan Semarang",
+    metaDescription:
+      "Guesthouse keluarga di Sampangan, Semarang. Kamar bersih mulai Rp150.000, family room 2 kamar tidur, WiFi & parkir gratis. Dekat kampus UNNES.",
+    twitterTitle: "Pomah Guesthouse – Guesthouse Keluarga & Penginapan Semarang",
+    twitterDescription:
+      "Guesthouse keluarga di Sampangan, Semarang. Kamar bersih mulai Rp150.000, family room 2 kamar tidur, WiFi & parkir gratis. Dekat kampus UNNES.",
+  },
+  hero: {
+    slides: [
+      { heading: "Selamat Datang Di Pomah Guesthouse", subheading: "Penginapan Murah di Kota Semarang" },
+      { heading: "Slide kustom", subheading: "Subheading kustom Dewi" },
+    ],
+  },
+});
+assert.deepEqual(patchedHome.seo, {
+  h1: APPROVED_HOME.h1,
+  metaTitle: APPROVED_HOME.title,
+  metaDescription: APPROVED_HOME.meta,
+  twitterTitle: APPROVED_HOME.title,
+  twitterDescription: APPROVED_HOME.meta,
+});
+assert.equal(patchedHome.hero.slides[0].subheading, "Guest house keluarga di Sampangan");
+assert.equal(patchedHome.hero.slides[0].heading, "Selamat Datang Di Pomah Guesthouse");
+assert.equal(patchedHome.hero.slides[1].subheading, "Subheading kustom Dewi");
+assert.equal(DEFAULT_HOMEPAGE_CONFIG.hero.slides[0].subheading, "Guest house keluarga di Sampangan");
+// Custom admin copy still wins.
+const customHome = applyApprovedHomepageSeo({ seo: { metaTitle: "Judul kustom Dewi", metaDescription: "Meta kustom Dewi" } });
+assert.equal(customHome.seo.metaTitle, "Judul kustom Dewi");
+assert.equal(customHome.seo.metaDescription, "Meta kustom Dewi");
+
+// Homepage FAQ: 6 Q&A, same list for page + JSON-LD, @id ".../#faq" (not "#faq#faq").
+assert.equal(HOMEPAGE_FAQS.length, 6);
+assert.deepEqual(
+  HOMEPAGE_FAQS.map((f) => f.question),
+  [
+    "Di mana lokasi guest house ini di Semarang?",
+    "Apakah Pomah cocok untuk keluarga?",
+    "Jam berapa check-in dan check-out?",
+    "Apakah tersedia WiFi dan parkir gratis?",
+    "Seberapa dekat Pomah dengan UNNES dan Akpelni?",
+    "Bagaimana cara pesan kamar di Pomah Guesthouse?",
+  ],
+);
+for (const f of HOMEPAGE_FAQS) assert.doesNotMatch(`${f.question} ${f.answer}`, /Rp/);
+const homeGraph = JSON.stringify(homepageLodgingGraph({ rooms: [], reviews: null, property: null, faqs: HOMEPAGE_FAQS }));
+assert.match(homeGraph, /"@id":"https:\/\/pomahguesthouse\.com\/#faq"/);
+assert.doesNotMatch(homeGraph, /#faq#faq/);
+assert.match(homeGraph, /WhatsApp 0851-9098-6169/);
+const indexSrc = readFileSync("src/routes/index.tsx", "utf8");
+assert.match(indexSrc, /\{APPROVED_HOME\.intro\}/);
+
+// City guide CTA: Lawang Sewu + Nasi Ayam Bu Wido link to "/" and carry no price.
+for (const [slug, anchor, heading] of [
+  ["lawang-sewu-semarang", "guest house di Semarang", "Menginap di Pomah setelah ke Lawang Sewu"],
+  ["nasi-ayam-bu-wido", "penginapan keluarga di Semarang", "Menginap di Pomah setelah kulineran malam"],
+] as const) {
+  const article = CITY_GUIDE_ARTICLES.find((a) => a.canonicalSlug === slug);
+  assert.ok(article, slug);
+  assert.deepEqual(article!.links[0], { anchor, href: "/" });
+  const section = article!.sections.find((s) => s.heading === heading);
+  assert.ok(section, heading);
+  assert.ok(section!.paragraphs[0].includes(`[${anchor}](/)`));
+  assert.doesNotMatch(section!.paragraphs[0], /Rp/);
+  assert.equal(section!.paragraphs[1], "Datang untuk wisuda UNNES? Lihat [penginapan dekat UNNES](/lp/penginapan-dekat-unnes).");
+}
 
 assert.equal(DEFAULT_HOMEPAGE_CONFIG.seo.h1, HOME_SEO.h1);
 assert.equal(DEFAULT_HOMEPAGE_CONFIG.seo.metaTitle, HOME_SEO.title);
@@ -860,6 +953,7 @@ assert.deepEqual(
   ],
 );
 assert.deepEqual(widoArticle.links, [
+  { anchor: "penginapan keluarga di Semarang", href: "/" },
   { anchor: "Kamar Deluxe untuk berdua", href: "/rooms/deluxe" },
   { anchor: "Family Room 222 untuk keluarga", href: "/rooms/family-room-222" },
   { anchor: "Kamar Single", href: "/rooms/kamar-single" },
@@ -884,9 +978,7 @@ const widoOrder = [
   "kuliner malam di Pasar Semawis",
   "lunpia untuk oleh-oleh",
   "Menginap di Pomah setelah kulineran malam",
-  "Kamar Deluxe",
-  "Family Room 222",
-  "Kamar Single",
+  "penginapan keluarga di Semarang",
   widoArticle.faq[0]!.question,
   widoArticle.faq[2]!.answer,
 ];

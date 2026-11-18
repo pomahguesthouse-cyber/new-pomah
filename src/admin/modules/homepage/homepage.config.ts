@@ -7,7 +7,7 @@
  * must stay free of server-only imports.
  */
 
-import { normalizeNearbyList } from "@/public/content/approved-seo";
+import { APPROVED_HOME, normalizeNearbyList } from "@/public/content/approved-seo";
 import { HOME_SEO } from "@/public/lib/public-seo";
 
 export interface NavLink {
@@ -305,7 +305,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
         imageUrl: "",
         videoUrl: "",
         heading: "Selamat Datang Di Pomah Guesthouse",
-        subheading: "Penginapan Murah di Kota Semarang",
+        subheading: APPROVED_HOME.heroSubheading,
       },
     ],
     autoplayMs: 5000,
