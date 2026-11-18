@@ -1874,7 +1874,7 @@ export async function executeAutoreplyForPhone(
     (storedAvailabilitySlots.checkIn ?? chatSummaryJson?.check_in) &&
     (storedAvailabilitySlots.checkOut ?? chatSummaryJson?.check_out)
   );
-  if (!reply && !isManager && !availabilityBlocked && !multiPendingInbound && !wantsMedia && lastMessage && !hasStoredAvailabilityDates) {
+  if (!reply && !isManager && !availabilityBlocked && !multiPendingInbound && !wantsMedia && lastMessage && !hasStoredAvailabilityDates && !isExplicitBookingOrder(lastMessage, rooms ?? [])) {
     const needDatesReply = buildRecentAvailabilityNeedDatesReply(rollingMessages);
     if (needDatesReply) {
       adoptReply(needDatesReply.reply);
@@ -1911,6 +1911,24 @@ export async function executeAutoreplyForPhone(
           fastPath: true,
         };
         console.info(`[Autoreply] Deterministic tonight price reply for ${phone.slice(-6)}`);
+
+        // Jalur ini melewati orchestrator. Tanpa persist, turn berikutnya
+        // ("Saya pesan kamar deluxe") tidak melihat tanggal malam ini dan
+        // fast-path need-dates menanyakan tanggal lagi (Agus Santoso, 18 Nov 2026).
+        // Await supaya "pesan Deluxe" segera setelah daftar tarif tetap membaca slot baru.
+        const tonightSlots = availabilitySlotPatch(tonightReply);
+        if (tonightSlots) {
+          const { error } = await (supabaseAdmin as any).rpc("update_conversation_topic", {
+            p_phone: phone,
+            p_last_topic: "availability",
+            p_last_entity: null,
+            p_slots: tonightSlots,
+          });
+          if (error) console.warn("[Autoreply] persist tonight dates failed:", error.message);
+          else if (bookingState) {
+            (bookingState as any).slots = { ...(((bookingState as any).slots ?? {}) as Record<string, unknown>), ...tonightSlots };
+          }
+        }
       }
     } catch (e) {
       console.warn("[Autoreply] deterministic tonight price failed (falling back to AI):", e);

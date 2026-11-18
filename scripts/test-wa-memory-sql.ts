@@ -81,7 +81,7 @@ assert.deepEqual(mergeSlots(null, { checkIn: "2026-10-03" }), { checkIn: "2026-1
 
 // ── kode pemanggil ──────────────────────────────────────────────────────────
 const wa = readFileSync(new URL("../src/services/wa-autoreply.service.ts", import.meta.url), "utf8");
-assert.equal((wa.match(/const \w+ = availabilitySlotPatch\(/g) ?? []).length, 2, "dua fast-path availability");
+assert.equal((wa.match(/const \w+ = availabilitySlotPatch\(/g) ?? []).length, 3, "tiga fast-path availability (termasuk malam ini)");
 assert.match(wa, /partialAdults = result\.guests\.adults/, "jumlah tamu ikut disimpan bila sudah diketahui");
 assert.equal((wa.match(/MENGGABUNG slots/g) ?? []).length, 2);
 const sim = readFileSync(new URL("../src/admin/modules/ai-lab/simulator.functions.ts", import.meta.url), "utf8");
