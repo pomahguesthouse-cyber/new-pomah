@@ -22,6 +22,13 @@ const today = "2026-07-11";
 assert.equal(isExplicitBookingOrder("Saya booking Deluxe tanggal 12 Juli", rooms), true);
 assert.equal(isExplicitBookingOrder("Mau pesan kamar dong", rooms), false);
 assert.equal(isExplicitBookingOrder("Tolong booking dengan extra bed", rooms), true);
+assert.equal(isExplicitBookingOrder("Saya pesan kamar deluxe", rooms), true);
+
+// Insiden 18 Nov 2026 (Agus Santoso): perintah pesan tipe kamar bukan
+// pertanyaan "butuh tanggal", meski mengandung frasa "pesan kamar".
+assert.equal(isAvailabilityNeedDatesQuestion("Saya pesan kamar deluxe", today), false);
+assert.equal(isAvailabilityNeedDatesQuestion("Mau pesan kamar dong", today), false);
+assert.equal(isAvailabilityNeedDatesQuestion("Bisa pesan kamar?", today), true);
 
 assert.equal(looksLikeBookingInquiry("Masih ada kamar?"), true);
 assert.equal(looksLikeBookingInquiry("Single ukuran kasurnya berapa?"), false);

@@ -99,9 +99,23 @@ export function shouldUseDeterministicAvailability(message: string): boolean {
   return asksAvailability && hasDateSignal;
 }
 
+const ORDER_VERB_RE =
+  /\b(pesan|pesankan|booking|bookingkan|book|ambil|fix(?:kan)?|deal|jadi\s+(?:pesan|booking|ambil))\b/i;
+
 export function looksLikeAvailabilityQuestion(message: string): boolean {
   const text = message.toLowerCase().replace(/\s+/g, " ").trim();
   if (!text) return false;
+  // Insiden 18 Nov 2026 (Agus Santoso 6281181114035): "Saya pesan kamar deluxe"
+  // lolos karena mengandung "pesan kamar", lalu fast-path need-dates menanyakan
+  // tanggal lagi padahal tamu sedang memesan tipe yang sudah ditawarkan.
+  // Perintah pemesanan (bukan pertanyaan cek ketersediaan) tidak boleh masuk sini.
+  if (
+    ORDER_VERB_RE.test(text) &&
+    !/\?/.test(text) &&
+    !/\b(ada|kosong|tersedia|available|avail|ready|cek)\b/i.test(text)
+  ) {
+    return false;
+  }
   if (
     /\b(ready|tersedia|available|availability|avail|kosong|ada kamar|ada room|cek kamar|booking|pesan kamar|menginap)\b/i.test(
       text,
@@ -247,8 +261,6 @@ export function messageOpensWithGreeting(message: string): boolean {
   );
 }
 
-const ORDER_VERB_RE =
-  /\b(pesan|pesankan|booking|bookingkan|book|ambil|fix(?:kan)?|deal|jadi\s+(?:pesan|booking|ambil))\b/i;
 export function isExplicitBookingOrder(message: string, rooms: Array<{ name?: unknown }>): boolean {
   const text = message.toLowerCase();
   if (!ORDER_VERB_RE.test(text)) return false;

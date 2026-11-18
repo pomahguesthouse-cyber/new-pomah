@@ -9,7 +9,7 @@ import { buildAvailabilityNeedDatesReply } from "@/services/wa-autoreply/availab
 type FastFaqResult = {
   reply: string;
   intent: string;
-  dates?: { checkIn: string; checkOut: string };
+  dates?: { checkIn: string; checkOut: string; checkoutAssumed?: boolean };
 };
 
 export function buildRecentAvailabilityNeedDatesReply(
@@ -69,6 +69,7 @@ export function formatTonightAvailabilityReply(
   }
 
   const rooms = data.kamar ?? [];
+  const dates = { checkIn, checkOut, checkoutAssumed: false as const };
   const available = rooms
     .filter((room) => !room.tidak_tersedia && (room.kamar_tersedia ?? 0) > 0)
     .sort(
@@ -95,6 +96,7 @@ export function formatTonightAvailabilityReply(
     if (availabilityUnknown) {
       return {
         intent: "deterministic_tonight_availability_unknown",
+        dates,
         reply:
           "Mohon maaf, sistem cek kamar kami sedang lambat 🙏 " +
           "Kami cek terlebih dahulu ya, Kak, lalu segera kami kabari.",
@@ -103,6 +105,7 @@ export function formatTonightAvailabilityReply(
 
     return {
       intent: "deterministic_tonight_availability_full",
+      dates,
       reply:
         `Mohon maaf Kak, untuk malam ini (${formatStayEcho(checkIn, checkOut)}) ` +
         "seluruh kamar kami sudah penuh.\n\n" +
@@ -118,6 +121,7 @@ export function formatTonightAvailabilityReply(
 
   return {
     intent: "deterministic_tonight_price",
+    dates,
     reply:
       `Untuk malam ini (${formatStayEcho(checkIn, checkOut)}), pilihan yang tersedia:\n` +
       `${lines.join("\n")}\n\n` +

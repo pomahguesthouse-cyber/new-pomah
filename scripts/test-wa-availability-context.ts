@@ -47,6 +47,11 @@ const tonightAvailable = formatTonightAvailabilityReply(
 );
 assert.ok(tonightAvailable);
 assert.equal(tonightAvailable.intent, "deterministic_tonight_price");
+assert.deepEqual(tonightAvailable.dates, {
+  checkIn: "2026-07-11",
+  checkOut: "2026-07-12",
+  checkoutAssumed: false,
+});
 assert.match(tonightAvailable.reply, /Single: Rp150\.000\/malam/);
 assert.ok(
   tonightAvailable.reply.indexOf("Single") < tonightAvailable.reply.indexOf("Family"),
@@ -105,5 +110,21 @@ assert.equal(tonightRpcError!.intent, "deterministic_tonight_availability_unknow
 assert.doesNotMatch(tonightRpcError!.reply, /penuh/i);
 
 assert.equal(formatTonightAvailabilityReply("invalid json", "2026-07-11", "2026-07-12"), null);
+
+// Insiden 18 Nov 2026 (Agus Santoso 6281181114035): setelah bot menampilkan
+// tarif malam ini, "Saya pesan kamar deluxe" tidak boleh memicu template
+// "supaya kami bisa cek kamar... tanggal berapa?".
+const agusOrderAfterTonight = buildRecentAvailabilityNeedDatesReply([
+  { direction: "in", body: "Mau reservasi bisa?" },
+  { direction: "out", body: "Boleh tahu untuk tanggal berapa Kakak rencana menginap?" },
+  { direction: "in", body: "Hari ini satu malam" },
+  { direction: "out", body: "Untuk malam ini (Rabu–Kamis, 18–19 November 2026), pilihan yang tersedia:\n- Deluxe: Rp207.000/malam (4 kamar tersedia)" },
+  { direction: "in", body: "Untuk deluxe apakah satu kamar 2 tempat tidur?" },
+  { direction: "out", body: "Kamar Deluxe memiliki 1 tempat tidur tipe Queen." },
+  { direction: "in", body: "Yang satu kamar 2 tempat tidur type apa?" },
+  { direction: "out", body: "Saat ini belum ada tipe kamar dengan twin bed." },
+  { direction: "in", body: "Saya pesan kamar deluxe" },
+]);
+assert.equal(agusOrderAfterTonight, null);
 
 console.log("✓ WhatsApp availability context regressions passed");
