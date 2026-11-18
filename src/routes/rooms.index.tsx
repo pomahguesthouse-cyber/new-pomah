@@ -13,6 +13,7 @@ type ListedRoom = {
   name: string | null;
   slug: string | null;
   base_rate: number | string | null;
+  today_rate?: number | null;
   capacity: number | null;
   size_sqm: number | null;
   bedrooms?: number | null;
@@ -77,7 +78,7 @@ function RoomsIndexPage() {
         <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {rooms.map((room) => {
             const href = `/rooms/${room.slug}`;
-            const price = roomsIndexPriceLabel(room.base_rate);
+            const price = roomsIndexPriceLabel(room.today_rate ?? room.base_rate);
             return (
               <article key={room.id} className="flex h-full flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-amber-50">

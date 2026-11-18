@@ -21,6 +21,8 @@ import {
 } from "@/public/content/approved-seo";
 import { PUBLIC_PROPERTY_FIELDS, toPublicSettings } from "@/public/lib/public-settings";
 import { loadPublicPropertyRow } from "@/public/lib/public-property.server";
+import { attachTodayRates } from "@/public/lib/today-rate.server";
+import { todayWIB } from "@/lib/date";
 import { PUBLIC_LISTED_ROOM_TYPE_COLUMNS, queryWithOptionalRoomLayout, selectColumns } from "@/lib/room-layout";
 
 /**
@@ -211,12 +213,16 @@ export type PublicProperty = {
 type PublicSiteData = { property: PublicProperty | null; roomTypes: any[] };
 
 const SITE_DATA_TTL_MS = 60_000;
-let siteDataCache: { at: number; value: PublicSiteData } | null = null;
+let siteDataCache: { at: number; rateDate: string; value: PublicSiteData } | null = null;
 let siteDataPending: Promise<PublicSiteData> | null = null;
 
 async function loadPublicSiteData(): Promise<PublicSiteData> {
   const now = Date.now();
-  if (siteDataCache && now - siteDataCache.at < SITE_DATA_TTL_MS) return siteDataCache.value;
+  // Kunci cache ikut tanggal WIB agar harga "hari ini" berganti tepat saat ganti hari.
+  const rateDate = todayWIB();
+  if (siteDataCache && siteDataCache.rateDate === rateDate && now - siteDataCache.at < SITE_DATA_TTL_MS) {
+    return siteDataCache.value;
+  }
   if (siteDataPending) return siteDataPending;
   siteDataPending = (async () => {
     const [propertyData, roomTypesResult] = await Promise.all([
@@ -228,9 +234,13 @@ async function loadPublicSiteData(): Promise<PublicSiteData> {
           .order("base_rate"),
       ),
     ]);
-    const value = shapePublicSiteData(propertyData, roomTypesResult.data);
+    const shaped = shapePublicSiteData(propertyData, roomTypesResult.data);
+    const value: PublicSiteData = {
+      ...shaped,
+      roomTypes: await attachTodayRates(db(supabasePublic), shaped.roomTypes, rateDate),
+    };
     if (value.property || value.roomTypes.length > 0) {
-      siteDataCache = { at: Date.now(), value };
+      siteDataCache = { at: Date.now(), rateDate, value };
     }
     return value;
   })().finally(() => {
@@ -1001,6 +1011,20 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
           }
         : null;
     const property = toPublicSettings(propertyRow) as PublicProperty | null;
+    // Satu query tarif harian hari ini untuk kamar utama + "Kamar Lainnya".
+    const ratedRows = await attachTodayRates(
+      sb,
+      [room, ...((others ?? []) as any[])].filter(Boolean) as Array<{ id: string; base_rate?: number | null }>,
+    );
+    const ratedById = new Map(ratedRows.map((row) => [row.id, row]));
+    const withRate = <T,>(row: T | null): T | null => {
+      if (!row) return row;
+      const id = (row as { id?: string }).id;
+      const rated = id ? ratedById.get(id) : undefined;
+      return rated
+        ? { ...row, today_rate: rated.today_rate, standard_rate: rated.standard_rate, rate_date: rated.rate_date }
+        : row;
+    };
 
     return {
       property: property
@@ -1014,8 +1038,8 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
             ) as Json,
           }
         : property,
-      room: withPublicBlurb(room),
-      others: ((others ?? []) as any[]).map((row: any) => withPublicBlurb(row)),
+      room: withRate(withPublicBlurb(room)),
+      others: ((others ?? []) as any[]).map((row: any) => withRate(withPublicBlurb(row))),
       roomCount,
     };
   });

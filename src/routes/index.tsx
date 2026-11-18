@@ -1,6 +1,7 @@
 // LOCKED: Halaman utama "/" WAJIB merender landing Pomah Guesthouse.
 // JANGAN mengganti file ini dengan landing lain (mis. Baboo / template generik)
 // kecuali diminta eksplisit oleh pemilik. Lihat mem://constraints/homepage-pomah-lock.
+import { effectivePublicRate, struckStandardRate } from "@/public/lib/today-rate";
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -535,10 +536,13 @@ export function PomahHomeView({
     return rooms.map((rt: any) => {
       const rateInfo = resolvedRates[rt.id];
       if (rateInfo) {
+        // Tanggal dipilih: harga tanggal itu menggantikan harga hari ini.
         return {
           ...rt,
           base_rate: rateInfo.base_rate,
           extrabed_rate: rateInfo.extrabed_rate,
+          today_rate: null,
+          standard_rate: null,
         };
       }
       return rt;
@@ -1610,6 +1614,8 @@ type RoomType = {
   slug: string;
   description?: string | null;
   base_rate: number | string;
+  today_rate?: number | null;
+  standard_rate?: number | null;
   capacity?: number | null;
   size_sqm?: number | null;
   hero_image_url?: string | null;
@@ -2384,8 +2390,11 @@ function RoomCarousel({
                       <p className={cartOpen ? "text-[9px] text-stone-400" : "text-[10px] text-stone-400"}>
                         {usingDateFilter ? "Harga" : "Harga Hari Ini"}
                       </p>
+                      {struckStandardRate(rt) != null && (
+                        <span className="block text-stone-400 line-through">{formatIDR(Number(struckStandardRate(rt)), "text-xs", "font-sans tabular-nums")}</span>
+                      )}
                       <p className="text-amber-700">
-                        {formatIDR(Number(rt.base_rate), cartOpen ? "text-sm" : "text-lg", "font-sans font-bold tabular-nums")}
+                        {formatIDR(Number(effectivePublicRate(rt) ?? 0), cartOpen ? "text-sm" : "text-lg", "font-sans font-bold tabular-nums")}
                       </p>
                     </div>
                   </div>

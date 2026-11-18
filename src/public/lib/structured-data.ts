@@ -25,6 +25,7 @@ export type SchemaRoom = {
   slug?: string | null;
   description?: string | null;
   base_rate?: number | string | null;
+  today_rate?: number | null;
   capacity?: number | null;
   bed_type?: string | null;
 };
@@ -127,7 +128,7 @@ export function siteIdentityGraph(property?: SocialProperty | null) {
 function hotelRoomNode(room: SchemaRoom) {
   const name = (room.name ?? "").trim() || "Kamar";
   const slug = (room.slug ?? "").trim();
-  const price = priceNumber(room.base_rate);
+  const price = priceNumber(room.today_rate ?? room.base_rate);
   const description = stripPublicHotWaterClaim((room.description ?? "").trim());
   const node: Record<string, unknown> = {
     "@type": "HotelRoom",
@@ -163,7 +164,7 @@ export function homepageLodgingGraph(input: {
 }) {
   const rooms = input.rooms.filter((room) => (room.slug ?? "").trim() && (room.name ?? "").trim());
   const prices = rooms
-    .map((room) => priceNumber(room.base_rate))
+    .map((room) => priceNumber(room.today_rate ?? room.base_rate))
     .filter((price): price is number => price != null);
   const rating = Number(input.reviews?.rating);
   const reviewCount = Number(input.reviews?.total);

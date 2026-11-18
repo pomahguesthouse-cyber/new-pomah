@@ -6,6 +6,7 @@
  * times, guest details, hotel policy, payment method) that creates the
  * reservation directly.
  */
+import { effectivePublicRate, struckStandardRate } from "@/public/lib/today-rate";
 import { Suspense, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate, notFound, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -128,6 +129,8 @@ export type RoomRow = {
   slug: string;
   description: string | null;
   base_rate: number | string | null;
+  today_rate?: number | null;
+  standard_rate?: number | null;
   capacity: number | null;
   bed_type: string | null;
   floor_info: string | null;
@@ -292,6 +295,9 @@ function RoomBookingPage() {
         ...room,
         base_rate: resolvedRates[room.id].base_rate,
         extrabed_rate: resolvedRates[room.id].extrabed_rate,
+        // Tanggal dipilih: harga tanggal itu menggantikan harga hari ini.
+        today_rate: null,
+        standard_rate: null,
       };
     }
     return room;
@@ -307,6 +313,8 @@ function RoomBookingPage() {
           ...o,
           base_rate: rateInfo.base_rate,
           extrabed_rate: rateInfo.extrabed_rate,
+          today_rate: null,
+          standard_rate: null,
         };
       }
       return o;
@@ -500,8 +508,13 @@ function RoomBookingPage() {
           <aside className="lg:sticky lg:top-6 lg:self-start">
             <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
               <p className="text-xs font-medium text-stone-500">Harga Kamar</p>
+              {struckStandardRate(displayRoom) != null && (
+                <p className="mt-1 text-sm text-stone-400 line-through">
+                  {formatIDR(Number(struckStandardRate(displayRoom)), "text-sm", "font-sans tabular-nums")}
+                </p>
+              )}
               <p className="mt-1 text-3xl font-bold text-amber-700">
-                {formatIDR(Number(displayRoom?.base_rate ?? 0), "text-3xl", "font-sans font-bold text-amber-700 tabular-nums")}
+                {formatIDR(Number(effectivePublicRate(displayRoom) ?? 0), "text-3xl", "font-sans font-bold text-amber-700 tabular-nums")}
               </p>
               <p className="text-xs text-stone-400">per malam</p>
 
@@ -602,7 +615,12 @@ function RoomBookingPage() {
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="font-bold">{o.name}</h3>
                         <span className="text-sm font-semibold text-amber-700">
-                          {formatIDR(Number(o.base_rate), "text-sm", "font-sans font-bold text-amber-700 tabular-nums")}
+                          {struckStandardRate(o) != null && (
+                            <span className="mr-1 text-xs font-normal text-stone-400 line-through">
+                              {formatIDR(Number(struckStandardRate(o)), "text-xs", "font-sans tabular-nums")}
+                            </span>
+                          )}
+                          {formatIDR(Number(effectivePublicRate(o) ?? 0), "text-sm", "font-sans font-bold text-amber-700 tabular-nums")}
                         </span>
                       </div>
                       {publicRoomBlurb(o.slug, o.description) && (

@@ -8,6 +8,7 @@ export type DynamicRoom = {
   slug: string;
   capacity?: number | null;
   base_rate?: number | string | null;
+  today_rate?: number | null;
   hero_image_url?: string | null;
   amenities?: string[] | null;
 };
@@ -32,7 +33,7 @@ export function formatIdr(value: number): string {
 }
 
 export function roomRate(room: DynamicRoom): number | null {
-  const n = Number(room.base_rate);
+  const n = Number(room.today_rate ?? room.base_rate);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 

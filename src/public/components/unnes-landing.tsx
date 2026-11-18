@@ -53,14 +53,15 @@ type LandingRoom = SchemaRoom & { hero_image_url?: string | null };
 /** Live "mulai" price from room_types.base_rate; approved copy is the fallback. */
 function roomPrice(href: string, fallback: string, rooms?: LandingRoom[] | null): string {
   const slug = href.replace(/^\/rooms\//, "").replace(/\/$/, "");
-  const rate = Number((rooms?.find((room) => room.slug === slug) as { base_rate?: unknown } | undefined)?.base_rate);
+  const found = (rooms?.find((room) => room.slug === slug) as { base_rate?: unknown; today_rate?: unknown } | undefined);
+  const rate = Number(found?.today_rate ?? found?.base_rate);
   return Number.isFinite(rate) && rate > 0 ? `${formatRupiah(rate)}/malam` : fallback;
 }
 
 /** Keep the cheapest-room FAQ amount in sync with live PMS rates when available. */
 function faqsWithLiveRates(faqs: FaqItem[], rooms?: LandingRoom[] | null): FaqItem[] {
-  const single = rooms?.find((room) => room.slug === "kamar-single") as { base_rate?: unknown } | undefined;
-  const rate = Number(single?.base_rate);
+  const single = rooms?.find((room) => room.slug === "kamar-single") as { base_rate?: unknown; today_rate?: unknown } | undefined;
+  const rate = Number(single?.today_rate ?? single?.base_rate);
   if (!Number.isFinite(rate) || rate <= 0) return faqs;
   const price = formatRupiah(rate);
   return faqs.map((faq) =>

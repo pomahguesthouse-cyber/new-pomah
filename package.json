@@ -92,7 +92,8 @@
     "android:debug": "bash scripts/build-android-debug.sh",
     "test:seo-room-prices": "tsx scripts/test-seo-room-prices.ts",
     "test:sofiah-flow": "bun scripts/test-sofiah-combination-flow.ts",
-    "test:payment-sql": "bash scripts/sql/test-payment-applications.sh"
+    "test:payment-sql": "bash scripts/sql/test-payment-applications.sh",
+    "test:public-today-rate": "tsx scripts/test-public-today-rate.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.79",
@@ -179,7 +180,7 @@
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
     "@eslint/js": "^9.32.0",
-    "@lovable.dev/vite-tanstack-config": "2.26.5",
+    "@lovable.dev/vite-tanstack-config": "2.27.1",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

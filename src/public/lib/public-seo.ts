@@ -45,8 +45,9 @@ export function resolveHomepageMeta(stored?: string | null, _minBaseRate?: numbe
 }
 
 /** Cheapest positive base_rate among listed rooms, or null. */
-export function minRoomBaseRate(rooms: ReadonlyArray<{ base_rate?: number | string | null }> | null | undefined): number | null {
-  const rates = (rooms ?? []).map((r) => Number(r.base_rate)).filter((n) => Number.isFinite(n) && n > 0);
+export function minRoomBaseRate(rooms: ReadonlyArray<{ base_rate?: number | string | null; today_rate?: number | null }> | null | undefined): number | null {
+  // Pakai tarif efektif hari ini bila tersedia, jika tidak base_rate.
+  const rates = (rooms ?? []).map((r) => Number(r.today_rate ?? r.base_rate)).filter((n) => Number.isFinite(n) && n > 0);
   return rates.length ? Math.min(...rates) : null;
 }
 
@@ -158,6 +159,7 @@ export type RoomSeoSource = {
   meta_description?: string | null;
   hero_image_url?: string | null;
   base_rate?: number | string | null;
+  today_rate?: number | null;
 };
 
 const LEGACY_ROOM_TITLE = /penginapan dekat unnes/i;
@@ -206,14 +208,14 @@ export function resolveRoomPublicSeo(room: RoomSeoSource): {
   const approved = approvedRoomSeo(room.slug);
   const title = syncFromPrice(
     firstNonEmpty(withoutHotWaterClaim(roomSeoField(room.seo_title)), approved?.title, defaultRoomSeoTitle(name)),
-    room.base_rate,
+    room.today_rate ?? room.base_rate,
   );
   const description = syncFromPrice(firstNonEmpty(
     withoutHotWaterClaim(room.meta_description),
     approved?.meta,
     withoutHotWaterClaim(room.description),
     `${name} di Pomah Guesthouse Semarang.`,
-  ), room.base_rate);
+  ), room.today_rate ?? room.base_rate);
   return {
     h1: firstNonEmpty(roomSeoField(room.seo_h1), approved?.h1, name),
     title,

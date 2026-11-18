@@ -3,6 +3,7 @@
  * Serves SEO-optimised landing pages created in the AI SEO Control Room.
  * Design matches the main Pomah Guesthouse site.
  */
+import { effectivePublicRate, struckStandardRate } from "@/public/lib/today-rate";
 import { Suspense, useState, useEffect, createContext, useContext, useMemo, type ReactNode } from "react";
 import { createFileRoute, notFound, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -1319,6 +1320,7 @@ function DatePickerSection({ s }: { s: LPDatePickerSection }) {
 type LPRoomType = {
   id: string; name: string; slug: string;
   description?: string | null; base_rate: number | string;
+  today_rate?: number | null; standard_rate?: number | null;
   capacity?: number | null; size_sqm?: number | null; hero_image_url?: string | null;
 };
 
@@ -1349,9 +1351,12 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
     return rooms.map((rt: any) => {
       const rateInfo = resolvedRates[rt.id];
       if (rateInfo) {
+        // Tanggal dipilih: harga tanggal itu menggantikan harga hari ini.
         return {
           ...rt,
           base_rate: rateInfo.base_rate,
+          today_rate: null,
+          standard_rate: null,
         };
       }
       return rt;
@@ -1419,7 +1424,10 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
                             <p className="text-[10px] text-stone-400">
                               {usingFilter ? "Harga" : "Harga Hari Ini"}
                             </p>
-                            <p className="text-lg font-bold text-amber-700">Rp {Number(rt.base_rate).toLocaleString("id-ID")}</p>
+                            {struckStandardRate(rt) != null && (
+                              <p className="text-xs text-stone-400 line-through">Rp {Number(struckStandardRate(rt)).toLocaleString("id-ID")}</p>
+                            )}
+                            <p className="text-lg font-bold text-amber-700">Rp {Number(effectivePublicRate(rt) ?? 0).toLocaleString("id-ID")}</p>
                           </div>
                         </div>
                         {rt.description && <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-stone-500">{rt.description}</p>}
