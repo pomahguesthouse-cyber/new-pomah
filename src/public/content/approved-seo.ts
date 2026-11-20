@@ -380,7 +380,14 @@ export type ApprovedLandingContent = Omit<typeof APPROVED_LP, "slug" | "booking"
  * drafts/lp-akpelni-2026-10-23.md (Hero through CTA only; the
  * unverified and keyword sections are not included). Room prices come
  * from live room_types rates via fillRoomPrices, never hardcoded.
+ *
+ * Last copy edit: commit 23da2add, 2026-10-30T07:59:05+07:00
+ * (travel time "kurang lebih 5 menit berkendara").
+ * Bump AKPELNI_LP_CONTENT_UPDATED_AT when this article changes.
+ * Do not substitute `new Date()` — sitemap `<lastmod>` must stay stable.
  */
+export const AKPELNI_LP_CONTENT_UPDATED_AT = "2026-10-30T00:59:05.000Z";
+
 export const APPROVED_AKPELNI_LP: ApprovedLandingContent = {
   slug: "penginapan-dekat-akpelni",
   breadcrumbName: "Penginapan dekat Akpelni",

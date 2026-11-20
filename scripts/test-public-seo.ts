@@ -37,10 +37,14 @@ import {
   resolveHomepageH1,
   resolveHomepageMeta,
   resolveHomepageTitle,
+  HOMEPAGE_CONTENT_UPDATED_AT,
+  PROMO_CONTENT_UPDATED_AT,
   resolveRoomPublicSeo,
   sitemapLastmodForPath,
 } from "../src/public/lib/public-seo";
+import { renderSitemapXml } from "../src/public/lib/city-guide";
 import {
+  AKPELNI_LP_CONTENT_UPDATED_AT,
   APPROVED_HOME,
   APPROVED_LP,
   APPROVED_ROOMS,
@@ -452,7 +456,72 @@ const stamps = {
   landings: [{ slug: "penginapan-dekat-unnes", updated_at: "2026-06-01T00:00:00.000Z" }],
   pages: [],
 };
-assert.equal(sitemapLastmodForPath("/", stamps), "2026-08-01T00:00:00.000Z");
+assert.equal(HOMEPAGE_CONTENT_UPDATED_AT, "2026-11-20T01:13:09.000Z");
+assert.equal(PROMO_CONTENT_UPDATED_AT, "2026-11-18T11:55:22.000Z");
+assert.equal(AKPELNI_LP_CONTENT_UPDATED_AT, "2026-10-30T00:59:05.000Z");
+assert.equal(
+  sitemapLastmodForPath("/", { ...stamps, propertyUpdatedAt: "2026-10-19T04:39:34.509Z" }),
+  "2026-11-20T01:13:09.000Z",
+  "homepage code timestamp wins when properties.updated_at is older",
+);
+assert.equal(
+  sitemapLastmodForPath("/", { ...stamps, propertyUpdatedAt: "2026-12-15T08:00:00.000Z" }),
+  "2026-12-15T08:00:00.000Z",
+  "properties.updated_at wins when it is newer than the homepage code timestamp",
+);
+assert.equal(
+  sitemapLastmodForPath("/", { ...stamps, propertyUpdatedAt: "   " }),
+  "2026-11-20T01:13:09.000Z",
+);
+assert.equal(sitemapLastmodForPath("/book", stamps), "2026-08-01T00:00:00.000Z");
+assert.equal(sitemapLastmodForPath("/promo", { pages: [] }), "2026-11-18T11:55:22.000Z");
+assert.equal(
+  sitemapLastmodForPath("/promo", { pages: [{ slug: "promo", updated_at: "2026-11-01T00:00:00.000Z" }] }),
+  "2026-11-18T11:55:22.000Z",
+);
+assert.equal(
+  sitemapLastmodForPath("/promo", { pages: [{ slug: "/promo", updated_at: "2026-12-01T00:00:00.000Z" }] }),
+  "2026-12-01T00:00:00.000Z",
+);
+assert.equal(
+  sitemapLastmodForPath("/lp/penginapan-dekat-akpelni", { landings: [] }),
+  "2026-10-30T00:59:05.000Z",
+);
+assert.equal(
+  sitemapLastmodForPath("/lp/penginapan-dekat-akpelni", {
+    landings: [{ slug: "penginapan-dekat-akpelni", updated_at: "2026-10-25T00:00:00.000Z" }],
+  }),
+  "2026-10-30T00:59:05.000Z",
+);
+assert.equal(
+  sitemapLastmodForPath("/lp/penginapan-dekat-akpelni", {
+    landings: [{ slug: "penginapan-dekat-akpelni", updated_at: "2026-11-02T03:04:05.000Z" }],
+  }),
+  "2026-11-02T03:04:05.000Z",
+);
+const lastmodXml = renderSitemapXml([
+  {
+    loc: canonicalUrlForPath("/"),
+    lastmod: sitemapLastmodForPath("/", { propertyUpdatedAt: "2026-10-19T04:39:34.509Z" }),
+  },
+  { loc: canonicalUrlForPath("/promo"), lastmod: sitemapLastmodForPath("/promo", {}) },
+  {
+    loc: canonicalUrlForPath("/lp/penginapan-dekat-akpelni"),
+    lastmod: sitemapLastmodForPath("/lp/penginapan-dekat-akpelni", {}),
+  },
+]);
+assert.match(
+  lastmodXml,
+  /<loc>https:\/\/pomahguesthouse\.com\/<\/loc><lastmod>2026-11-20T01:13:09\.000Z<\/lastmod>/,
+);
+assert.match(
+  lastmodXml,
+  /<loc>https:\/\/pomahguesthouse\.com\/promo<\/loc><lastmod>2026-11-18T11:55:22\.000Z<\/lastmod>/,
+);
+assert.match(
+  lastmodXml,
+  /<loc>https:\/\/pomahguesthouse\.com\/lp\/penginapan-dekat-akpelni<\/loc><lastmod>2026-10-30T00:59:05\.000Z<\/lastmod>/,
+);
 assert.equal(sitemapLastmodForPath("/rooms/deluxe", stamps), "2026-07-02T03:04:05.000Z");
 assert.equal(
   sitemapLastmodForPath("/lp/penginapan-dekat-unnes", stamps),
