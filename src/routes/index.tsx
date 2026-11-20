@@ -81,8 +81,6 @@ const BookingDialog = lazy(() =>
 );
 import { BrandLogo, PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { GuideTextLinks, exploreHrefForName } from "@/public/components/guide-links";
-import { AreaNeedsSection } from "@/public/components/area-needs";
-import type { IndexableLandingLink } from "@/public/lib/lp-dynamic";
 import { APPROVED_HOME, cardIntroForName, omitPublicHotWaterAmenities, publicRoomBlurb } from "@/public/content/approved-seo";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 import { DateRangePickerID } from "@/public/components/lazy-public-widgets";
@@ -90,16 +88,14 @@ import { DateRangePickerID } from "@/public/components/lazy-public-widgets";
 export const Route = createFileRoute("/")({
   loader: async () => {
     const { loadCityGuidePlaces } = await import("@/public/lib/city-guide.server");
-    const { listIndexableLandingPages } = await import("@/public/lib/landing-catalog.server");
-    const [site, guidePlaces, reviews, areaPages] = await Promise.all([
+    const [site, guidePlaces, reviews] = await Promise.all([
       getPublicSiteData(),
       loadCityGuidePlaces(),
       getGoogleReviews().catch(
         (): GoogleReviewsResult => ({ rating: null, total: null, reviews: [], status: "ERROR" }),
       ),
-      listIndexableLandingPages().catch(() => [] as IndexableLandingLink[]),
     ]);
-    return { ...site, guidePlaces, reviews, areaPages };
+    return { ...site, guidePlaces, reviews };
   },
   // Data property + room types jarang berubah; cache 1 jam mengurangi
   // beban server dan mempercepat navigasi balik ke home.
@@ -741,13 +737,6 @@ export function PomahHomeView({
         }}
       />
 
-      <AreaNeedsSection
-        pages={
-          (
-            initialData as { areaPages?: IndexableLandingLink[] } | undefined
-          )?.areaPages ?? []
-        }
-      />
       <GuideTextLinks places={guidePlaces} />
 
       <PomahFooter name={propertyName} property={property} rooms={rooms} />

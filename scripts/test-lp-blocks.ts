@@ -4,7 +4,6 @@
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
-import { AreaNeedsSection } from "../src/public/components/area-needs";
 import {
   FilteredReviewsBlock,
   FilteredRoomsBlock,
@@ -96,7 +95,6 @@ const exploreHtml = renderToStaticMarkup(
 );
 assert.match(exploreHtml, /\/explore\/lawang-sewu-semarang/);
 
-assert.equal(AreaNeedsSection({ pages: [] }), null);
 assert.deepEqual(
   matchLandingForExplore("lawang-sewu-semarang", [
     { slug: "dekat-lawang", title: "Dekat Lawang Sewu", exploreSlugs: ["lawang-sewu-semarang"] },
