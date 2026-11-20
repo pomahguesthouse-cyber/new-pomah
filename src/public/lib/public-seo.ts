@@ -8,6 +8,7 @@
  * replaced so the approved sentences show before the SQL file is run.
  */
 import {
+  AKPELNI_LP_CONTENT_UPDATED_AT,
   APPROVED_HOME,
   formatRupiah,
   approvedRoomSeo,
@@ -409,8 +410,54 @@ function stampForSlug(rows: SitemapStamp[] | undefined, slug: string): string | 
 }
 
 /**
- * lastmod from stored updated_at. Missing dates are omitted so the sitemap
- * does not pretend the page changed at request time.
+ * Last code edit that changed the public homepage (`src/routes/index.tsx`,
+ * commit e58a888f, 2026-11-20T01:13:09Z: removed the "Area & kebutuhan"
+ * section). Earlier in that window: SEO refresh #150 and the promo
+ * section, both on 2026-11-18.
+ *
+ * Bump this when homepage copy, sections, or code-managed SEO change.
+ * Sitemap `<lastmod>` reads it. Never substitute `new Date()`.
+ */
+export const HOMEPAGE_CONTENT_UPDATED_AT = "2026-11-20T01:13:09.000Z";
+
+/**
+ * Last code edit of `/promo` (commit 5570252e, 2026-11-18T11:55:22Z:
+ * promo section and the promo page). Kept here so `promos.ts` stays free
+ * of digits. Bump when that copy changes. Never substitute `new Date()`.
+ */
+export const PROMO_CONTENT_UPDATED_AT = "2026-11-18T11:55:22.000Z";
+
+/** Code-only landing copy. Keyed by slug, without the `/lp/` prefix. */
+const CODE_LANDING_CONTENT_UPDATED_AT: Record<string, string> = {
+  "penginapan-dekat-akpelni": AKPELNI_LP_CONTENT_UPDATED_AT,
+};
+
+/** Code-managed pages that are not property, room, or landing rows. */
+const CODE_PAGE_CONTENT_UPDATED_AT: Record<string, string> = {
+  "/promo": PROMO_CONTENT_UPDATED_AT,
+};
+
+/**
+ * Newer of two stored timestamps. The original string is kept so a database
+ * `updated_at` is not rewritten. Unparseable values lose to a parseable one.
+ * Missing values are omitted — this never falls back to the current time.
+ */
+function laterSitemapStamp(stored?: string | null, code?: string | null): string | undefined {
+  const left = stored?.trim() || "";
+  const right = code?.trim() || "";
+  if (!left) return right || undefined;
+  if (!right) return left;
+  const at = Date.parse(left);
+  const bt = Date.parse(right);
+  if (Number.isNaN(at)) return Number.isNaN(bt) ? left : right;
+  if (Number.isNaN(bt)) return left;
+  return at >= bt ? left : right;
+}
+
+/**
+ * lastmod from stored updated_at, or for code-managed pages the newer of that
+ * timestamp and an explicit content date. Missing dates are omitted so the
+ * sitemap does not pretend the page changed at request time.
  */
 export function sitemapLastmodForPath(
   path: string,
@@ -421,13 +468,22 @@ export function sitemapLastmodForPath(
     pages?: SitemapStamp[];
   },
 ): string | undefined {
-  if (path === "/" || path === "/book" || path === "/explore" || path === ROOMS_INDEX_PATH) {
+  if (path === "/") {
+    return laterSitemapStamp(input.propertyUpdatedAt, HOMEPAGE_CONTENT_UPDATED_AT);
+  }
+  if (path === "/book" || path === "/explore" || path === ROOMS_INDEX_PATH) {
     return input.propertyUpdatedAt?.trim() || undefined;
   }
   const room = path.match(/^\/rooms\/([^/]+)$/);
   if (room) return stampForSlug(input.rooms, room[1]);
   const landing = path.match(/^\/lp\/([^/]+)$/);
-  if (landing) return stampForSlug(input.landings, landing[1]);
+  if (landing) {
+    return laterSitemapStamp(
+      stampForSlug(input.landings, landing[1]),
+      CODE_LANDING_CONTENT_UPDATED_AT[landing[1]],
+    );
+  }
   const pageSlug = path.replace(/^\//, "");
-  return stampForSlug(input.pages, pageSlug) || stampForSlug(input.pages, path);
+  const storedPage = stampForSlug(input.pages, pageSlug) || stampForSlug(input.pages, path);
+  return laterSitemapStamp(storedPage, CODE_PAGE_CONTENT_UPDATED_AT[path]);
 }

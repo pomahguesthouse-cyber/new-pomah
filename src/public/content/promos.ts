@@ -13,6 +13,11 @@ export type Promo = {
 
 export const PROMO_TERMS_NOTE = "Syarat & ketentuan berlaku, harga final mengikuti sistem.";
 
+/**
+ * Sitemap `<lastmod>` for `/promo` is PROMO_CONTENT_UPDATED_AT in public-seo.
+ * Bump that constant when this copy or the promo page changes.
+ */
+
 export const PROMOS: readonly Promo[] = [
   {
     id: "hari-kerja-deluxe",
