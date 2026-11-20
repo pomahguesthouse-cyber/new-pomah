@@ -29,6 +29,13 @@
       "when": 1794435047068,
       "tag": "0003_lock_backup_tables_and_staff_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795138160484,
+      "tag": "0004_migration",
+      "breakpoints": true
     }
   ]
 }
