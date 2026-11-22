@@ -9,11 +9,20 @@ import { runDeferred } from "@/lib/cf-context";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { formatNightlyBreakdownLines, hasVaryingRates } from "@/services/pricing/price-quote";
 import { mentionsPayAtCheckin, requiresFullPayment } from "@/lib/deposit-policy";
+import { buildPropertyFaqReply, isLocationShareRequest } from "@/services/property-faq";
 import { capAvailabilityWithStopSell } from "@/services/pricing/stop-sell-availability";
 import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
-import { extractAllSlots, getMissingSlots, formatPartialBookingSummary, TRAILING_FILLER_RE } from "./flexible-slot-extractor";
+import {
+  extractAllSlots,
+  extractGuestNameFromMessage,
+  formatPartialBookingSummary,
+  getMissingSlots,
+  isEchoedBookingTemplate,
+  isTemplateGuestName,
+  sanitizeGuestNameLine,
+} from "./flexible-slot-extractor";
 import { buildPaymentPolicyAnswer, isGuestPaymentQuestion } from "./booking-inline-answers";
 import {
   bookingSummaryLead,
@@ -306,11 +315,6 @@ const CANCEL_PATTERN = /\b(tidak|batal|salah|ubah|ganti|cancel|no|nggak|ngga)\b/
 const NON_NAME_TOKENS =
   /\b(aja|biar|buat|tolong|kalo|kalau|yang|sama|sebelahan|samping|atas|bawah|deket|dekat|atau|tapi|cuma|sih|nih|dong|deh|nya|kamar|room|wifi|ac|sarapan|breakfast|pusing|bingung|embuh|ribet|capek|cape|penipuan|scam|email|nomor|hp|bukan)\b/i;
 
-// Honorifik / panggilan umum yang sering ditempel di awal/akhir nama
-// (contoh: "Ratih Asmarani kak", "kak Budi", "mas Joko"). Dibersihkan
-// sebelum validasi nama supaya tidak salah-tolak.
-const HONORIFIC_TOKEN = /\b(kak|kakak|mba|mbak|mas|pak|bu|bro|sis|bang|kk)\b/gi;
-
 /**
  * Detect "this looks like a request about the booking itself (room
  * preference, payment, etc.), not a name". Used inside CONFIRMING_NAME
@@ -322,27 +326,20 @@ const ROOM_PREFERENCE_OR_QUESTION =
   /(?:\d{2,3}\s*[\/\-]\s*\d{2,3})|\b(sebelahan|samping|sebelah|depan|belakang|atas|bawah|deket|dekat|view|pemandangan|pojok)\b|\?/i;
 
 /**
- * Bersihkan kandidat nama: ambil baris pertama (tamu sering menulis
- * "Ratih Asmarani\n28 Juni kak, single"), buang honorifik di awal/akhir,
- * dan rapikan whitespace. Mengembalikan string siap-validasi.
+ * Bersihkan kandidat nama dari seluruh baris (bukan hanya baris pertama).
+ * "1. Susilo Yuwono" dan "• Nama: Susilo Yuwono" lolos; baris template
+ * ("Data booking sementara", "Mohon lengkapi data", "Nama lengkap tamu") tidak.
  */
 function cleanNameCandidate(candidate: string): string {
-  const firstLine = candidate.split(/\r?\n/)[0] ?? candidate;
-  return firstLine
-    .replace(/^(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku|nama|name)\s*:?\s*/i, "")
-    .replace(/^saya\s+/i, "")
-    // Buang nomor HP dari kandidat — tamu sering menjawab "Dian, 082175341673"
-    // sesuai contoh yang bot berikan; tanpa ini digit membuat nama ditolak
-    // (insiden 4 Jul 2026).
-    .replace(/(?:\+?62|0)[\s\-().]*8(?:[\s\-().]*\d){6,12}/g, " ")
-    .replace(/\b(?:nomor|no\.?|hp|wa|telp)\s*:?\s*/gi, " ")
-    .replace(/[,;]+/g, " ")
-    .replace(HONORIFIC_TOKEN, " ")
-    .replace(/[,.\-–—!]+$/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(TRAILING_FILLER_RE, "")
-    .trim();
+  const lines = candidate.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    const stripped = line.replace(/^[•\-\*\u2022·]+\s*/, "").replace(/^\d+[\.\)]\s*/, "");
+    if (isTemplateGuestName(line) || isTemplateGuestName(stripped)) continue;
+    const cleaned = sanitizeGuestNameLine(line);
+    if (!cleaned || isTemplateGuestName(cleaned)) continue;
+    if (looksLikePersonName(cleaned)) return cleaned;
+  }
+  return "";
 }
 
 // Kata kerja / kata tanya / kata fungsi yang TIDAK mungkin jadi nama orang.
@@ -643,6 +640,23 @@ function resolveRoomExtraBedPolicy(
  * Build the pre-confirmation booking summary once all guest details are set.
  * Versi sync — fallback ketika daily-rate dynamic tidak bisa di-resolve.
  */
+/** Prompt data yang masih kosong. Bukan ringkasan yang bisa dikunci dengan "Ya". */
+function buildMissingDataReply(context: BookingContext): string {
+  const missing: string[] = [];
+  if (!context.checkIn || !context.checkOut) missing.push("Tanggal check-in & check-out");
+  if (!context.roomName) missing.push("Tipe kamar");
+  if (!context.guestName || context.guestName.trim().length < 2) missing.push("Nama lengkap tamu");
+  if (!((context.adults ?? 0) >= 1)) missing.push("Jumlah tamu (dewasa & anak)");
+  const summary = formatPartialBookingSummary(context);
+  let reply = `Data booking sementara:\n${summary}\n\n`;
+  reply += `Mohon lengkapi data berikut untuk melanjutkan reservasi:\n`;
+  missing.forEach((item, idx) => {
+    reply += `${idx + 1}. ${item}\n`;
+  });
+  reply += `\nKakak bisa mengetikkan data di atas sekaligus (contoh: "booking Deluxe, atas nama Budi, tanggal 25-27 Juni, 2 dewasa 1 anak").`;
+  return reply;
+}
+
 function buildBookingSummary(
   context: BookingContext,
   roomsCatalog?: RoomCatalogEntry[],
@@ -654,6 +668,11 @@ function buildBookingSummary(
     nightlyBreakdown?: string[];
   },
 ): StateMachineResult {
+  // Nama kosong tidak boleh jadi ringkasan yang dikunci "Ya" / "sudah sesuai".
+  if (!context.guestName?.trim()) {
+    return { handled: true, reply: buildMissingDataReply(context) };
+  }
+
   // --- Room line ---
   const summaryRooms = overrides?.rooms ?? context.rooms;
   const roomsDisplay = formatRoomsDisplay(summaryRooms, context.roomName);
@@ -886,6 +905,16 @@ async function buildBookingSummaryFromResolved(
   context: BookingContext,
   resolved: ResolvedBookingRates,
 ): Promise<StateMachineResult> {
+  if (!context.guestName?.trim()) {
+    if (ctx.phone) {
+      try {
+        await updateBookingState(ctx.supabaseAdmin, ctx.phone, "COLLECTING_DATA", context);
+      } catch (e) {
+        console.warn("[BookingState] gagal menyimpan permintaan nama (non-fatal):", e);
+      }
+    }
+    return { handled: true, reply: buildMissingDataReply(context) };
+  }
   const previousQuote = context.quotedTotal;
   const result = buildBookingSummaryFromResolvedSync(ctx, context, resolved);
   // Simpan total yang ditampilkan agar langkah konfirmasi bisa membandingkannya
@@ -1346,6 +1375,13 @@ export function parseSlotCorrection(
   if (requestedExtraBeds !== undefined) {
     patch.extraBeds = requestedExtraBeds;
     patch.extraBedsDeclined = requestedExtraBeds <= 0;
+    changed = true;
+  }
+
+  // Nama di CONFIRMING_BOOKING: "Nama: Susilo Yuwono", "• Nama:", atau "1. Susilo Yuwono".
+  const guestName = extractGuestNameFromMessage(input, { awaitingName: true, rooms });
+  if (guestName) {
+    patch.guestName = guestName;
     changed = true;
   }
 
@@ -1957,6 +1993,10 @@ async function showSummaryFromState(
   phone: string,
   context: BookingContext,
 ): Promise<StateMachineResult> {
+  if (!context.guestName?.trim()) {
+    await updateBookingState(ctx.supabaseAdmin, phone, "COLLECTING_DATA", context);
+    return { handled: true, reply: buildMissingDataReply(context) };
+  }
   const resolvedRates = await applyResolvedRatesToContext(ctx, context).catch(() => null);
   await updateBookingState(ctx.supabaseAdmin, phone, "CONFIRMING_BOOKING", context);
   return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
@@ -1975,6 +2015,24 @@ async function handleStayDateCorrection(
   const todayStr = ctx.today || todayWIB();
   const plan = planStayCorrection(message, context, todayStr);
   if (!plan) return null;
+
+  // Tanggal benar-benar berubah, tetapi nama belum ada dan pesan ini
+  // memuat nama. Jangan tampilkan ringkasan dulu — ekstraksi nama harus jalan.
+  const nameMissing = !context.guestName?.trim();
+  if (
+    nameMissing &&
+    extractGuestNameFromMessage(message, { awaitingName: true, rooms: ctx.rooms })
+  ) {
+    context.checkIn = plan.checkIn;
+    context.checkOut = plan.checkOut;
+    context.checkoutAssumed = false;
+    context.datesConfirmed = !plan.needsConfirm;
+    context.pendingDateConfirm = plan.needsConfirm;
+    context.lastSummary = undefined;
+    context.availabilityBlocked = false;
+    context.quotedTotal = undefined;
+    return null;
+  }
 
   context.checkIn = plan.checkIn;
   context.checkOut = plan.checkOut;
@@ -2029,6 +2087,26 @@ async function notifyStaffOfBookingChange(
 /** Sinyal tamu ingin mengubah/ganti tipe kamar (dipakai juga oleh orchestrator saat IDLE). */
 export const ROOM_CHANGE_INTENT_RE =
   /\b(ubah|diubah|ganti|diganti|pindah|dipindah|upgrade|tukar|switch)\b|\bjadi(?:nya)?\s+(?:ambil|pakai|pilih)\b/i;
+
+/**
+ * Persetujuan/penutup singkat. Bukan permintaan ubah booking.
+ * "Siap kak" setelah invoice (22 Nov 2026, PG-4BJ9F) tidak boleh jadi pindah kamar.
+ * "ya kak" yang menjawab penawaran pindah kamar yang SUDAH ditanya tetap ditangani
+ * di blok pendingRoomChange, sebelum fungsi ini dipakai.
+ */
+const SHORT_ACK_RE =
+  /^(?:siap|sip|noted|ok+|oke|okay|okey|baik(?:lah)?|makasih|terima\s*kasih|trims?|thanks?|thx|tq|ya|iya|iyaa+)(?:\s+(?:kak|ka|kk|kakak|ya|iya|dong|deh|min|mba?k|mas|pak|bu))*[\s.!,🙏👍]*$/i;
+
+export function isShortAcknowledgement(message: string): boolean {
+  const text = (message ?? "").trim();
+  if (!text || text.includes("?") || text.length > 48) return false;
+  return SHORT_ACK_RE.test(text);
+}
+
+/** "ya" / "ya kak" setelah booking ada tetap diserahkan ke Finance, bukan dijawab di sini. */
+function isBareYes(message: string): boolean {
+  return /^(?:ya|iya|iyaa+|yes|yess+)(?:\s+(?:kak|ka|kk|kakak))*[\s.!,🙏👍]*$/i.test((message ?? "").trim());
+}
 const ROOM_CHANGE_DENY_RE = /\b(tidak|tdk|gak|ga|nggak|ngga|enggak|engga|batal|gak jadi|nggak jadi|tidak jadi|cancel|no)\b/i;
 
 export interface RoomChangeDeps {
@@ -2086,6 +2164,11 @@ async function handleExistingBookingRoomChange(
     await updateBookingState(supabase, phone, "IDLE", {});
     return { handled: false };
   }
+
+  // Sapaan singkat bukan sinyal pindah kamar. Tanpa ini, draft yang masih
+  // menyimpan kamar + tanggal yang bertabrakan dengan booking aktif dianggap
+  // permintaan ubah kamar ("Siap kak" → "Untuk perubahan kamar booking …").
+  if (isShortAcknowledgement(message)) return null;
 
   // 2) Tentukan tipe kamar baru yang diminta.
   const rooms = (ctx.rooms ?? []) as RoomTypeRow[];
@@ -2217,6 +2300,41 @@ export async function processBookingState(
     } catch (e) {
       console.warn("[BookingState] gagal memperpanjang TTL (non-fatal):", e);
     }
+  }
+
+  // Share lokasi di tengah booking: jawab alamat yang sudah ada, jangan
+  // mengganti state dan jangan jatuh ke "saya tunggu kabarnya".
+  if (state !== "IDLE" && isLocationShareRequest(message)) {
+    const location = buildPropertyFaqReply({
+      message,
+      property: (ctx.property ?? null) as Record<string, unknown> | null,
+      rooms: ctx.rooms,
+      greetingUsed: true,
+      mode: "late",
+    });
+    if (location?.intent === "location_question" && location.reply) {
+      return { handled: true, reply: location.reply };
+    }
+  }
+
+  // Booking sudah tercatat: "Siap kak" / "makasih" cukup dibalas singkat.
+  // "ya"/"ya kak" tidak ikut — Finance yang menanggapinya, dan penawaran
+  // pindah kamar yang sedang menunggu "ya" sudah ditangani di atas.
+  if (
+    isShortAcknowledgement(message) &&
+    !isBareYes(message) &&
+    (context.bookingCode?.trim() || state === "PAYMENT_PENDING" || state === "COMPLETED")
+  ) {
+    const code = context.bookingCode?.trim();
+    if (state === "CONFIRMING_BOOKING") {
+      await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
+    }
+    return {
+      handled: true,
+      reply: code
+        ? `Siap Kak 🙏 Pemesanan ${code} sudah tercatat. Kalau ada yang perlu dibantu lagi, kabari kami ya.`
+        : `Siap Kak 🙏 Kalau ada yang perlu dibantu lagi, kabari kami ya.`,
+    };
   }
 
   const formSubmittedMatch = message.match(FORM_SUBMITTED_PATTERN);
@@ -2631,8 +2749,15 @@ export async function processBookingState(
   // Keputusan extra bed (minta atau tolak) bukan interupsi. "bayar kamarnya
   // saja" + tanda tanya tetap koreksi, bukan pertanyaan pembayaran ke LLM.
   const holdsExtraBedChoice = extractRequestedExtraBeds(message) !== undefined;
+  // Tempelan template / jawaban nama bukan pertanyaan, walaupun ada kata "check-in".
+  const echoedTemplate = isEchoedBookingTemplate(message);
+  const supplyingMissingName =
+    !context.guestName?.trim() &&
+    !!extractGuestNameFromMessage(message, { awaitingName: true, rooms: ctx.rooms });
   if (
     isDataEntryState(state) &&
+    !echoedTemplate &&
+    !supplyingMissingName &&
     !awaitingOverrideConfirm &&
     !paymentQuestion &&
     !holdsExtraBedChoice &&
@@ -2768,16 +2893,18 @@ export async function processBookingState(
     const extracted = extractAllSlots(message, roomsList, phone, todayStr);
     const trimmedMessage = message.trim();
 
-    // Fallback: If we specifically need a name and the user provides a short unlabelled string that looks like a name.
-    // Validasi dilakukan pada kandidat yang SUDAH dibersihkan (label, honorifik,
-    // filler ekor seperti "ya minn" dibuang) — pesan mentah "Lutfi Priyanti ya"
-    // dulu ditolak hanya karena token "ya" ada di NON_NAME_TOKEN.
+    // Nama tanpa label, jawaban bernomor ("1. Susilo Yuwono"), atau "Nama:"
+    // di baris mana pun. Tanggal/tipe kamar di pesan yang sama tidak boleh
+    // memblokir ini — itu yang membuat tempelan template kehilangan nama
+    // (insiden Susilo Yuwono, 22 Nov 2026). Baris template tetap ditolak.
     if (!context.guestName && !extracted.guest_name) {
-      if (!extracted.check_in && !extracted.room_type) {
-        const nameCandidate = cleanNameCandidate(trimmedMessage);
-        if (nameCandidate && looksLikePersonName(nameCandidate)) {
-          extracted.guest_name = nameCandidate;
-        }
+      const nameCandidate = extractGuestNameFromMessage(trimmedMessage, {
+        awaitingName: true,
+        allowUnlabeled: !extracted.check_in && !extracted.room_type && !isEchoedBookingTemplate(trimmedMessage),
+        rooms: roomsList,
+      });
+      if (nameCandidate && looksLikePersonName(nameCandidate)) {
+        extracted.guest_name = nameCandidate;
       }
     }
 
@@ -2851,7 +2978,9 @@ export async function processBookingState(
       context.lastSummary = undefined;
     }
 
-    if (extracted.room_type) {
+    // Tempelan ringkasan bot ("1x Single, 2x Deluxe") bukan perintah ganti kamar.
+    const preserveEchoedRooms = isEchoedBookingTemplate(trimmedMessage) && (context.rooms?.length ?? 0) > 0;
+    if (extracted.room_type && !preserveEchoedRooms) {
       context.roomName = extracted.room_type;
       context.roomId = extracted.room_type_id;
       const rt = roomsList.find((r) => r.id === extracted.room_type_id);
@@ -2860,7 +2989,7 @@ export async function processBookingState(
       }
     }
 
-    if (extracted.room_quantity) {
+    if (extracted.room_quantity && !preserveEchoedRooms) {
       if (context.roomId && context.roomName) {
         context.rooms = [
           {
@@ -3093,24 +3222,9 @@ export async function processBookingState(
     // Still missing details: update state to COLLECTING_DATA
     await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
 
-    const missing: string[] = [];
-    if (!hasDates) missing.push("Tanggal check-in & check-out");
-    if (!hasRoom) missing.push("Tipe kamar");
-    if (!hasName) missing.push("Nama lengkap tamu");
-    if (!hasGuestCount) missing.push("Jumlah tamu (dewasa & anak)");
-    // guestPhone otomatis dari nomor WA — tidak perlu diminta ke tamu
-
-    const summary = formatPartialBookingSummary(context);
-    let reply = `${inlineAnswerPrefix}Data booking sementara:\n${summary}\n\n`;
-    reply += `Mohon lengkapi data berikut untuk melanjutkan reservasi:\n`;
-    missing.forEach((item, idx) => {
-      reply += `${idx + 1}. ${item}\n`;
-    });
-    reply += `\nKakak bisa mengetikkan data di atas sekaligus (contoh: "booking Deluxe, atas nama Budi, tanggal 25-27 Juni, 2 dewasa 1 anak").`;
-
     return {
       handled: true,
-      reply,
+      reply: `${inlineAnswerPrefix}${buildMissingDataReply(context)}`,
     };
   }
 
@@ -3121,6 +3235,18 @@ export async function processBookingState(
       console.info(`[BookingState] CONFIRMING_BOOKING → PAYMENT_PENDING: bookingCode sudah ada (${context.bookingCode}), skip createBooking.`);
       await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
       return { handled: false };
+    }
+
+    // Tempelan ulang ringkasan/template: ambil nama, jangan ubah kamar atau tanggal
+    // yang sama dengan draft (insiden Susilo Yuwono, 22 Nov 2026).
+    if (isEchoedBookingTemplate(message)) {
+      const echoedName = extractGuestNameFromMessage(message, { awaitingName: true, rooms: ctx.rooms });
+      if (echoedName) context.guestName = echoedName;
+      if (!context.guestName?.trim()) {
+        await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+        return { handled: true, reply: buildMissingDataReply(context) };
+      }
+      return showSummaryFromState(ctx, phone, context);
     }
 
     // Setelah write gagal tamu boleh minta dibantu staf. Data pesanan sudah
@@ -3199,6 +3325,7 @@ export async function processBookingState(
     if (!isPureConfirm && !isPureCancel) {
       const { patch, changed } = parseSlotCorrection(message, ctx.rooms);
       if (changed) {
+        if (patch.guestName) context.guestName = patch.guestName;
         if (patch.adults || patch.children !== undefined || patch.childAges?.length) {
           const guest = mergeGuestCountReading(context, {
             adults: patch.adults,
@@ -3343,11 +3470,14 @@ export async function processBookingState(
       // dipakai setelah tamu mengonfirmasinya (pendingPhone ditangani di gate atas).
       // Selalu disimpan dalam format 62xxxx.
       context.guestPhone = normalizeWaNumber(context.guestPhone) ?? normalizeWaNumber(phone) ?? undefined;
+      if (!context.guestName?.trim()) {
+        await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+        return { handled: true, reply: buildMissingDataReply(context) };
+      }
       const missing: string[] = [];
       if (!context.guestPhone) missing.push("nomor telepon");
       if (!context.checkIn || !context.checkOut) missing.push("tanggal");
       if (!context.roomName) missing.push("tipe kamar");
-      if (!context.guestName) missing.push("nama");
       // Email opsional: hanya validasi format jika tamu mengisinya.
       if (context.guestEmail && !EMAIL_PATTERN.test(context.guestEmail)) missing.push("email");
       // Total harga wajib datang dari perhitungan resmi (tarif harian/base_rate

@@ -53,9 +53,12 @@ export function isOnsitePaymentMethod(method: string | null | undefined): boolea
   return m === "onsite" || m === "cash" || m === "pay_at_checkin" || m === "bayar_di_tempat";
 }
 
-/** Tamu memilih bayar di tempat ("bayar di tempat ya", "cash saat check-in"). */
+/**
+ * Tamu memilih bayar di tempat ("bayar di tempat ya", "cash saat check-in").
+ * Typo tanpa spasi ikut: "bayar dtempat", "bayar ditempat" (insiden 22 Nov 2026).
+ */
 export function mentionsPayAtCheckin(message: string): boolean {
-  return /\b(bayar(?:nya)?\s+(?:di\s+tempat|di\s+lokasi|langsung\s+di\s+tempat|pas\s+(?:datang|check[\s-]?in|sampai)|saat\s+(?:datang|check[\s-]?in|tiba))|lunas\s+di\s+tempat|cash\s+(?:di\s+tempat|saat\s+check[\s-]?in|pas\s+datang)|cod)\b/i.test(
+  return /\b(?:bayar(?:nya)?\s+(?:di\s*tempat|ditempat|dtempat|di\s+lokasi|langsung\s+(?:di\s*tempat|ditempat|dtempat)|pas\s+(?:datang|check[\s-]?in|sampai)|saat\s+(?:datang|check[\s-]?in|tiba))|lunas\s+(?:di\s*tempat|ditempat|dtempat)|cash\s+(?:di\s*tempat|ditempat|dtempat|saat\s+check[\s-]?in|pas\s+datang)|cod)\b/i.test(
     message,
   );
 }
