@@ -9,6 +9,7 @@ import { runDeferred } from "@/lib/cf-context";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { formatNightlyBreakdownLines, hasVaryingRates } from "@/services/pricing/price-quote";
 import { mentionsPayAtCheckin, requiresFullPayment } from "@/lib/deposit-policy";
+import { buildPropertyFaqReply, isLocationShareRequest } from "@/services/property-faq";
 import { capAvailabilityWithStopSell } from "@/services/pricing/stop-sell-availability";
 import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
@@ -2086,6 +2087,26 @@ async function notifyStaffOfBookingChange(
 /** Sinyal tamu ingin mengubah/ganti tipe kamar (dipakai juga oleh orchestrator saat IDLE). */
 export const ROOM_CHANGE_INTENT_RE =
   /\b(ubah|diubah|ganti|diganti|pindah|dipindah|upgrade|tukar|switch)\b|\bjadi(?:nya)?\s+(?:ambil|pakai|pilih)\b/i;
+
+/**
+ * Persetujuan/penutup singkat. Bukan permintaan ubah booking.
+ * "Siap kak" setelah invoice (22 Nov 2026, PG-4BJ9F) tidak boleh jadi pindah kamar.
+ * "ya kak" yang menjawab penawaran pindah kamar yang SUDAH ditanya tetap ditangani
+ * di blok pendingRoomChange, sebelum fungsi ini dipakai.
+ */
+const SHORT_ACK_RE =
+  /^(?:siap|sip|noted|ok+|oke|okay|okey|baik(?:lah)?|makasih|terima\s*kasih|trims?|thanks?|thx|tq|ya|iya|iyaa+)(?:\s+(?:kak|ka|kk|kakak|ya|iya|dong|deh|min|mba?k|mas|pak|bu))*[\s.!,🙏👍]*$/i;
+
+export function isShortAcknowledgement(message: string): boolean {
+  const text = (message ?? "").trim();
+  if (!text || text.includes("?") || text.length > 48) return false;
+  return SHORT_ACK_RE.test(text);
+}
+
+/** "ya" / "ya kak" setelah booking ada tetap diserahkan ke Finance, bukan dijawab di sini. */
+function isBareYes(message: string): boolean {
+  return /^(?:ya|iya|iyaa+|yes|yess+)(?:\s+(?:kak|ka|kk|kakak))*[\s.!,🙏👍]*$/i.test((message ?? "").trim());
+}
 const ROOM_CHANGE_DENY_RE = /\b(tidak|tdk|gak|ga|nggak|ngga|enggak|engga|batal|gak jadi|nggak jadi|tidak jadi|cancel|no)\b/i;
 
 export interface RoomChangeDeps {
@@ -2143,6 +2164,11 @@ async function handleExistingBookingRoomChange(
     await updateBookingState(supabase, phone, "IDLE", {});
     return { handled: false };
   }
+
+  // Sapaan singkat bukan sinyal pindah kamar. Tanpa ini, draft yang masih
+  // menyimpan kamar + tanggal yang bertabrakan dengan booking aktif dianggap
+  // permintaan ubah kamar ("Siap kak" → "Untuk perubahan kamar booking …").
+  if (isShortAcknowledgement(message)) return null;
 
   // 2) Tentukan tipe kamar baru yang diminta.
   const rooms = (ctx.rooms ?? []) as RoomTypeRow[];
@@ -2274,6 +2300,41 @@ export async function processBookingState(
     } catch (e) {
       console.warn("[BookingState] gagal memperpanjang TTL (non-fatal):", e);
     }
+  }
+
+  // Share lokasi di tengah booking: jawab alamat yang sudah ada, jangan
+  // mengganti state dan jangan jatuh ke "saya tunggu kabarnya".
+  if (state !== "IDLE" && isLocationShareRequest(message)) {
+    const location = buildPropertyFaqReply({
+      message,
+      property: (ctx.property ?? null) as Record<string, unknown> | null,
+      rooms: ctx.rooms,
+      greetingUsed: true,
+      mode: "late",
+    });
+    if (location?.intent === "location_question" && location.reply) {
+      return { handled: true, reply: location.reply };
+    }
+  }
+
+  // Booking sudah tercatat: "Siap kak" / "makasih" cukup dibalas singkat.
+  // "ya"/"ya kak" tidak ikut — Finance yang menanggapinya, dan penawaran
+  // pindah kamar yang sedang menunggu "ya" sudah ditangani di atas.
+  if (
+    isShortAcknowledgement(message) &&
+    !isBareYes(message) &&
+    (context.bookingCode?.trim() || state === "PAYMENT_PENDING" || state === "COMPLETED")
+  ) {
+    const code = context.bookingCode?.trim();
+    if (state === "CONFIRMING_BOOKING") {
+      await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
+    }
+    return {
+      handled: true,
+      reply: code
+        ? `Siap Kak 🙏 Pemesanan ${code} sudah tercatat. Kalau ada yang perlu dibantu lagi, kabari kami ya.`
+        : `Siap Kak 🙏 Kalau ada yang perlu dibantu lagi, kabari kami ya.`,
+    };
   }
 
   const formSubmittedMatch = message.match(FORM_SUBMITTED_PATTERN);

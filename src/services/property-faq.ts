@@ -90,6 +90,30 @@ const VISITOR_PICKUP_TOPIC_RE =
 const VISIT_SURVEY_TOPIC_RE =
   /\b(?:nanti\s+)?(?:pagi|siang|sore|malam)?\s*(?:ini)?\s*(?:saya|kami|aku|kita)?\s*(?:akan|mau|ingin|rencana|kemungkinan)?\s*(?:ke|datang\s+ke|dtg\s+ke|menuju\s+ke)\s+(?:lokasi|penginapan|pomah|guesthouse|gh)\b|\b(?:survey|survei|lihat\s+kamar|cek\s+kamar|lihat\s+lokasi|cek\s+lokasi|mampir\s+ke\s+lokasi|datang\s+survey|datang\s+survei)\b/i;
 
+/**
+ * Tamu minta titik/share lokasi, termasuk ejaan chat yang tidak baku.
+ * "Nt minta sharelooknya kak" = nanti minta share lokasinya (22 Nov 2026).
+ * Bukan pertanyaan "kode booking dimana" / rekening.
+ */
+export function isLocationShareRequest(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  if (
+    /\b(kode|booking(?:nya)?|reservasi(?:nya)?|pesanan(?:nya)?|invoice(?:nya)?|rekening|norek|no\.?\s*rek|pembayaran|bayar(?:nya)?|transfer(?:nya)?|tagihan(?:nya)?)\b/i.test(
+      text,
+    )
+  ) {
+    return false;
+  }
+  if (/\bshare\s*l(?:ook|ok|oc)(?:asi)?(?:nya)?\b/i.test(text)) return true;
+  if (/\b(?:kirim(?:kan)?|minta|kasih(?:in|kan)?|kasi)\s+(?:share\s*)?(?:lokasi|maps?|google\s*maps|pin|titik)(?:nya)?\b/i.test(text)) return true;
+  if (/\btitik\s+lokasi(?:nya)?\b/i.test(text)) return true;
+  if (/\b(?:share|kirim(?:kan)?)\s+(?:pin|titik)(?:\s+lokasi(?:nya)?)?\b/i.test(text)) return true;
+  if (/\bgoogle\s*maps(?:nya)?\b/i.test(text)) return true;
+  if (/\b(?:minta|share|kirim(?:kan)?|kasih(?:in|kan)?)\s+maps?(?:nya)?\b/i.test(text)) return true;
+  return false;
+}
+
 /** Filler ekor: "kak", "min", "yaa", "dong", dst. — boleh berulang. */
 const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|y+a+h?|dong|banget|banyak|deh|nih|loh|lho))*";
 
@@ -418,7 +442,8 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
 
   // — Alamat / lokasi —
   if (
-    /\b(alamat|lokasi|dimana|di mana|dmn|maps?|map|lokasinya|rute|arah|arahan|posisi|google maps)\b/i.test(raw) &&
+    (isLocationShareRequest(raw) ||
+      /\b(alamat|lokasi|dimana|di mana|dmn|maps?|map|lokasinya|rute|arah|arahan|posisi|google maps)\b/i.test(raw)) &&
     !/\b(kode|booking(?:nya)?|reservasi(?:nya)?|pesanan(?:nya)?|invoice(?:nya)?|rekening|norek|no\.?\s*rek|pembayaran|bayar(?:nya)?|transfer(?:nya)?|tf|dp|lunas|pelunasan|tagihan(?:nya)?|nota|bukti|kwitansi|kuitansi|voucher|qris)\b/i.test(raw)) {
     const mapsLink =
       mapUrl ||

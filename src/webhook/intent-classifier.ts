@@ -12,7 +12,7 @@ const RULES: Array<{ pattern: RegExp; label: string }> = [
   // Insiden Syahrul Alwi 5 Nov 2026: "saya ambil yg single… dibantu pembayarannya" ter-label Pembayaran.
   { pattern: /\b(?:(?:saya|kami|kita|mau|ingin)\s+)?(?:ambil|pilih|pesan)\s+(?:yg|yang|kamar|tipe|single|deluxe|family|grand)?/i, label: "Booking" },
   { pattern: /(tersedia|available|kosong|booking|pesan|reservasi|cek|check)/i,                    label: "Cek Ketersediaan" },
-  { pattern: /(lokasi|alamat|dimana|jarak|jauh|dekat|map|peta|arah|rute|unnes|kampus|pusat|kota)/i, label: "Tanya Lokasi" },
+  { pattern: /(lokasi|alamat|dimana|jarak|jauh|dekat|map|peta|arah|rute|unnes|kampus|pusat|kota|share\s*l(?:ook|ok|oc))/i, label: "Tanya Lokasi" },
   { pattern: /(fasilitas|wifi|sarapan|parkir|cafe|kolam|gym|ameniti|fitur)/i,                     label: "Tanya Fasilitas" },
   { pattern: /(check.?in|check.?out|waktu|jam|kapan|lama)/i,                                      label: "Kebijakan" },
   { pattern: /(rusak|broken|mati|tidak (bisa|berfungsi)|macet|bocor|keluhan|komplain)/i,           label: "Keluhan" },

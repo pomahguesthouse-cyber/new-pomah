@@ -16,11 +16,15 @@ import { mentionsPayAtCheckin } from "../src/lib/deposit-policy";
 import { planStayCorrection } from "../src/ai/state-machine/booking-stay-guard";
 import { extractGuestNameFromMessage } from "../src/ai/state-machine/flexible-slot-extractor";
 import {
+  isShortAcknowledgement,
   parseSlotCorrection,
   processBookingState,
   type BookingContext,
   type StateRecord,
 } from "../src/ai/state-machine/booking-machine";
+import { buildPropertyFaqReply, isLocationShareRequest } from "../src/services/property-faq";
+import { buildRoomChangeQuote, type ActiveBookingSnapshot } from "../src/services/room-change-quote";
+import { classifyMessageIntent } from "../src/webhook/intent-classifier";
 
 const TODAY = "2026-11-22";
 const WA = "6285885881986";
@@ -202,6 +206,40 @@ assert.ok(mentionsPayAtCheckin("bayar di tempat ya kak"));
 assert.ok(!mentionsPayAtCheckin("mau transfer saja"));
 assert.ok(!mentionsPayAtCheckin("Data booking sementara:"));
 
+const SHARE_LOC = "Nt minta sharelooknya kak";
+
+assert.equal(isLocationShareRequest(SHARE_LOC), true);
+assert.equal(classifyMessageIntent(SHARE_LOC), "Tanya Lokasi");
+for (const sample of [
+  "nanti minta share lokasinya",
+  "sharelok",
+  "share lok",
+  "sharelook",
+  "shareloc",
+  "share lokasi",
+  "kirim lokasi",
+  "minta lokasi",
+  "titik lokasi",
+  "minta maps nya kak",
+  "sharelooknya",
+]) {
+  assert.equal(isLocationShareRequest(sample), true, sample);
+}
+assert.equal(isLocationShareRequest("Siap kak"), false);
+assert.equal(isLocationShareRequest("kode booking dimana"), false);
+{
+  const faq = buildPropertyFaqReply({ message: SHARE_LOC, property: {}, mode: "late", greetingUsed: true });
+  assert.equal(faq?.intent, "location_question");
+  assert.match(faq?.reply ?? "", /Jl\. Dewi Sartika/);
+  assert.doesNotMatch(faq?.reply ?? "", /-?\d+\.\d{4,}/);
+}
+
+for (const sample of ["Siap kak", "siap", "ok", "oke", "baik", "makasih", "terima kasih", "sip", "noted", "ya kak"]) {
+  assert.equal(isShortAcknowledgement(sample), true, sample);
+}
+assert.equal(isShortAcknowledgement("mau ganti ke deluxe"), false);
+assert.equal(isShortAcknowledgement("Nt minta sharelooknya kak"), false);
+
 function writer() {
   const calls: Array<Record<string, unknown>> = [];
   const impl = async (args: Record<string, unknown>) => {
@@ -381,6 +419,86 @@ async function main() {
     assert.equal(rec.states.at(-1)!.context.guestName, "Susilo Yuwono");
     assertRoomsUnchanged(rec.states.at(-1)!.context);
     assert.match(reply.reply ?? "", /bayar di tempat/i, message);
+  }
+
+  // "Nt minta sharelooknya kak" saat konfirmasi booking: jawab lokasi, state tetap.
+  {
+    const { db, rec } = makeDb();
+    const w = writer();
+    const before = draft({ guestName: "Susilo Yuwono" });
+    const reply = await processBookingState(ctxOf(db) as any, WA, SHARE_LOC, record("CONFIRMING_BOOKING", before), {
+      createBookingImpl: w.impl as any,
+    });
+    assert.equal(w.calls.length, 0);
+    assert.match(reply.reply ?? "", /Jl\. Dewi Sartika/);
+    assert.match(reply.reply ?? "", /Maps:/);
+    assert.doesNotMatch(reply.reply ?? "", /saya tunggu kabarnya/i);
+    assert.doesNotMatch(reply.reply ?? "", /perubahan kamar/i);
+    const saved = rec.states.at(-1)!;
+    assert.equal(saved.state, "CONFIRMING_BOOKING");
+    assert.equal(saved.context.guestName, "Susilo Yuwono");
+    assert.equal(saved.context.checkIn, CHECK_IN);
+    assert.equal(saved.context.checkOut, CHECK_OUT);
+    assertRoomsUnchanged(saved.context);
+  }
+
+  // "Siap kak" setelah booking PG-4BJ9F ada: bukan permintaan pindah kamar.
+  {
+    const existing: ActiveBookingSnapshot = {
+      id: "b-4bj9f",
+      referenceCode: "PG-4BJ9F",
+      checkIn: CHECK_IN,
+      checkOut: CHECK_OUT,
+      nights: 1,
+      status: "confirmed",
+      paymentStatus: "unpaid",
+      totalAmount: 800000,
+      paidAmount: 0,
+      adults: 3,
+      rooms: [
+        { bookingRoomId: "br-1", roomTypeId: SINGLE.id, roomTypeName: "Single", roomId: null, nightlyRate: 200000, extraBedCount: 0 },
+        { bookingRoomId: "br-2", roomTypeId: DELUXE.id, roomTypeName: "Deluxe", roomId: null, nightlyRate: 300000, extraBedCount: 0 },
+      ],
+    };
+    const handoffs: unknown[] = [];
+    const deps = {
+      loadActiveBookings: async () => [existing],
+      computeQuote: async (booking: ActiveBookingSnapshot, roomType: { id: string; name: string; base_rate?: number | null }) =>
+        buildRoomChangeQuote({
+          booking,
+          newRoomType: roomType,
+          newTotal: Number(roomType.base_rate ?? 0),
+          available: 1,
+        }),
+      createHandoff: async (input: unknown) => {
+        handoffs.push(input);
+        return { id: "t" };
+      },
+    };
+    for (const message of ["Siap kak", "ok", "oke", "baik", "makasih", "terima kasih", "sip", "noted", "ya kak"]) {
+      const { db, rec } = makeDb();
+      const w = writer();
+      const reply = await processBookingState(
+        ctxOf(db) as any,
+        WA,
+        message,
+        record("CONFIRMING_BOOKING", draft({ guestName: "Susilo Yuwono", bookingCode: "PG-4BJ9F" })),
+        { createBookingImpl: w.impl as any, roomChange: deps },
+      );
+      assert.equal(w.calls.length, 0, message);
+      assert.equal(handoffs.length, 0, message);
+      assert.doesNotMatch(reply.reply ?? "", /perubahan kamar/i, message);
+      assert.doesNotMatch(reply.reply ?? "", /teruskan ke staf/i, message);
+      const saved = rec.states.at(-1)!;
+      assert.equal(saved.context.bookingCode, "PG-4BJ9F", message);
+      assertRoomsUnchanged(saved.context);
+      if (message === "Siap kak") {
+        assert.equal(reply.handled, true);
+        assert.match(reply.reply ?? "", /PG-4BJ9F/);
+        assert.match(reply.reply ?? "", /sudah tercatat/);
+      }
+      if (message === "ya kak") assert.equal(reply.handled, false);
+    }
   }
 
   console.log("susilo name capture: ok");
