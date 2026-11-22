@@ -17,6 +17,7 @@
 
 import {
   findMentionedRoomType,
+  looksLikePersonName,
   normalizeRoomName,
 } from "./booking-machine";
 import { todayWIB, fmtDateID } from "@/lib/date";
@@ -65,6 +66,25 @@ export interface ExtractedSlots {
  */
 const NAME_LABEL_PATTERN =
   /(?:(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku)\s*(?::\s*|\s+)|(?:nama|name)\s*:\s*)(.+)/i;
+
+/** Label nama di awal baris, termasuk bullet ringkasan `• Nama:`. */
+const LINE_NAME_LABEL_RE =
+  /^(?:(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku)\s*(?::\s*|\s+)|(?:nama|name)\s*:\s*)(.+)$/i;
+
+const NUMBERED_ANSWER_RE = /^(\d+)[\.\)]\s*(.+)$/;
+
+/**
+ * Baris/nilai yang merupakan template bot, bukan nama tamu.
+ * "Nama lengkap tamu" dan "Data booking sementara" tidak boleh lolos.
+ */
+const TEMPLATE_GUEST_NAME_RE =
+  /^(?:data\s+booking\s+sementara|mohon\s+lengkapi(?:\s+data)?(?:\s+berikut)?(?:\s+untuk\s+melanjutkan(?:\s+reservasi)?)?|berikut\s+ringkasan(?:nya)?|data\s+pemesanan(?:\s+sudah\s+lengkap)?|nama\s+lengkap(?:\s+tamu)?|lengkap\s+tamu|tipe\s+kamar|jumlah\s+tamu(?:\s*\([^)]*\))?|tanggal\s+check[\s-]*in(?:\s*(?:&|dan)\s*check[\s-]*out)?|nomor(?:\s+(?:telepon|hp|wa))?|no\.?\s*hp|check[\s-]*in|check[\s-]*out|kamar|dewasa|anak)$/i;
+
+const TEMPLATE_LINE_RE =
+  /^(?:data\s+booking\s+sementara|mohon\s+lengkapi\s+data|berikut\s+ringkasan|data\s+pemesanan|kalau\s+datanya\s+sudah\s+sesuai|kalau\s+ada\s+yang\s+ingin|kakak\s+bisa\s+mengetikkan)\b/i;
+
+const FIELD_LABEL_LINE_RE =
+  /^(?:kamar|check[\s-]*in|check[\s-]*out|no\.?\s*hp|no\.?\s*wa|dewasa|anak|usia\s+anak|email|durasi|harga|total|pembayaran|extra\s*bed|rincian|jumlah\s+tamu)\s*:/i;
 
 /** Honorifik yang harus dibuang dari nama */
 const HONORIFIC_RE = /\b(kak|kakak|mba|mbak|mas|pak|bu|bro|sis|bang|kk)\b/gi;
@@ -119,18 +139,6 @@ const EARLY_ARRIVAL_RE =
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function cleanName(raw: string): string {
-  return raw
-    .split(/\r?\n/)[0]!
-    .replace(/^saya\s+/i, "")
-    .replace(HONORIFIC_RE, " ")
-    .replace(/[,\.\-–—!]+$/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(TRAILING_FILLER_RE, "")
-    .trim();
-}
-
 /**
  * Validasi nama yang lebih lenient:
  * - Minimal 2 karakter
@@ -147,6 +155,146 @@ function isValidName(candidate: string): boolean {
   if (tokens.length > 6) return false;
   // Minimal 1 kata alfabet ≥ 2 karakter
   return tokens.some((w) => /^[A-Za-zÀ-ÿ.'\-]{2,}$/.test(w));
+}
+
+function normalizeGuestNameKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[•*]+/g, " ")
+    .replace(/[:.]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** True bila teks ini label template bot, bukan nama orang. */
+export function isTemplateGuestName(value: string): boolean {
+  const key = normalizeGuestNameKey(value);
+  if (!key) return true;
+  if (TEMPLATE_GUEST_NAME_RE.test(key)) return true;
+  if (TEMPLATE_LINE_RE.test(key)) return true;
+  return false;
+}
+
+function isSkippableTemplateLine(line: string): boolean {
+  const key = normalizeGuestNameKey(line);
+  if (!key) return true;
+  if (isTemplateGuestName(key)) return true;
+  if (FIELD_LABEL_LINE_RE.test(line.trim())) return true;
+  if (TEMPLATE_LINE_RE.test(key)) return true;
+  return false;
+}
+
+/** Rapikan satu baris kandidat nama (bullet, nomor jawaban, label, honorifik, ekor). */
+export function sanitizeGuestNameLine(candidate: string): string {
+  const firstLine = candidate.split(/\r?\n/)[0] ?? candidate;
+  return firstLine
+    .replace(/^[•\-\*\u2022·]+\s*/, "")
+    .replace(/^\d+[\.\)]\s*/, "")
+    .replace(/^(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku|nama|name)\s*:?\s*/i, "")
+    .replace(/^saya\s+/i, "")
+    .replace(/(?:\+?62|0)[\s\-().]*8(?:[\s\-().]*\d){6,12}/g, " ")
+    .replace(/\b(?:nomor|no\.?|hp|wa|telp)\s*:?\s*/gi, " ")
+    .replace(/[,;]+/g, " ")
+    .replace(HONORIFIC_RE, " ")
+    .replace(/[,.\-–—!]+$/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(TRAILING_FILLER_RE, "")
+    .trim();
+}
+
+function isRoomTypeLabel(
+  candidate: string,
+  rooms: Array<{ id: string; name: string; base_rate?: number | null }>,
+): boolean {
+  const key = normalizeRoomName(candidate);
+  if (!key) return false;
+  return rooms.some((room) => normalizeRoomName(room.name) === key);
+}
+
+function acceptGuestName(
+  raw: string,
+  rooms?: Array<{ id: string; name: string; base_rate?: number | null }>,
+): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed || isTemplateGuestName(trimmed)) return null;
+  const cleaned = sanitizeGuestNameLine(trimmed);
+  if (!cleaned || isTemplateGuestName(cleaned)) return null;
+  if (!looksLikePersonName(cleaned) || !isValidName(cleaned)) return null;
+  if (rooms && isRoomTypeLabel(cleaned, rooms)) return null;
+  return cleaned;
+}
+
+function prepareGuestNameLine(line: string): string {
+  return line.trim().replace(/^[•\-\*\u2022·]+\s*/, "");
+}
+
+export interface GuestNameExtractOptions {
+  /** Bot baru meminta nama (COLLECTING_DATA / jawaban bernomor "1. Susilo Yuwono"). */
+  awaitingName?: boolean;
+  /** Baris tanpa label boleh jadi nama. Matikan bila pesan juga memuat tanggal/kamar. */
+  allowUnlabeled?: boolean;
+  rooms?: Array<{ id: string; name: string; base_rate?: number | null }>;
+}
+
+/**
+ * Nama tamu dari pesan bebas.
+ * - `Nama:` / `• Nama:` / `atas nama` di baris mana pun.
+ * - Jawaban bernomor `1. Susilo Yuwono` bila bot sedang meminta nama.
+ * - Baris template ("Data booking sementara", "Mohon lengkapi data") diabaikan.
+ */
+export function extractGuestNameFromMessage(message: string, opts?: GuestNameExtractOptions): string | null {
+  const lines = message.split(/\r?\n/).map(prepareGuestNameLine).filter(Boolean);
+  for (const line of lines) {
+    const labeled = line.match(LINE_NAME_LABEL_RE);
+    if (!labeled) continue;
+    const name = acceptGuestName(labeled[1] ?? "", opts?.rooms);
+    if (name) return name;
+  }
+
+  const wantNumbered = opts?.awaitingName === true || /mohon\s+lengkapi\s+data/i.test(message);
+  if (wantNumbered) {
+    for (const line of lines) {
+      if (LINE_NAME_LABEL_RE.test(line)) continue;
+      const numbered = line.match(NUMBERED_ANSWER_RE);
+      if (!numbered) continue;
+      const name = acceptGuestName(numbered[2] ?? "", opts?.rooms);
+      if (name) return name;
+    }
+  }
+
+  if (opts?.allowUnlabeled) {
+    for (const line of lines) {
+      if (LINE_NAME_LABEL_RE.test(line) || NUMBERED_ANSWER_RE.test(line)) continue;
+      if (isSkippableTemplateLine(line)) continue;
+      if (line.includes(":")) continue;
+      const name = acceptGuestName(line, opts.rooms);
+      if (name) return name;
+    }
+  }
+
+  if (lines.length <= 1 && !message.includes("\n")) {
+    const loose = message.match(NAME_LABEL_PATTERN);
+    if (loose) {
+      const name = acceptGuestName(loose[1] ?? "", opts?.rooms);
+      if (name) return name;
+    }
+  }
+  return null;
+}
+
+/** Tamu menempel ulang template/ringkasan bot, bukan permintaan ubah kamar/tanggal. */
+export function isEchoedBookingTemplate(message: string): boolean {
+  const text = message.replace(/\r/g, "");
+  if (!text.trim()) return false;
+  if (/data\s+booking\s+sementara/i.test(text)) return true;
+  if (/mohon\s+lengkapi\s+data/i.test(text)) return true;
+  if (/berikut\s+ringkasan(?:nya)?/i.test(text)) return true;
+  if (/data\s+pemesanan\s+sudah\s+lengkap/i.test(text)) return true;
+  if (/kalau\s+datanya\s+sudah\s+sesuai/i.test(text)) return true;
+  const bulletStay =
+    /(?:^|\n)\s*•\s*check[\s-]*in\s*:/i.test(text) && /(?:^|\n)\s*•\s*check[\s-]*out\s*:/i.test(text);
+  return bulletStay;
 }
 
 /**
@@ -320,13 +468,13 @@ export function extractAllSlots(
   const textLower = text.toLowerCase();
 
   // ── 1. Nama ───────────────────────────────────────────────────────────────
-  const nameMatch = text.match(NAME_LABEL_PATTERN);
-  if (nameMatch) {
-    const candidate = cleanName(nameMatch[1]!);
-    if (candidate.length >= 2 && isValidName(candidate)) {
-      result.guest_name = candidate;
-    }
-  }
+  // Label di baris mana pun (termasuk "• Nama:") dan jawaban bernomor
+  // setelah prompt "Mohon lengkapi data". Baris template tidak jadi nama.
+  const guestName = extractGuestNameFromMessage(text, {
+    rooms,
+    allowUnlabeled: false,
+  });
+  if (guestName) result.guest_name = guestName;
 
   // ── 2. Email ──────────────────────────────────────────────────────────────
   if (SKIP_EMAIL_RE.test(text)) {

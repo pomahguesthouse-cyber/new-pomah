@@ -115,6 +115,10 @@ function labeledDay(text: string, label: RegExp, today: string, fallbackIso?: st
  * Koreksi tanggal dari pesan tamu terhadap draft yang sudah ada.
  * Hanya check-in tidak pernah diam-diam memperpanjang menginap
  * (20 + checkout lama 22 → 2 malam). Malam lama dipertahankan, lalu ditanya.
+ *
+ * Tanggal yang sama dengan draft bukan koreksi (insiden 22 Nov 2026:
+ * tamu menempel ulang ringkasan Check-in/Check-out yang tidak berubah).
+ * Pemanggil harus lanjut mengekstrak slot lain, terutama nama.
  */
 export function planStayCorrection(
   message: string,
@@ -133,35 +137,42 @@ export function planStayCorrection(
   const oldNights =
     current.checkIn && current.checkOut ? Math.max(1, countStayNights(current.checkIn, current.checkOut)) : 1;
 
+  const emit = (plan: StayCorrectionPlan): StayCorrectionPlan | null => {
+    if (current.checkIn && current.checkOut && plan.checkIn === current.checkIn && plan.checkOut === current.checkOut) {
+      return null;
+    }
+    return plan;
+  };
+
   if (checkIn && checkOut) {
     if (checkOut > checkIn) {
-      return { checkIn, checkOut, explicit: true, needsConfirm: false, wouldLengthen: false };
+      return emit({ checkIn, checkOut, explicit: true, needsConfirm: false, wouldLengthen: false });
     }
     const proposedOut = addStayDays(checkIn, oldNights);
-    return { checkIn, checkOut: proposedOut, explicit: false, needsConfirm: true, wouldLengthen: false };
+    return emit({ checkIn, checkOut: proposedOut, explicit: false, needsConfirm: true, wouldLengthen: false });
   }
 
   if (checkIn && !checkOut) {
     const preservedOut = addStayDays(checkIn, oldNights);
     const keptOldOut = current.checkOut && current.checkOut > checkIn ? current.checkOut : null;
     const wouldLengthen = !!keptOldOut && countStayNights(checkIn, keptOldOut) > oldNights;
-    return {
+    return emit({
       checkIn,
       checkOut: preservedOut,
       explicit: false,
       needsConfirm: true,
       wouldLengthen,
-    };
+    });
   }
 
   if (checkOut && current.checkIn && checkOut > current.checkIn) {
-    return { checkIn: current.checkIn, checkOut, explicit: true, needsConfirm: false, wouldLengthen: false };
+    return emit({ checkIn: current.checkIn, checkOut, explicit: true, needsConfirm: false, wouldLengthen: false });
   }
 
   if (checkOut) {
     const proposedIn = addStayDays(checkOut, -oldNights);
     if (!proposedIn || proposedIn >= checkOut) return null;
-    return { checkIn: proposedIn, checkOut, explicit: false, needsConfirm: true, wouldLengthen: false };
+    return emit({ checkIn: proposedIn, checkOut, explicit: false, needsConfirm: true, wouldLengthen: false });
   }
 
   return null;
