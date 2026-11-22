@@ -1,4 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { guestNameSafeForThreadDisplay } from "@/ai/state-machine/booking-summary-text";
 import { isOnsitePaymentMethod, requiresFullPayment } from "@/lib/deposit-policy";
 import { fmtDateID } from "@/lib/date";
 import { formatTransferAccountLine, resolveBotTransferAccount, type PropertyPaymentFields } from "@/lib/payment-account";
@@ -66,15 +67,17 @@ export async function resolveOrCreateNotificationThread({
   /** Set `meta` hanya saat thread baru dibuat untuk kiriman Meta. */
   provider?: "meta" | null;
 }): Promise<string | null> {
+  // Jangan timpa nama profil WhatsApp dengan hasil parser yang masih
+  // berisi label template ("lengkap tamu HUSNI HARIS").
+  const safeName = guestNameSafeForThreadDisplay(displayName);
   const existingId = await findNotificationThreadId(supabase, phone);
   if (existingId) {
-    await (supabase as any)
-      .from("whatsapp_threads")
-      .update({
-        display_name: displayName,
-        ...(guestId ? { guest_id: guestId } : {}),
-      })
-      .eq("id", existingId);
+    const patch: Record<string, unknown> = {};
+    if (safeName) patch.display_name = safeName;
+    if (guestId) patch.guest_id = guestId;
+    if (Object.keys(patch).length > 0) {
+      await (supabase as any).from("whatsapp_threads").update(patch).eq("id", existingId);
+    }
     return existingId;
   }
 
@@ -83,7 +86,7 @@ export async function resolveOrCreateNotificationThread({
     .insert({
       phone,
       canonical_phone: phone,
-      display_name: displayName,
+      display_name: safeName,
       ...(guestId ? { guest_id: guestId } : {}),
       status: "open",
       unread_count: 0,

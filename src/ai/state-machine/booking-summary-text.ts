@@ -25,6 +25,20 @@ export function formatEmailSummaryLine(email?: string | null): string {
   return `• Email: ${value}\n`;
 }
 
+/** Label template bot. Nama yang masih memuat frasa ini bukan nama orang. */
+const THREAD_TEMPLATE_NAME_RE =
+  /\b(?:nama\s+lengkap(?:\s+tamu)?|nama\s+tamu|lengkap\s+tamu|data\s+booking\s+sementara|mohon\s+lengkapi(?:\s+data)?)\b/i;
+
+/**
+ * Nama yang boleh menggantikan `whatsapp_threads.display_name`.
+ * Null bila kosong atau masih berisi kata template ("lengkap tamu HUSNI HARIS").
+ */
+export function guestNameSafeForThreadDisplay(name: string | null | undefined): string | null {
+  const trimmed = String(name ?? "").replace(/\s+/g, " ").trim();
+  if (!trimmed || THREAD_TEMPLATE_NAME_RE.test(trimmed)) return null;
+  return trimmed;
+}
+
 export function bookingSummaryLead(completeAndValid: boolean): string {
   return completeAndValid
     ? "Data pemesanan sudah lengkap! Berikut ringkasannya:\n\n"

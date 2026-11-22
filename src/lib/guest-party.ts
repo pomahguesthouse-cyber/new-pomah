@@ -181,11 +181,21 @@ export function readParentheticalParty(text: string): { adults: number; children
 }
 
 /**
+ * Buang contoh yang bot sendiri tempelkan (`contoh: "..."`, `(contoh: ...)`),
+ * sampai akhir baris / kurung. Angka di contoh ("2 dewasa 1 anak") bukan data tamu.
+ */
+export function stripBotExampleText(message: string): string {
+  return String(message ?? "")
+    .replace(/\(\s*contoh\s*:[\s\S]*?\)/gi, " ")
+    .replace(/\bcontoh\s*:[^\n]*/gi, " ");
+}
+
+/**
  * Baca jumlah tamu dan usia anak dari satu pesan. Jumlah anak hanya terisi
  * bila tamu menyebut hitungan ("1 anak"), bukan usia.
  */
 export function readGuestCount(message: string): GuestCountReading | null {
-  const { ages, masked } = extractChildAges(message);
+  const { ages, masked } = extractChildAges(stripBotExampleText(message));
   const counts = readExplicitCounts(masked);
   const reading: GuestCountReading = {};
   if (counts?.adultFound && counts.adults > 0) reading.adults = counts.adults;

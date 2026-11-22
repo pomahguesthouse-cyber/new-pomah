@@ -23,8 +23,8 @@ import {
 import { todayWIB, fmtDateID } from "@/lib/date";
 import { nowForStayParsing, resolveIdDate, resolveRelativeDayRange } from "@/lib/id-date";
 import { extractRequestedExtraBeds } from "./extra-bed-parser";
-import { readGuestCount } from "@/lib/guest-party";
-import { formatGuestNameForSummary } from "./booking-summary-text";
+import { readGuestCount, stripBotExampleText } from "@/lib/guest-party";
+import { formatGuestNameForSummary, guestNameSafeForThreadDisplay } from "./booking-summary-text";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,9 +67,9 @@ export interface ExtractedSlots {
 const NAME_LABEL_PATTERN =
   /(?:(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku)\s*(?::\s*|\s+)|(?:nama|name)\s*:\s*)(.+)/i;
 
-/** Label nama di awal baris, termasuk bullet ringkasan `• Nama:`. */
+/** Label nama di awal baris, termasuk bullet ringkasan `• Nama:` dan label template. */
 const LINE_NAME_LABEL_RE =
-  /^(?:(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku)\s*(?::\s*|\s+)|(?:nama|name)\s*:\s*)(.+)$/i;
+  /^(?:(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku)\s*(?::\s*|\s+)|(?:nama\s+lengkap\s+tamu|nama\s+lengkap|nama\s+tamu|lengkap\s+tamu)\s*[:\-–—]?\s*|(?:nama|name)\s*:\s*)(.+)$/i;
 
 const NUMBERED_ANSWER_RE = /^(\d+)[\.\)]\s*(.+)$/;
 
@@ -190,7 +190,10 @@ export function sanitizeGuestNameLine(candidate: string): string {
   return firstLine
     .replace(/^[•\-\*\u2022·]+\s*/, "")
     .replace(/^\d+[\.\)]\s*/, "")
-    .replace(/^(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku|nama|name)\s*:?\s*/i, "")
+    .replace(
+      /^(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku|nama\s+lengkap\s+tamu|nama\s+lengkap|nama\s+tamu|lengkap\s+tamu|nama|name)\s*[:\-–—]?\s*/i,
+      "",
+    )
     .replace(/^saya\s+/i, "")
     .replace(/(?:\+?62|0)[\s\-().]*8(?:[\s\-().]*\d){6,12}/g, " ")
     .replace(/\b(?:nomor|no\.?|hp|wa|telp)\s*:?\s*/gi, " ")
@@ -219,7 +222,7 @@ function acceptGuestName(
   const trimmed = raw.trim();
   if (!trimmed || isTemplateGuestName(trimmed)) return null;
   const cleaned = sanitizeGuestNameLine(trimmed);
-  if (!cleaned || isTemplateGuestName(cleaned)) return null;
+  if (!cleaned || isTemplateGuestName(cleaned) || !guestNameSafeForThreadDisplay(cleaned)) return null;
   if (!looksLikePersonName(cleaned) || !isValidName(cleaned)) return null;
   if (rooms && isRoomTypeLabel(cleaned, rooms)) return null;
   return cleaned;
@@ -244,7 +247,8 @@ export interface GuestNameExtractOptions {
  * - Baris template ("Data booking sementara", "Mohon lengkapi data") diabaikan.
  */
 export function extractGuestNameFromMessage(message: string, opts?: GuestNameExtractOptions): string | null {
-  const lines = message.split(/\r?\n/).map(prepareGuestNameLine).filter(Boolean);
+  const source = stripBotExampleText(message);
+  const lines = source.split(/\r?\n/).map(prepareGuestNameLine).filter(Boolean);
   for (const line of lines) {
     const labeled = line.match(LINE_NAME_LABEL_RE);
     if (!labeled) continue;
@@ -273,8 +277,8 @@ export function extractGuestNameFromMessage(message: string, opts?: GuestNameExt
     }
   }
 
-  if (lines.length <= 1 && !message.includes("\n")) {
-    const loose = message.match(NAME_LABEL_PATTERN);
+  if (lines.length <= 1 && !source.includes("\n")) {
+    const loose = source.match(NAME_LABEL_PATTERN);
     if (loose) {
       const name = acceptGuestName(loose[1] ?? "", opts?.rooms);
       if (name) return name;
@@ -464,7 +468,7 @@ export function extractAllSlots(
   today?: string,
 ): ExtractedSlots {
   const result: ExtractedSlots = {};
-  const text = message.trim();
+  const text = stripBotExampleText(message).trim();
   const textLower = text.toLowerCase();
 
   // ── 1. Nama ───────────────────────────────────────────────────────────────
