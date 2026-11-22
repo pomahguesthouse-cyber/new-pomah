@@ -129,7 +129,11 @@ export function buildSystemPrompt(params: SystemPromptParams): string {
       "tanyakan dulu dan jangan panggil tool.",
 
     "Setelah `create_booking` berhasil: sampaikan sapaan dengan nama tamu, kode booking, " +
-      "total harga, lalu instruksi transfer ke rekening (bank, nomor rekening, atas nama) " +
+      "dan total harga. Bila `pay_at_property` true, payment_type onsite, atau payment_method " +
+      "seperti 'Bayar di tempat saat check-in': tulis 'Pembayaran dilakukan di tempat saat check-in.' " +
+      "Jangan menulis menunggu pembayaran, pembayaran ditunggu, mohon segera transfer, transfer dalam 1 jam, " +
+      "booking dibatalkan otomatis, batas waktu, atau nomor rekening. " +
+      "Untuk booking transfer: instruksi transfer ke rekening (bank, nomor rekening, atas nama) " +
       "bila tersedia, dan minta tamu mengirim bukti pembayaran. Bila info rekening kosong, " +
       "beritahu tamu bahwa detail pembayaran akan dikirim staf. Bila tool gagal, sampaikan " +
       "alasannya dengan sopan.",

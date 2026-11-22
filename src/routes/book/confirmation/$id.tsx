@@ -6,6 +6,11 @@
  */
 import * as React from "react";
 import { FULL_PAYMENT_POLICY_TEXT, requiresFullPayment } from "@/lib/deposit-policy";
+import {
+  guestConfirmationPaymentMode,
+  ONSITE_GUEST_PAYMENT_LINE,
+  ONSITE_STATUS_LABEL,
+} from "@/lib/guest-payment-copy";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Printer, Loader2, Download, Send } from "lucide-react";
@@ -201,6 +206,7 @@ function ConfirmationPage() {
       check_out: inv.check_out,
       total_amount: inv.total_amount,
       payment_status: inv.payment_status,
+      payment_method: inv.payment_method ?? null,
       paid_amount: inv.paid_amount,
       special_requests: inv.special_requests,
       guests: {
@@ -259,6 +265,12 @@ function ConfirmationPage() {
   const hasPayment = paidAmount > 0 || paymentStatus === "paid" || paymentStatus === "partial";
   const isPaid = paymentStatus === "paid" || (totalAmount > 0 && paidAmount >= totalAmount);
   const isPartial = !isPaid && (paymentStatus === "partial" || paidAmount > 0);
+  const paymentMode = guestConfirmationPaymentMode({
+    paymentStatus,
+    paidAmount,
+    totalAmount,
+    paymentMethod: inv?.payment_method,
+  });
 
   async function handleSendInvoice() {
     setSendState("sending");
@@ -440,13 +452,27 @@ function ConfirmationPage() {
               {/* Payment */}
               <div className="border-t border-stone-200 bg-stone-50 px-6 py-5 text-sm">
                 <p className="font-semibold">Pembayaran</p>
-                {isPaid ? (
+                {paymentMode === "paid" ? (
                   <p className="mt-1 font-medium text-emerald-700">
                     Terima kasih, anda telah melakukan pembayaran atas pemesanan anda di Pomah Guesthouse.
                   </p>
-                ) : (
+                ) : paymentMode === "onsite" ? (
                   <>
                     {isPartial ? (
+                      <p className="mt-1 font-medium text-amber-700">
+                        DP sudah diterima sebesar {formatIDR(paidAmount)}. Sisa pelunasan {formatIDR(remainingAmount)}.
+                      </p>
+                    ) : (
+                      <p className="mt-1 font-medium text-stone-700">
+                        Status pembayaran: {ONSITE_STATUS_LABEL}.
+                      </p>
+                    )}
+                    <p className="mt-1 text-stone-700">{ONSITE_GUEST_PAYMENT_LINE}</p>
+                    <p className="mt-1 text-stone-700">Total: {formatIDR(totalAmount)}</p>
+                  </>
+                ) : (
+                  <>
+                    {paymentMode === "partial" ? (
                       <p className="mt-1 font-medium text-amber-700">
                         DP sudah diterima sebesar {formatIDR(paidAmount)}. Sisa pelunasan {formatIDR(remainingAmount)}.
                       </p>
@@ -455,17 +481,13 @@ function ConfirmationPage() {
                         Status pembayaran: menunggu pembayaran.
                       </p>
                     )}
-                    {!isPartial && requiresFullPayment(Number(inv.nights)) && (
+                    {paymentMode === "unpaid" && requiresFullPayment(Number(inv.nights)) && (
                       <p className="mt-1 text-stone-700">
                         Jumlah yang harus dibayar: {formatIDR(totalAmount)} — {FULL_PAYMENT_POLICY_TEXT} (tanpa DP).
                       </p>
                     )}
 
-                    {inv.payment_method === "onsite" ? (
-                      <p className="mt-1 text-stone-600">
-                        Bayar di tempat saat check-in. Reservasi dikonfirmasi admin via WhatsApp.
-                      </p>
-                    ) : inv.property.bank ? (
+                    {inv.property.bank ? (
                       <div className="mt-1 space-y-0.5 text-stone-600">
                         <p>Silakan transfer ke:</p>
                         <p>🏦 {inv.property.bank}</p>

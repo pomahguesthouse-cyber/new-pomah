@@ -7,6 +7,8 @@
  * `formatTransferAccountLine(resolveBotTransferAccount(property))`.
  */
 import { fmtDateID } from "@/lib/date";
+import { isOnsitePaymentMethod } from "@/lib/deposit-policy";
+import { ONSITE_GUEST_PAYMENT_LINE } from "@/lib/guest-payment-copy";
 
 export const ADMIN_INVOICE_SOURCE = "admin_inbox_invoice";
 export const DEFAULT_CHECK_IN_TIME = "14:00";
@@ -33,6 +35,7 @@ export type AdminInvoiceMessageInput = {
   paidAmount: number;
   nights?: number | null;
   paymentStatus?: string | null;
+  paymentMethod?: string | null;
   invoiceUrl: string;
   transferAccountLine: string;
 };
@@ -113,9 +116,13 @@ export function buildInvoicePaymentBlock(input: {
   paidAmount: number;
   totalAmount: number;
   transferAccountLine: string;
+  paymentMethod?: string | null;
 }): string {
   if (isInvoicePaid(input.paymentStatus, input.paidAmount, input.totalAmount)) {
     return "Pembayaran sudah lunas, terima kasih";
+  }
+  if (isOnsitePaymentMethod(input.paymentMethod)) {
+    return ONSITE_GUEST_PAYMENT_LINE;
   }
   const account = String(input.transferAccountLine ?? "").trim() || "rekening resmi Pomah Guesthouse";
   return `Pembayaran bisa langsung saat check-in atau transfer ke ${account}. Mohon kirim bukti transfer di chat ini ya, Kak.`;
@@ -142,6 +149,7 @@ export function buildAdminInvoiceMessage(input: AdminInvoiceMessageInput): strin
     paidAmount: paid,
     totalAmount: total,
     transferAccountLine: input.transferAccountLine,
+    paymentMethod: input.paymentMethod,
   });
 
   return [

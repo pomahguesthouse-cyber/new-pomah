@@ -35,7 +35,7 @@ const BOOKING_ID = z
   );
 
 const BOOKING_COLUMNS =
-  "id, reference_code, guest_id, room_id, room_type_id, check_in, check_out, check_in_time, check_out_time, nights, total_amount, paid_amount, payment_status, status, created_at, guests(id, full_name, phone, email)";
+  "id, reference_code, guest_id, room_id, room_type_id, check_in, check_out, check_in_time, check_out_time, nights, total_amount, paid_amount, payment_status, payment_method, status, created_at, guests(id, full_name, phone, email)";
 
 type GuestRow = {
   id?: string | null;
@@ -58,6 +58,7 @@ type BookingRow = {
   total_amount?: number | string | null;
   paid_amount?: number | string | null;
   payment_status?: string | null;
+  payment_method?: string | null;
   status?: string | null;
   created_at?: string | null;
   guests?: GuestRow | GuestRow[] | null;
@@ -261,6 +262,7 @@ async function enrichBookings(
       paidAmount: paid,
       nights,
       paymentStatus: row.payment_status,
+      paymentMethod: row.payment_method,
       invoiceUrl,
       transferAccountLine: property.transfer_account_line,
     });
@@ -296,6 +298,7 @@ async function enrichBookings(
         check_out: row.check_out ?? "",
         total_amount: total,
         payment_status: paymentStatus === "paid" || paymentStatus === "partial" || paymentStatus === "unpaid" ? paymentStatus : "unpaid",
+        payment_method: row.payment_method ?? null,
         paid_amount: paid,
         guests: {
           full_name: guest?.full_name ?? null,

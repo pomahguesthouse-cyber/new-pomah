@@ -11,6 +11,7 @@ import { allowsDeposit } from "@/lib/deposit-policy";
 import { isDateString, fmtDateID } from "@/lib/date";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 import { toPaymentAccountFields } from "@/lib/payment-account";
+import { buildOnsiteInvoicePaymentLines, isOnsitePaymentChoice, ONSITE_STATUS_LABEL } from "@/lib/guest-payment-copy";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeGrandTotal, toRupiah, totalsMatch } from "@/lib/booking-total";
@@ -1029,6 +1030,7 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
     subtotal: s.rate * s.count * nights,
   }));
   const roomCount = assignments.length;
+  const payAtProperty = isOnsitePaymentChoice(paymentPlan.paymentMethod, str(args.payment_type));
 
   return JSON.stringify({
     ok: true,
@@ -1045,9 +1047,13 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
     total,
     paid_amount: initialPaidAmount,
     payment_status: initialPaymentStatus,
+    payment_method: paymentPlan.paymentMethod,
+    pay_at_property: payAtProperty,
+    guest_payment_text: payAtProperty ? buildOnsiteInvoicePaymentLines(total) : null,
+    payment_label: payAtProperty ? ONSITE_STATUS_LABEL : null,
     remaining_amount: Math.max(0, total - initialPaidAmount),
     guest: { full_name: fullName, email, phone },
-    pembayaran: toPaymentAccountFields(ctx.property),
+    pembayaran: payAtProperty ? null : toPaymentAccountFields(ctx.property),
     invoice_url: (() => {
       const pDom = (ctx.property?.public_domain as string | undefined)?.trim();
       const base = pDom

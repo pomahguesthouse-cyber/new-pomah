@@ -2,6 +2,7 @@ import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
+import { invoiceTransactionStatusLabel } from "@/lib/guest-payment-copy";
 
 // To make it look good, we define styles using StyleSheet.create
 const styles = StyleSheet.create({
@@ -226,6 +227,8 @@ export type InvoiceBookingData = {
   check_out: string;
   total_amount: number;
   payment_status?: "unpaid" | "partial" | "paid" | null;
+  /** onsite / "Bayar di tempat saat check-in" → label Bayar di Tempat. */
+  payment_method?: string | null;
   paid_amount?: number | null;
   source?: string;
   guests?: { full_name?: string | null; email?: string | null; phone?: string | null } | null;
@@ -295,12 +298,7 @@ export function InvoiceDocument({
   }
   const groupedRooms = Array.from(roomGroups.values());
 
-  const paymentText =
-    booking.payment_status === "paid"
-      ? "Lunas"
-      : booking.payment_status === "partial"
-        ? "Pembayaran Sebagian"
-        : "Belum Bayar";
+  const paymentText = invoiceTransactionStatusLabel(booking);
 
   const today = format(new Date(), "dd MMM yyyy, HH:mm", { locale: id });
   const safeLogo = pdfSafeLogo(logoUrl);

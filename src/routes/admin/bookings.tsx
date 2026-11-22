@@ -115,7 +115,7 @@ function statusPillClass(status: BookingStatus) {
   }
 }
 
-const FULL_SELECT = "id, reference_code, check_in, check_out, created_at, status, source, total_amount, adults, children, payment_status, paid_amount, internal_notes, special_requests, guests(id, full_name, email, phone, country), booking_rooms(id, room_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(id, name), rooms(id, number))";
+const FULL_SELECT = "id, reference_code, check_in, check_out, created_at, status, source, total_amount, adults, children, payment_status, payment_method, paid_amount, internal_notes, special_requests, guests(id, full_name, email, phone, country), booking_rooms(id, room_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(id, name), rooms(id, number))";
 const BASE_SELECT = "id, check_in, check_out, created_at, status, source, total_amount, adults, children, special_requests, guests(id, full_name, email, phone), booking_rooms(id, room_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(id, name), rooms(id, number))";
 
 type BookingListRow = {
@@ -128,6 +128,7 @@ type BookingListRow = {
   source: string;
   total_amount: number;
   payment_status?: "unpaid" | "partial" | "paid" | null;
+  payment_method?: string | null;
   paid_amount?: number | null;
   guests?: { full_name?: string | null; email?: string | null; phone?: string | null } | null;
   booking_rooms?: {

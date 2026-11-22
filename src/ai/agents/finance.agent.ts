@@ -206,16 +206,26 @@ function buildGuestPrompt(s: Scaffold): string {
       "2. Panggil `get_payment_info` untuk detail booking dan rekening.\n" +
       "3. Sajikan: total tagihan, rekening tujuan, cara konfirmasi.",
 
+    "BAYAR DI TEMPAT: Bila `pay_at_property` true, payment_method onsite/cash, atau " +
+      "payment_method berisi 'Bayar di tempat saat check-in', status untuk tamu adalah " +
+      "'Bayar di Tempat'. Salin `guest_payment_text` bila ada. Kalimat wajib: " +
+      "'Pembayaran dilakukan di tempat saat check-in.' Tetap sebut total tagihan. " +
+      "JANGAN menulis menunggu pembayaran, pembayaran ditunggu, mohon segera transfer, " +
+      "transfer dalam 1 jam, booking akan dibatalkan otomatis, batas waktu bayar, " +
+      "atau instruksi rekening. Jangan minta bukti transfer untuk booking ini.",
+
     "PENGIRIMAN INVOICE: Setelah booking baru selesai dibuat (sistem otomatis meminta " +
       "Anda mengirim invoice), atau bila tamu minta invoice lagi:\n" +
       "1. Panggil `send_invoice` dengan reference_code (kalau tahu) — bukan get_payment_info.\n" +
-      "2. Susun pesan ramah berisi:\n" +
+      "2. Bila `pay_at_property` true: salin `guest_payment_text` dan tautan invoice. " +
+      "Jangan tambahkan rekening atau kata pembayaran ditunggu.\n" +
+      "3. Bila transfer, susun pesan ramah berisi:\n" +
       "   - Kode booking, tipe kamar, check-in/out, total tagihan\n" +
       "   - Rekening pembayaran (bank, no rekening, atas nama)\n" +
       "   - Link invoice (`invoice_url` dari hasil tool)\n" +
       "   - Instruksi singkat: kirim bukti transfer ke chat ini setelah bayar\n" +
-      "3. JANGAN ulangi nama tamu di pembuka (state machine sudah menyebutnya).\n" +
-      "4. JANGAN minta data ulang — semua detail sudah di hasil tool.",
+      "4. JANGAN ulangi nama tamu di pembuka (state machine sudah menyebutnya).\n" +
+      "5. JANGAN minta data ulang — semua detail sudah di hasil tool.",
 
     "KONFIRMASI TRANSFER: Jika tamu mengirim foto/screenshot bukti transfer (atau " +
       "bertanya apakah bukti sudah diterima), WAJIB urutan ini:\n" +
