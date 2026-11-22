@@ -242,15 +242,44 @@ const CONFIRM_PATTERN =
  * mengenali "sudah sesuai" / "sesuai" — jadi write tidak pernah jalan.
  * Diekspor agar staff-silence bisa melewatkan konfirmasi aktif.
  */
+/**
+ * Buang klausa bayar di tempat, termasuk "saat check in" yang menempel.
+ * "check in" di dalam frasa pembayaran bukan koreksi tanggal menginap.
+ */
+function stripPayAtPropertyClause(message: string): string {
+  if (!mentionsPayAtCheckin(message)) return message.trim();
+  return message
+    .replace(
+      /,?\s*\b(?:bayar(?:nya)?\s+(?:di\s*tempat|ditempat|dtempat|di\s+lokasi|langsung(?:\s+(?:di\s*tempat|ditempat|dtempat))?|pas\s+(?:datang|check[\s-]?in|sampai)|saat\s+(?:datang|check[\s-]?in|tiba))|lunas\s+(?:di\s*tempat|ditempat|dtempat)|cash\s+(?:di\s*tempat|ditempat|dtempat|saat\s+check[\s-]?in|pas\s+datang)|cod)(?:\s+(?:ya|aja|saja|kak|ka|kk|dong|deh))*?(?:\s+(?:nanti\s+)?(?:saat|pas|waktu)\s+check[\s-]?in)?/gi,
+      " ",
+    )
+    .replace(/\s+/g, " ")
+    .replace(/\s+([,.!])/g, "$1")
+    .replace(/^[,\s]+|[,\s]+$/g, "")
+    .trim();
+}
+
+/** "Sudah betul, bayar di lokasi nanti saat check in" = setuju + bayar di tempat. */
+function isAffirmationPlusPayAtProperty(message: string): boolean {
+  if (!mentionsPayAtCheckin(message) || message.includes("?")) return false;
+  const match = message.match(/^([\s\S]+?)[,.]?\s+\b(?:bayar(?:nya)?|lunas|cash|cod)\b/i);
+  if (!match) return false;
+  const prefix = match[1].replace(/[,.\s]+$/g, "").trim();
+  if (!prefix || isBookingNegationOrCorrection(prefix)) return false;
+  return PURE_BOOKING_APPROVAL_RE.test(prefix);
+}
+
 export function isBookingConfirmationMessage(message: string): boolean {
   const text = (message ?? "").trim();
   if (!text || text.includes("?")) return false;
   // Negasi/koreksi SELALU didahulukan dari kata setuju: "belum sesuai kak",
   // "tidak sesuai", "ok tanggalnya 22 Juni", "iya, jumlah tamu 5" BUKAN
   // persetujuan ringkasan — jangan pernah membuat booking/invoice dari data lama.
+  // "check in" di dalam frasa bayar di tempat sudah dibuang sebelum tes ini.
   if (isBookingNegationOrCorrection(text)) return false;
-  // Hanya persetujuan murni (seluruh pesan) yang dihitung, bukan substring.
-  return PURE_BOOKING_APPROVAL_RE.test(text);
+  if (PURE_BOOKING_APPROVAL_RE.test(text)) return true;
+  // Afirmasi + bayar di tempat dalam satu pesan: lanjut createBooking, bukan ringkasan kedua.
+  return isAffirmationPlusPayAtProperty(text);
 }
 
 /** Kata sapaan/partikel yang boleh menempel pada persetujuan murni. */
@@ -269,7 +298,10 @@ const PURE_BOOKING_APPROVAL_RE = new RegExp(
  * (angka, tanggal, tamu, kamar, malam). Diekspor untuk regresi.
  */
 export function isBookingNegationOrCorrection(message: string): boolean {
-  const text = (message ?? "").trim().toLowerCase();
+  const raw = (message ?? "").trim().toLowerCase();
+  if (!raw) return false;
+  // "saat check in" pada "bayar di lokasi nanti saat check in" bukan ubah tanggal.
+  const text = mentionsPayAtCheckin(raw) ? stripPayAtPropertyClause(raw).toLowerCase() : raw;
   if (!text) return false;
   if (
     /\b(belum|blm|blom|tidak|tdk|tak|gak|ga|gk|nggak|ngga|enggak|engga|bukan|bkn|jangan|salah|keliru|kurang|no|nope|not)\b/i.test(
@@ -666,6 +698,8 @@ function buildBookingSummary(
     displayRatePerNight?: number;
     hasDynamicBreakdown?: boolean;
     nightlyBreakdown?: string[];
+    /** Tarif extra bed dari kalender (fallback extrabed_rate tipe kamar). */
+    extraBedRate?: number;
   },
 ): StateMachineResult {
   // Nama kosong tidak boleh jadi ringkasan yang dikunci "Ya" / "sudah sesuai".
@@ -704,9 +738,11 @@ function buildBookingSummary(
   // --- Format currency IDR ---
   const fmtRp = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
 
-  // --- Resolve extra-bed policy & jumlah extra bed dari DB ---
+  // --- Resolve extra-bed policy & jumlah extra bed dari DB / kalender ---
   const policy = resolveRoomExtraBedPolicy(context, roomsCatalog);
-  const resolvedExtraBedRate = policy.extrabedRate;
+  const resolvedExtraBedRate =
+    overrides?.extraBedRate && overrides.extraBedRate > 0 ? overrides.extraBedRate : policy.extrabedRate;
+  if (resolvedExtraBedRate > 0) context.extraBedRate = resolvedExtraBedRate;
 
   const totalRooms = summaryRooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
   const eb = resolveExtraBedPolicy(policy, totalRooms, totalGuests, context);
@@ -716,8 +752,26 @@ function buildBookingSummary(
   const extraBedTotal = nights && extraBeds > 0 && hasRate ? computeExtraBedTotal(extraBeds, resolvedExtraBedRate, nights) : 0;
 
   // Subtotal kamar: pakai dynamic (jika tersedia), kalau tidak fallback rata.
+  // totalPrice yang sudah memuat extra bed tidak boleh dipakai lagi sebagai
+  // subtotal kamar — itu yang membuat total dobel atau, sebaliknya, yang
+  // menimpa quotedTotal jadi harga kamar saja.
   const fallbackSubtotal = nights && pricePerNight ? nights * pricePerNight * totalRooms : 0;
-  const roomSubtotal = overrides?.roomSubtotal ?? context.totalPrice ?? fallbackSubtotal;
+  const storedTotal = context.totalPrice ?? 0;
+  const roomRounded = toRupiah(fallbackSubtotal);
+  const storedIncludesExtra =
+    extraBedTotal > 0 && storedTotal === roomRounded + extraBedTotal;
+  const storedRoom = storedIncludesExtra ? storedTotal - extraBedTotal : storedTotal;
+  const roomSubtotal =
+    overrides?.roomSubtotal ??
+    (extraBedTotal > 0 &&
+    context.quotedTotal != null &&
+    context.quotedTotal === storedTotal &&
+    storedTotal > extraBedTotal &&
+    roomRounded > storedTotal
+      ? storedTotal - extraBedTotal
+      : storedRoom > 0
+        ? storedRoom
+        : fallbackSubtotal);
   // Satu sumber angka (integer rupiah) — sama dengan yang dipakai create_booking.
   const grandTotal = computeGrandTotal({
     roomSubtotal,
@@ -725,8 +779,9 @@ function buildBookingSummary(
     extraBedRate: hasRate ? resolvedExtraBedRate : 0,
     nights: nights ?? 0,
   });
-  // Catat angka yang DITAMPILKAN ke tamu; dicocokkan dengan hitungan server sebelum write.
+  // Angka yang DITAMPILKAN dan total state harus sama (kamar + extra bed).
   context.quotedTotal = grandTotal > 0 ? grandTotal : undefined;
+  if (grandTotal > 0) context.totalPrice = grandTotal;
   const shown = snapshotFromStay({
     checkIn: context.checkIn,
     checkOut: context.checkOut,
@@ -828,6 +883,8 @@ async function resolveBookingSummaryRates(
   hasDynamicBreakdown: boolean;
   nightlyBreakdown: string[];
   stopSellDates: string[];
+  /** Rata-rata tarif extra bed/malam dari kalender (fallback extrabed_rate). */
+  extraBedRate: number;
 } | null> {
   if (!context.checkIn || !context.checkOut) return null;
   const items = context.rooms ?? [];
@@ -843,6 +900,7 @@ async function resolveBookingSummaryRates(
   const stopSellDates: string[] = [];
   let roomSubtotal = 0;
   let hasDynamicBreakdown = false;
+  let calendarExtraBedRate = 0;
   const nightlyBreakdown: string[] = [];
   let firstAvg: number | null = null;
   let sameRate = true;
@@ -859,6 +917,14 @@ async function resolveBookingSummaryRates(
     const resolved = resolveRoomNightlyRates(rt, context.checkIn, context.checkOut, overrides.get(item.roomTypeId));
     if (resolved.has_stop_sell) stopSellDates.push(...resolved.stop_sell_dates);
     if (!resolved.all_base) hasDynamicBreakdown = true;
+    const avgExtra =
+      resolved.nights > 0
+        ? resolved.nightly.reduce((sum, night) => sum + night.extrabed_rate, 0) / resolved.nights
+        : Number(rt.extrabed_rate ?? 0);
+    const extraCapacity = Number(rt.extrabed_capacity ?? 0);
+    if (calendarExtraBedRate <= 0 && extraCapacity > 0 && avgExtra > 0) {
+      calendarExtraBedRate = avgExtra;
+    }
     // Kalender harga beda per malam → tampilkan rincian supaya total transparan.
     if (hasVaryingRates(resolved.nightly)) {
       const label = items.length > 1 ? `${item.roomTypeName}${item.quantity > 1 ? ` ×${item.quantity}` : ""}` : "";
@@ -883,6 +949,7 @@ async function resolveBookingSummaryRates(
     hasDynamicBreakdown,
     nightlyBreakdown,
     stopSellDates: Array.from(new Set(stopSellDates)),
+    extraBedRate: calendarExtraBedRate,
   };
 }
 
@@ -952,6 +1019,7 @@ function buildBookingSummaryFromResolvedSync(
       displayRatePerNight: resolved.displayRatePerNight,
       hasDynamicBreakdown: resolved.hasDynamicBreakdown,
       nightlyBreakdown: resolved.nightlyBreakdown,
+      extraBedRate: resolved.extraBedRate,
     });
   }
   return buildBookingSummary(context, ctx.rooms);
@@ -971,6 +1039,23 @@ export async function buildBookingSummaryAsync(ctx: ToolContext, context: Bookin
  * Resolve rates SEKALI, apply ke context, dan kembalikan hasil resolve agar
  * caller bisa langsung pakai buildBookingSummaryFromResolved tanpa query ulang.
  */
+/** Total menginap = subtotal kamar + extra bed (tarif sistem, bukan angka tetap). */
+function assignStayTotal(
+  context: BookingContext,
+  nights: number,
+  roomCount: number,
+  extraBedRate?: number,
+): void {
+  if (!(nights > 0)) return;
+  const rate = extraBedRate ?? context.extraBedRate ?? 0;
+  context.totalPrice = computeGrandTotal({
+    roomSubtotal: nights * (context.pricePerNight ?? 0) * Math.max(1, roomCount),
+    extraBeds: context.extraBeds ?? 0,
+    extraBedRate: rate,
+    nights,
+  });
+}
+
 async function applyResolvedRatesToContext(
   ctx: ToolContext,
   context: BookingContext,
@@ -980,7 +1065,15 @@ async function applyResolvedRatesToContext(
     if (!resolved || resolved.stopSellDates.length > 0) return resolved;
     context.rooms = resolved.rooms;
     context.pricePerNight = resolved.displayRatePerNight;
-    context.totalPrice = resolved.roomSubtotal;
+    if (resolved.extraBedRate > 0) context.extraBedRate = resolved.extraBedRate;
+    const nights =
+      context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : 0;
+    context.totalPrice = computeGrandTotal({
+      roomSubtotal: resolved.roomSubtotal,
+      extraBeds: context.extraBeds ?? 0,
+      extraBedRate: context.extraBedRate ?? resolved.extraBedRate ?? 0,
+      nights,
+    });
     return resolved;
   } catch (e) {
     console.warn("[BookingState] applyResolvedRatesToContext failed (non-fatal):", e);
@@ -1044,7 +1137,7 @@ function bookingFormSubmissionToContext(
   }
   if (policy.extrabedRate > 0) context.extraBedRate = policy.extrabedRate;
   if (context.checkIn && context.checkOut && context.pricePerNight) {
-    context.totalPrice = countNights(context.checkIn, context.checkOut) * context.pricePerNight * quantity;
+    assignStayTotal(context, countNights(context.checkIn, context.checkOut), quantity, policy.extrabedRate);
   }
   return context;
 }
@@ -1290,6 +1383,9 @@ function isExpectedAnswer(state: BookingState, message: string): boolean {
     case "CONFIRMING_NAME":
       return USE_THIS_PATTERN.test(message) || USE_OTHER_PATTERN.test(message);
     case "CONFIRMING_BOOKING":
+      // Afirmasi murni, termasuk "Sudah betul, bayar di lokasi nanti saat
+      // check in". Kata "lokasi"/"check in" di frasa bayar bukan pertanyaan.
+      if (isBookingConfirmationMessage(message)) return true;
       // Pesan berupa pertanyaan (mis. "boleh ubah bookingan kah?") BUKAN
       // konfirmasi/pembatalan — walaupun mengandung kata "ubah"/"ganti".
       // Biarkan guard interupsi meneruskannya ke LLM agar dijawab, bukan
@@ -2711,8 +2807,10 @@ export async function processBookingState(
     const capacityReply = await respondToOverCapacity(ctx, phone, context, message);
     if (capacityReply) return capacityReply;
   }
-  // Tamu memilih bayar di tempat saat ringkasan booking: catat lalu tampilkan
-  // ringkasan terbaru untuk dikonfirmasi (bukan langsung membuat booking).
+  // Tamu memilih bayar di tempat saat ringkasan booking.
+  // Afirmasi + bayar di tempat dalam SATU pesan ("Sudah betul, bayar di lokasi
+  // nanti saat check in") langsung lanjut createBooking di bawah — jangan
+  // tampilkan ringkasan kedua. Pilihan bayar di tempat saja tetap minta konfirmasi.
   if (
     state === "CONFIRMING_BOOKING" &&
     mentionsPayAtCheckin(message) &&
@@ -2720,13 +2818,15 @@ export async function processBookingState(
   ) {
     context.paymentType = "onsite";
     context.dpAmount = undefined;
-    const resolvedOnsite = await applyResolvedRatesToContext(ctx, context);
-    await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-    const summary = await buildBookingSummaryFromResolved(ctx, context, resolvedOnsite);
-    if (summary.reply) {
-      summary.reply = `Bisa Kak, pembayarannya bayar di tempat saat check-in ya 🙏\n\n${summary.reply}`;
+    if (!isBookingConfirmationMessage(message)) {
+      const resolvedOnsite = await applyResolvedRatesToContext(ctx, context);
+      await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+      const summary = await buildBookingSummaryFromResolved(ctx, context, resolvedOnsite);
+      if (summary.reply) {
+        summary.reply = `Bisa Kak, pembayarannya bayar di tempat saat check-in ya 🙏\n\n${summary.reply}`;
+      }
+      return summary;
     }
-    return summary;
   }
   const paymentQuestion = isGuestPaymentQuestion(message);
   if (paymentQuestion && state === "CONFIRMING_BOOKING" && !CONFIRM_PATTERN.test(message)) {
@@ -3177,8 +3277,12 @@ export async function processBookingState(
       }
 
       if (context.checkIn && context.checkOut && context.pricePerNight) {
-        const nights = countNights(context.checkIn, context.checkOut);
-        context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
+        assignStayTotal(
+          context,
+          countNights(context.checkIn, context.checkOut),
+          totalRoomsCount,
+          recomputePolicy.extrabedRate,
+        );
       }
 
       // Jalur "fast booking" (auto-create sebelum tamu konfirmasi) dinonaktifkan
@@ -3375,10 +3479,14 @@ export async function processBookingState(
           };
         }
 
-        // Recompute total
+        // Recompute total (kamar + extra bed), supaya tidak jatuh ke harga kamar saja.
         if (context.checkIn && context.checkOut && context.pricePerNight) {
-          const nights = countNights(context.checkIn, context.checkOut);
-          context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
+          assignStayTotal(
+            context,
+            countNights(context.checkIn, context.checkOut),
+            totalRoomsCount,
+            recomputePolicy.extrabedRate,
+          );
         }
         const resolvedRates = await applyResolvedRatesToContext(ctx, context);
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
@@ -3516,7 +3624,9 @@ export async function processBookingState(
       // bila pesan "ya" diproses dua kali (retry webhook / tamu ketuk dua kali).
       const confirmNights =
         context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : 0;
-      if (requiresFullPayment(confirmNights)) {
+      // Transfer 1–2 malam tetap lunas. Bayar di tempat (onsite) boleh untuk
+      // semua tamu sejak 31 Okt 2026 dan tidak diubah jadi transfer lunas.
+      if (requiresFullPayment(confirmNights) && context.paymentType !== "onsite") {
         context.paymentType = "full";
         context.dpAmount = undefined;
       }
@@ -3711,8 +3821,12 @@ export async function processBookingState(
         if (capacityReply) return capacityReply;
       }
       if (context.checkIn && context.checkOut && context.pricePerNight) {
-        const nights = countNights(context.checkIn, context.checkOut);
-        context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
+        assignStayTotal(
+          context,
+          countNights(context.checkIn, context.checkOut),
+          totalRoomsCount,
+          policy.extrabedRate,
+        );
       }
       const resolvedRates = await applyResolvedRatesToContext(ctx, context);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);

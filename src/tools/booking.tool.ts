@@ -909,11 +909,32 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   }
 
   // ── Assign rooms (resolved above, guaranteed non-null) ────────────────────────
-  const brRows = assignments.map((a) => ({
+  // Extra bed menempel di kamar penampung (yang sama dengan hitungan total):
+  // kamar pertama yang punya slot + tarif extra bed. Tanpa kolom ini
+  // booking_rooms.extra_bed_count tetap 0 walaupun args.extra_beds dikirim.
+  let extraBedHost = -1;
+  if (requestedExtraBeds > 0) {
+    extraBedHost = assignments.findIndex((a) => {
+      const rt = ctx.rooms.find((r) => r.id === a.roomTypeId);
+      const capacity = Number(rt?.extrabed_capacity ?? 0);
+      const rate =
+        resolvedByRoomType.get(a.roomTypeId)?.avgExtraBedRate ?? Number(rt?.extrabed_rate ?? 0);
+      return capacity > 0 && rate > 0;
+    });
+    if (extraBedHost < 0) {
+      extraBedHost = assignments.findIndex(
+        (a) => Number(ctx.rooms.find((r) => r.id === a.roomTypeId)?.extrabed_capacity ?? 0) > 0,
+      );
+    }
+    if (extraBedHost < 0) extraBedHost = 0;
+  }
+  const brRows = assignments.map((a, index) => ({
     booking_id: booking.id,
     room_id: a.roomId,
     room_type_id: a.roomTypeId,
     nightly_rate: a.rate,
+    extra_bed_count: index === extraBedHost ? requestedExtraBeds : 0,
+    extra_bed_rate: index === extraBedHost ? extraBedRate : 0,
   }));
   const { error: brErr } = await (ctx.supabaseAdmin as any).from("booking_rooms").insert(brRows);
 
