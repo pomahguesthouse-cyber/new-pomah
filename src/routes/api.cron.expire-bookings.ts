@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { shouldExpireUnpaidBooking } from "@/lib/booking-expiry";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -8,10 +9,10 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
  *
  * Dijalankan setiap 1 menit oleh pg_cron job `expire-unpaid-bookings`.
  * Logika:
- *   1. Cari semua bookings dengan status='pending' AND payment_status='unpaid'
- *      AND expires_at sudah lewat — berlaku sama untuk semua channel (web,
- *      chatbot WA, admin) karena expires_at diset di semua titik insert.
- *   2. Set status='expired' untuk baris-baris tersebut.
+ *   1. Cari booking status='pending' AND payment_status='unpaid'
+ *      AND expires_at sudah lewat. Bayar di tempat (expires_at null, atau
+ *      payment_method onsite / "Bayar di tempat saat check-in") tidak ikut.
+ *   2. Set status='expired' untuk baris yang lolos shouldExpireUnpaidBooking.
  *   3. Booking partial (sudah DP) atau paid tidak pernah tersentuh — filter
  *      payment_status='unpaid' adalah satu-satunya gerbang.
  *
@@ -30,13 +31,15 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 async function handle(): Promise<Response> {
   const nowIso = new Date().toISOString();
 
+  const nowMs = Date.parse(nowIso);
   const { data: candidates, error: findErr } = await (supabaseAdmin as any)
     .from("bookings")
-    .select("id, reference_code")
+    .select("id, reference_code, status, payment_status, payment_method, expires_at")
     .eq("status", "pending")
     .eq("payment_status", "unpaid")
+    .not("expires_at", "is", null)
     .lt("expires_at", nowIso)
-    // Bayar di tempat tidak pernah di-expire (keputusan pemilik 31 Okt 2026).
+    // Saringan kasar. Kalimat "Bayar di tempat saat check-in" disaring lagi di JS.
     .or("payment_method.is.null,payment_method.not.in.(onsite,cash,pay_at_checkin,bayar_di_tempat)");
 
   if (findErr) {
@@ -44,10 +47,17 @@ async function handle(): Promise<Response> {
     return Response.json({ ok: false, error: findErr.message }, { status: 500 });
   }
 
-  const rows = (candidates ?? []) as Array<{ id: string; reference_code: string | null }>;
+  const rows = ((candidates ?? []) as Array<{
+    id: string;
+    reference_code: string | null;
+    status?: string | null;
+    payment_status?: string | null;
+    payment_method?: string | null;
+    expires_at?: string | null;
+  }>).filter((row) => shouldExpireUnpaidBooking(row, nowMs));
 
   if (rows.length === 0) {
-    return Response.json({ ok: true, checked: 0, expired: 0 });
+    return Response.json({ ok: true, checked: (candidates ?? []).length, expired: 0 });
   }
 
   const ids = rows.map((r) => r.id);

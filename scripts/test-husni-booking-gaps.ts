@@ -190,8 +190,10 @@ const invoice = buildInvoicePaymentLines({
   expiresAt: null,
   bankDetails: "\n\nTransfer Pembayaran:\nBANK",
 });
-assert.match(invoice, /Bayar di tempat/);
-assert.doesNotMatch(invoice, /dibatalkan|1 jam|Batas waktu|Transfer Pembayaran/);
+assert.match(invoice, /Bayar di Tempat/);
+assert.match(invoice, /Pembayaran dilakukan di tempat saat check-in/);
+assert.match(invoice, /Total: Rp 287\.000/);
+assert.doesNotMatch(invoice, /Menunggu pembayaran|pembayaran ditunggu|dibatalkan|1 jam|Batas waktu|Transfer Pembayaran/i);
 
 async function main() {
   // (a) tempelan template: nama bersih, 3 dewasa, 0 anak, tidak over kapasitas.

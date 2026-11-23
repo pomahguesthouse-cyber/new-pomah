@@ -72,8 +72,10 @@ assert.doesNotMatch(bookingMethodGuestText(), /tidak ada bayar di tempat/);
 const inv1 = buildInvoicePaymentLines({ paymentStatus: "unpaid", paidAmount: 0, totalAmount: 230000, nights: 1 });
 assert.match(inv1, /Rp 230\.000 \(lunas via transfer/);
 const invOnsite = buildInvoicePaymentLines({ paymentStatus: "unpaid", paidAmount: 0, totalAmount: 207000, nights: 1, paymentMethod: "onsite", expiresAt: "2026-10-30T17:40:00Z", bankDetails: "BANK" });
-assert.match(invOnsite, /Bayar di tempat saat check-in/);
-assert.doesNotMatch(invOnsite, /Batas waktu|dibatalkan|BANK/);
+assert.match(invOnsite, /Bayar di Tempat/);
+assert.match(invOnsite, /Pembayaran dilakukan di tempat saat check-in/);
+assert.match(invOnsite, /Rp 207\.000/);
+assert.doesNotMatch(invOnsite, /Menunggu pembayaran|pembayaran ditunggu|Batas waktu|dibatalkan|BANK/i);
 // Staf: booking baru 1 malam tanpa metode → bukan "Bayar di tempat"; booking lama bertanda onsite tetap.
 assert.match(formatStaffPaymentLine({ totalAmount: 230000, paidAmount: 0, nights: 1, paymentStatus: "unpaid", paymentMethod: null } as never), /^Wajib lunas Rp/);
 assert.equal(formatStaffPaymentLine({ totalAmount: 230000, paidAmount: 0, nights: 1, paymentStatus: "unpaid", paymentMethod: "onsite" } as never), "Bayar di tempat");

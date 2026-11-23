@@ -17,6 +17,11 @@
 
 import { toPaymentAccountFields } from "@/lib/payment-account";
 import {
+  buildOnsiteInvoicePaymentLines,
+  isOnsitePaymentChoice,
+  ONSITE_STATUS_LABEL,
+} from "@/lib/guest-payment-copy";
+import {
   bookingBelongsToPhone,
   invalidBookingCodeError,
   normalizeBookingCode,
@@ -41,7 +46,7 @@ function buildInvoiceUrl(refOrId: string, ctx: ToolContext): string {
 }
 
 const BOOKING_SELECT =
-  "id, reference_code, status, total_amount, paid_amount, payment_status, check_in, check_out, nights, " +
+  "id, reference_code, status, total_amount, paid_amount, payment_status, payment_method, expires_at, check_in, check_out, nights, " +
   "guests(full_name, email, phone), booking_rooms(room_type_id, nightly_rate, room_types(name))";
 
 function phoneVariants(phone: string): string[] {
@@ -214,16 +219,19 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
   const rt = ctx.rooms.find((r) => r.id === br?.room_type_id);
   const roomTypeName = br?.room_types?.name ?? rt?.name ?? "Kamar";
 
-  const paymentAccount = toPaymentAccountFields(ctx.property);
   const total = Number(b.total_amount ?? 0);
   const paid = Number(b.paid_amount ?? 0);
   const remaining = Math.max(0, total - paid);
   const paymentStatus: string = b.payment_status ?? "unpaid";
+  const paymentMethod = typeof b.payment_method === "string" ? b.payment_method : null;
+  const payAtProperty = paymentStatus !== "paid" && isOnsitePaymentChoice(paymentMethod);
 
   return JSON.stringify({
     ok: true,
     wa_sent: waSent,
     wa_error: waError,
+    pay_at_property: payAtProperty,
+    guest_payment_text: payAtProperty ? buildOnsiteInvoicePaymentLines(total) : null,
     booking: {
       reference_code: b.reference_code,
       status: b.status,
@@ -240,16 +248,23 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
       remaining_amount: remaining,
       remaining_tampil: remaining > 0 ? `Rp ${remaining.toLocaleString("id-ID")}` : null,
       payment_status: paymentStatus,
-      // Label ramah untuk agent: "Sudah DP", "Lunas", "Belum Bayar"
-      payment_label:
-        paymentStatus === "paid" ? "LUNAS ✅" : paymentStatus === "partial" ? "SUDAH DP 🔄" : "BELUM DIBAYAR",
+      payment_method: paymentMethod,
+      expires_at: b.expires_at ?? null,
+      // Label ramah untuk agent. Bayar di tempat bukan "menunggu pembayaran".
+      payment_label: payAtProperty
+        ? ONSITE_STATUS_LABEL
+        : paymentStatus === "paid"
+          ? "LUNAS ✅"
+          : paymentStatus === "partial"
+            ? "SUDAH DP 🔄"
+            : "BELUM DIBAYAR",
       guest: {
         full_name: g?.full_name,
         email: g?.email,
         phone: g?.phone,
       },
     },
-    payment_account: paymentAccount,
+    payment_account: payAtProperty ? null : toPaymentAccountFields(ctx.property),
     invoice_url: buildInvoiceUrl(b.reference_code ?? b.id, ctx),
   });
 };

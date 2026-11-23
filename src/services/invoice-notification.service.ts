@@ -1,6 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { guestNameSafeForThreadDisplay } from "@/ai/state-machine/booking-summary-text";
 import { isOnsitePaymentMethod, requiresFullPayment } from "@/lib/deposit-policy";
+import { buildOnsiteInvoicePaymentLines, formatGuestRupiah, ONSITE_GUEST_PAYMENT_LINE, ONSITE_STATUS_LABEL } from "@/lib/guest-payment-copy";
 import { fmtDateID } from "@/lib/date";
 import { formatTransferAccountLine, resolveBotTransferAccount, type PropertyPaymentFields } from "@/lib/payment-account";
 import { findNotificationThreadId } from "./notification-thread-resolver";
@@ -21,11 +22,18 @@ export function buildInvoicePaymentLines(opts: {
   bankDetails?: string;
   paymentMethod?: string | null;
 }): string {
-  if (opts.paymentStatus !== "paid" && opts.paymentStatus !== "partial" && isOnsitePaymentMethod(opts.paymentMethod)) {
-    return (
-      `• Status Pembayaran: Bayar di tempat saat check-in 🏨\n` +
-      `• Jumlah dibayar saat check-in: Rp ${Math.max(0, opts.totalAmount).toLocaleString("id-ID")}`
-    );
+  if (opts.paymentStatus !== "paid" && isOnsitePaymentMethod(opts.paymentMethod)) {
+    if (opts.paymentStatus === "partial" && opts.paidAmount > 0) {
+      const remainingAmount = Math.max(0, opts.totalAmount - opts.paidAmount);
+      return (
+        `• Status Pembayaran: ${ONSITE_STATUS_LABEL}\n` +
+        `• DP Dibayar: Rp ${opts.paidAmount.toLocaleString("id-ID")}\n` +
+        `• Sisa saat check-in: ${formatGuestRupiah(remainingAmount)}\n` +
+        `• ${ONSITE_GUEST_PAYMENT_LINE}\n` +
+        `• Total: ${formatGuestRupiah(opts.totalAmount)}`
+      );
+    }
+    return buildOnsiteInvoicePaymentLines(opts.totalAmount);
   }
   const isDP = opts.paymentStatus === "partial" && opts.paidAmount > 0;
   const remainingAmount = Math.max(0, opts.totalAmount - opts.paidAmount);

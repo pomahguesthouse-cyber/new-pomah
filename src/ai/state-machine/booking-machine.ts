@@ -9,6 +9,7 @@ import { runDeferred } from "@/lib/cf-context";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { formatNightlyBreakdownLines, hasVaryingRates } from "@/services/pricing/price-quote";
 import { mentionsPayAtCheckin, requiresFullPayment } from "@/lib/deposit-policy";
+import { buildBookingCreatedGuestReply } from "@/lib/guest-payment-copy";
 import { buildPropertyFaqReply, isLocationShareRequest } from "@/services/property-faq";
 import { capAvailabilityWithStopSell } from "@/services/pricing/stop-sell-availability";
 import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
@@ -3781,10 +3782,13 @@ export async function processBookingState(
 
       return {
         handled: true,
-        reply:
-          `Terima kasih, Kak ${context.guestName} 🙏 Pemesanan berhasil dibuat ` +
-          `dengan kode ${result.reference_code}. ` +
-          `Berikut invoice dan cara pembayarannya:`,
+        reply: buildBookingCreatedGuestReply({
+          guestName: context.guestName,
+          referenceCode: result.reference_code,
+          paymentType: context.paymentType,
+          totalAmount: context.quotedTotal,
+          invoiceUrl: typeof result.invoice_url === "string" ? result.invoice_url : null,
+        }),
         followUp: "send_invoice",
         followUpRef: result.reference_code,
       };

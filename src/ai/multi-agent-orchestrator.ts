@@ -1014,9 +1014,15 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
         ]
           .filter(Boolean)
           .join("\n");
-        const synthesized = refCode
-          ? `Mohon kirimkan detail invoice dan info pembayaran untuk booking berikut:\n${ctxLines}`
-          : `Mohon kirimkan detail invoice dan info pembayaran untuk booking saya yang baru.`;
+        const payAtProperty = bookingCtx.paymentType === "onsite";
+        const synthesized = payAtProperty
+          ? `Booking ini bayar di tempat, bukan transfer. Mohon kirimkan detail invoice. ` +
+            `Salin guest_payment_text. Jangan tulis menunggu pembayaran, pembayaran ditunggu, ` +
+            `mohon segera transfer, batas waktu, batal otomatis, atau nomor rekening. ` +
+            `Tetap sebut total.\n${ctxLines}`
+          : refCode
+            ? `Mohon kirimkan detail invoice dan info pembayaran untuk booking berikut:\n${ctxLines}`
+            : `Mohon kirimkan detail invoice dan info pembayaran untuk booking saya yang baru.`;
         const financeAgent = getAgent("finance");
         const financeResult = await runAgent(
           financeAgent,

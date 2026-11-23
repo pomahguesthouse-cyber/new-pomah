@@ -47,10 +47,26 @@ export const ONSITE_PAYMENT_METHOD = "onsite";
 /** Kalimat opsi bayar di tempat untuk tamu. */
 export const PAY_AT_CHECKIN_TEXT = "bisa juga bayar di tempat saat check-in";
 
-/** True bila payment_method menandai bayar di tempat (termasuk nilai lama). */
+/** True bila payment_method menandai bayar di tempat (kode atau kalimat di data). */
 export function isOnsitePaymentMethod(method: string | null | undefined): boolean {
-  const m = String(method ?? "").trim().toLowerCase();
-  return m === "onsite" || m === "cash" || m === "pay_at_checkin" || m === "bayar_di_tempat";
+  const m = String(method ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+  if (!m) return false;
+  if (
+    m === "onsite" ||
+    m === "cash" ||
+    m === "pay at checkin" ||
+    m === "pay at check in" ||
+    m === "pay at property" ||
+    m === "bayar di tempat" ||
+    m === "bayar ditempat"
+  ) {
+    return true;
+  }
+  if (/\bbayar\s+di\s*tempat\b/.test(m)) return true;
+  return /\bpay\s+at\s+(?:the\s+)?(?:property|check\s*in)\b/.test(m);
 }
 
 /**

@@ -13,6 +13,7 @@ import {
 } from "@/lib/booking-code";
 import { fmtDateID } from "@/lib/date";
 import { toPaymentAccountFields } from "@/lib/payment-account";
+import { buildOnsiteInvoicePaymentLines, isOnsitePaymentChoice, ONSITE_STATUS_LABEL } from "@/lib/guest-payment-copy";
 import type { ToolContext, ToolHandler } from "@/tools/types";
 
 function str(v: unknown): string {
@@ -47,7 +48,7 @@ export const getPaymentInfo: ToolHandler = async (
     let query = (ctx.supabaseAdmin as any)
       .from("bookings")
       .select(
-        "id, reference_code, status, total_amount, check_in, check_out, nights, " +
+        "id, reference_code, status, total_amount, paid_amount, payment_status, payment_method, expires_at, check_in, check_out, nights, " +
         "guests(full_name, email, phone)"
       )
       .order("created_at", { ascending: false })
@@ -108,13 +109,24 @@ export const getPaymentInfo: ToolHandler = async (
 
     const b = booking as Record<string, unknown>;
     const g = (b.guests as Record<string, unknown>) ?? {};
+    const paymentMethod = typeof b.payment_method === "string" ? b.payment_method : null;
+    const paymentStatus = typeof b.payment_status === "string" ? b.payment_status : "unpaid";
+    const total = Number(b.total_amount ?? 0);
+    const payAtProperty = paymentStatus !== "paid" && isOnsitePaymentChoice(paymentMethod);
 
     return JSON.stringify({
       ok:     true,
+      pay_at_property: payAtProperty,
+      guest_payment_text: payAtProperty ? buildOnsiteInvoicePaymentLines(total) : null,
+      payment_label: payAtProperty ? ONSITE_STATUS_LABEL : null,
       booking: {
         reference_code:   b.reference_code,
         status:           b.status,
         total_amount:     b.total_amount,
+        paid_amount:      b.paid_amount ?? 0,
+        payment_status:   paymentStatus,
+        payment_method:   paymentMethod,
+        expires_at:       b.expires_at ?? null,
         check_in:         b.check_in,
         check_out:        b.check_out,
         check_in_tampil:  fmtDateID(String(b.check_in  ?? "")),
@@ -126,7 +138,7 @@ export const getPaymentInfo: ToolHandler = async (
           phone:     g.phone,
         },
       },
-      payment_account: paymentAccount,
+      payment_account: payAtProperty ? null : paymentAccount,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
