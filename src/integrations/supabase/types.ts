@@ -353,6 +353,204 @@ export type Database = {
         }
         Relationships: []
       }
+      _bak_bsh8p_bookings_20261122: {
+        Row: {
+          adults: number | null
+          check_in: string | null
+          check_in_time: string | null
+          check_out: string | null
+          check_out_time: string | null
+          children: number | null
+          created_at: string | null
+          expires_at: string | null
+          guest_id: string | null
+          id: string | null
+          idempotency_key: string | null
+          internal_notes: string | null
+          nightly_rate: number | null
+          nights: number | null
+          paid_amount: number | null
+          payment_method: string | null
+          payment_status: Database["public"]["Enums"]["payment_status"] | null
+          property_id: string | null
+          reference_code: string | null
+          room_id: string | null
+          room_type_id: string | null
+          source: Database["public"]["Enums"]["booking_source"] | null
+          special_requests: string | null
+          status: Database["public"]["Enums"]["booking_status"] | null
+          total_amount: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          adults?: number | null
+          check_in?: string | null
+          check_in_time?: string | null
+          check_out?: string | null
+          check_out_time?: string | null
+          children?: number | null
+          created_at?: string | null
+          expires_at?: string | null
+          guest_id?: string | null
+          id?: string | null
+          idempotency_key?: string | null
+          internal_notes?: string | null
+          nightly_rate?: number | null
+          nights?: number | null
+          paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          property_id?: string | null
+          reference_code?: string | null
+          room_id?: string | null
+          room_type_id?: string | null
+          source?: Database["public"]["Enums"]["booking_source"] | null
+          special_requests?: string | null
+          status?: Database["public"]["Enums"]["booking_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          adults?: number | null
+          check_in?: string | null
+          check_in_time?: string | null
+          check_out?: string | null
+          check_out_time?: string | null
+          children?: number | null
+          created_at?: string | null
+          expires_at?: string | null
+          guest_id?: string | null
+          id?: string | null
+          idempotency_key?: string | null
+          internal_notes?: string | null
+          nightly_rate?: number | null
+          nights?: number | null
+          paid_amount?: number | null
+          payment_method?: string | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          property_id?: string | null
+          reference_code?: string | null
+          room_id?: string | null
+          room_type_id?: string | null
+          source?: Database["public"]["Enums"]["booking_source"] | null
+          special_requests?: string | null
+          status?: Database["public"]["Enums"]["booking_status"] | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      _bak_bsh8p_guest_20261122: {
+        Row: {
+          avatar_url: string | null
+          country: string | null
+          created_at: string | null
+          display_name: string | null
+          email: string | null
+          first_seen_at: string | null
+          full_name: string | null
+          id: string | null
+          last_seen_at: string | null
+          merged_into: string | null
+          notes: string | null
+          phone: string | null
+          phone_normalized: string | null
+          real_name: string | null
+          source: string | null
+          tags: string[] | null
+          total_bookings: number | null
+          total_spent: number | null
+          updated_at: string | null
+          whatsapp_id: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          country?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          email?: string | null
+          first_seen_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          last_seen_at?: string | null
+          merged_into?: string | null
+          notes?: string | null
+          phone?: string | null
+          phone_normalized?: string | null
+          real_name?: string | null
+          source?: string | null
+          tags?: string[] | null
+          total_bookings?: number | null
+          total_spent?: number | null
+          updated_at?: string | null
+          whatsapp_id?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          country?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          email?: string | null
+          first_seen_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          last_seen_at?: string | null
+          merged_into?: string | null
+          notes?: string | null
+          phone?: string | null
+          phone_normalized?: string | null
+          real_name?: string | null
+          source?: string | null
+          tags?: string[] | null
+          total_bookings?: number | null
+          total_spent?: number | null
+          updated_at?: string | null
+          whatsapp_id?: string | null
+        }
+        Relationships: []
+      }
+      _bak_bsh8p_rooms_20261122: {
+        Row: {
+          booking_id: string | null
+          booking_status: string | null
+          check_in: string | null
+          check_out: string | null
+          created_at: string | null
+          extra_bed_count: number | null
+          extra_bed_rate: number | null
+          id: string | null
+          nightly_rate: number | null
+          room_id: string | null
+          room_type_id: string | null
+        }
+        Insert: {
+          booking_id?: string | null
+          booking_status?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string | null
+          extra_bed_count?: number | null
+          extra_bed_rate?: number | null
+          id?: string | null
+          nightly_rate?: number | null
+          room_id?: string | null
+          room_type_id?: string | null
+        }
+        Update: {
+          booking_id?: string | null
+          booking_status?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string | null
+          extra_bed_count?: number | null
+          extra_bed_rate?: number | null
+          id?: string | null
+          nightly_rate?: number | null
+          room_id?: string | null
+          room_type_id?: string | null
+        }
+        Relationships: []
+      }
       _bak_facility_kb_20261020: {
         Row: {
           checkin_point: string | null
@@ -1481,6 +1679,39 @@ export type Database = {
           property_id?: string | null
           source_url?: string | null
           storage_bucket?: string | null
+        }
+        Relationships: []
+      }
+      _bak_wa_state_susilo_20261122: {
+        Row: {
+          context: Json | null
+          last_entity: Json | null
+          last_topic: string | null
+          phone: string | null
+          slots: Json | null
+          state: string | null
+          topic_updated_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          context?: Json | null
+          last_entity?: Json | null
+          last_topic?: string | null
+          phone?: string | null
+          slots?: Json | null
+          state?: string | null
+          topic_updated_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          context?: Json | null
+          last_entity?: Json | null
+          last_topic?: string | null
+          phone?: string | null
+          slots?: Json | null
+          state?: string | null
+          topic_updated_at?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
