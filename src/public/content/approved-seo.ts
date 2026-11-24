@@ -554,7 +554,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
       {
         heading: "Menginap di Pomah setelah ke Lawang Sewu",
         paragraphs: [
-          "Setelah seharian keliling kota, istirahat di [guest house di Semarang](/) yang tenang terasa melegakan. Pomah Guesthouse ada di Sampangan; Lawang Sewu hanya sekitar 6 km atau 15–25 menit berkendara, dan check-in mulai pukul 14.00, jadi setelah menaruh barang masih sempat berkunjung sore harinya. Cek ketersediaan lalu pesan lewat situs atau WhatsApp 0851-9098-6169.",
+          "Setelah seharian keliling kota, istirahat di [guest house di Semarang](/) yang tenang terasa melegakan. Pomah Guesthouse ada di Sampangan; Lawang Sewu hanya sekitar 6 km atau 15–25 menit berkendara, dan check-in mulai pukul 14.00, jadi setelah menaruh barang masih sempat berkunjung sore harinya. Untuk keluarga, [Family Room 222](/rooms/family-room-222) dan [Family Suite 100](/rooms/family-suite-100) masing-masing punya 2 kamar tidur untuk hingga 4 tamu. Cek ketersediaan lalu pesan lewat [halaman kamar](/rooms) atau WhatsApp 0851-9098-6169.",
           "Datang untuk wisuda UNNES? Lihat [penginapan dekat UNNES](/lp/penginapan-dekat-unnes).",
         ],
       },
@@ -578,6 +578,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
     links: [
       { anchor: "guest house di Semarang", href: "/" },
       { anchor: "Family Room 222 untuk keluarga", href: "/rooms/family-room-222" },
+      { anchor: "Family Suite 100 untuk keluarga", href: "/rooms/family-suite-100" },
       { anchor: "Kamar Single", href: "/rooms/kamar-single" },
       { anchor: "jalan kaki keliling Kota Lama Semarang", href: "/explore/kota-lama-semarang" },
       { anchor: "lunpia khas Semarang untuk oleh-oleh", href: "/explore/lcm-lunpia-cik-me-me" },
