@@ -43,6 +43,13 @@
       "when": 1795330279781,
       "tag": "0005_restrict_seo_pages_public_read",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795563645966,
+      "tag": "0006_lock_nov22_backup_tables",
+      "breakpoints": true
     }
   ]
 }
