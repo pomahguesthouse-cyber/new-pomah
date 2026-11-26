@@ -74,6 +74,19 @@ Deno.serve(async (req) => {
       const to = toRecipient(guest?.phone ?? "");
       if (!/^\d{8,15}$/.test(to)) continue;
 
+      const { data: thread } = await supabase
+        .from("whatsapp_threads")
+        .select("ai_auto, ai_paused_until")
+        .eq("phone", to)
+        .order("last_message_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const pausedUntil = thread?.ai_paused_until ? Date.parse(thread.ai_paused_until) : NaN;
+      if (thread && (thread.ai_auto === false || (Number.isFinite(pausedUntil) && pausedUntil > Date.now()))) {
+        results.push({ booking: booking.reference_code, phone: to, success: false, skipped: "handover" });
+        continue;
+      }
+
       const message =
         `Halo Kak ${guest?.full_name ?? ""}, terima kasih banyak sudah menginap di ${prop.name} 🙏\n\n` +
         `Kami berharap Kakak mendapatkan pengalaman menginap yang menyenangkan. ` +

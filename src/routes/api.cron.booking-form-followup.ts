@@ -10,6 +10,7 @@ import {
   type FollowupStateRow,
   type FollowupTokenRow,
 } from "@/services/booking-form-followup.service";
+import { shouldSuppressBotSend } from "@/services/wa-autoreply/handover-guard";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -39,17 +40,24 @@ async function collectBlockedPhones(phones: string[]): Promise<Set<string>> {
   const blocked = new Set<string>();
   if (phones.length === 0) return blocked;
 
-  const [handoff, queue] = await Promise.all([
+  const [handoff, queue, threads] = await Promise.all([
     (supabaseAdmin as any).from("handoff_tickets").select("phone").in("phone", phones).eq("status", "open"),
     (supabaseAdmin as any)
       .from("wa_conversation_queue")
       .select("phone")
       .in("phone", phones)
       .in("status", ACTIVE_QUEUE_STATUSES),
+    (supabaseAdmin as any)
+      .from("whatsapp_threads")
+      .select("phone, ai_auto, ai_paused_until")
+      .in("phone", phones),
   ]);
 
   for (const r of (handoff.data ?? []) as Array<{ phone: string }>) blocked.add(r.phone);
   for (const r of (queue.data ?? []) as Array<{ phone: string }>) blocked.add(r.phone);
+  for (const t of (threads.data ?? []) as Array<{ phone: string; ai_auto?: boolean | null; ai_paused_until?: string | null }>) {
+    if (shouldSuppressBotSend({ aiAuto: t.ai_auto, aiPausedUntil: t.ai_paused_until })) blocked.add(t.phone);
+  }
   return blocked;
 }
 
@@ -67,7 +75,7 @@ async function fetchStates(
 
   for (const r of (data ?? []) as Array<{ phone: string; state: string; context: any }>) {
     const ctx = (r.context ?? {}) as BookingContext;
-    plain.set(r.phone, { state: r.state, formToken: ctx.formToken });
+    plain.set(r.phone, { state: r.state, formToken: ctx.formToken, handoff: ctx.handoff === true });
     contexts.set(r.phone, ctx);
   }
   return { plain, contexts };

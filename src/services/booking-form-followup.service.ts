@@ -40,6 +40,8 @@ export interface FollowupStateRow {
   state: string;
   /** Token yang sedang ditunggu bot, dari `wa_booking_states.context.formToken`. */
   formToken?: string;
+  /** `wa_booking_states.context.handoff` — bot sudah diserahkan ke manusia. */
+  handoff?: boolean;
 }
 
 export interface FollowupInput {
@@ -75,6 +77,12 @@ function awaitingThisToken(input: FollowupInput, row: FollowupTokenRow): boolean
   return st?.state === "AWAITING_FORM_SUBMISSION" && st.formToken === row.token;
 }
 
+/** Jangan kirim nudge/expiry ke nomor yang sedang dipegang manusia. */
+function botHandedOver(input: FollowupInput, row: FollowupTokenRow): boolean {
+  if (input.blockedPhones.has(row.phone)) return true;
+  return input.stateByPhone.get(row.phone)?.handoff === true;
+}
+
 /**
  * Tentukan token mana yang perlu di-nudge dan mana yang perlu ditutup.
  *
@@ -97,7 +105,7 @@ export function planBookingFormFollowup(input: FollowupInput): FollowupPlan {
       plan.expire.push({
         row,
         resetState,
-        notify: resetState && !input.blockedPhones.has(row.phone),
+        notify: resetState && !botHandedOver(input, row),
       });
       continue;
     }
@@ -105,7 +113,7 @@ export function planBookingFormFollowup(input: FollowupInput): FollowupPlan {
     if (row.reminder_sent_at !== null) continue;
     if (input.nowMs - new Date(row.created_at).getTime() < NUDGE_AFTER_MS) continue;
     if (expiresMs - input.nowMs < NUDGE_MIN_REMAINING_MS) continue;
-    if (input.blockedPhones.has(row.phone)) continue;
+    if (botHandedOver(input, row)) continue;
     if (!awaitingThisToken(input, row)) continue;
 
     plan.nudge.push(row);

@@ -14,6 +14,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { shouldSuppressBotSend } from "@/services/wa-autoreply/handover-guard";
+
 /** Frasa frustrasi/kebingungan yang memicu handoff ke manusia. */
 const FRUSTRATION_PATTERNS: RegExp[] = [
   /\bsaya\s+pusing\b/i,
@@ -204,23 +206,24 @@ export async function clearHumanHandoffForThread(supabase: any, threadId: string
 }
 
 /**
- * Guard handoff: flag context.handoff saja tidak cukup bila staf sudah
- * menutup tiket dan mengakhiri jeda. Flag usang tidak boleh mematikan bot.
+ * Guard handoff. Flag usang (tiket sudah ditutup, jeda sudah kosong) tidak
+ * boleh mematikan bot. Jeda `ai_paused_until` yang masih berjalan mematikan
+ * bot meski flag booking belum sempat diset — itu lubang insiden 26 Nov 2026.
  */
 export function shouldSkipForHumanHandoff(input: {
   handoffFlag: boolean;
   aiPausedUntil?: string | null;
   hasOpenTicket?: boolean;
+  aiAuto?: boolean | null;
   now?: Date;
 }): boolean {
-  if (!input.handoffFlag) return false;
-  if (input.hasOpenTicket) return true;
-  const until = input.aiPausedUntil;
-  if (until) {
-    const ts = Date.parse(until);
-    if (!Number.isNaN(ts) && ts > (input.now ?? new Date()).getTime()) return true;
-  }
-  return false;
+  return shouldSuppressBotSend({
+    aiAuto: input.aiAuto,
+    aiPausedUntil: input.aiPausedUntil,
+    handoffFlag: input.handoffFlag,
+    hasOpenTicket: input.hasOpenTicket,
+    now: input.now,
+  });
 }
 
 // ─── Handoff ticket creation ──────────────────────────────────────────────

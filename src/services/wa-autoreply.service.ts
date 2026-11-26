@@ -47,6 +47,7 @@ import { checkRoomAvailability } from "@/tools/availability.tool";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
 import { getBookingState, isBookingConfirmationMessage } from "@/ai/state-machine/booking-machine";
 import { STAFF_REPLY_SILENCE_MS, staffSilenceUntil } from "@/services/wa-autoreply/staff-silence";
+import { loadThreadHandoverSnapshot, shouldSuppressBotSend } from "@/services/wa-autoreply/handover-guard";
 import { planPaymentProofGuestReply } from "@/services/wa-inbound-media";
 import { buildPropertyFaqReply, ensureLocationCorrection } from "@/services/property-faq";
 import {
@@ -848,9 +849,25 @@ export async function executeAutoreplyForPhone(
           console.warn("[Autoreply] staff silence bypass check failed (non-fatal):", bypassErr);
         }
         if (!bypassStaffSilence) {
+          // Jangan memperpendek jeda handoff (6 jam) dengan jeda staf (1 jam).
+          let mergedPause = silenceUntil;
+          try {
+            const { data: pauseRow } = await (supabaseAdmin as any)
+              .from("whatsapp_threads")
+              .select("ai_paused_until")
+              .eq("id", c.thread_id)
+              .maybeSingle();
+            const { laterPause } = await import("@/services/wa-autoreply/admin-handoff");
+            mergedPause = laterPause(
+              (pauseRow as { ai_paused_until?: string | null } | null)?.ai_paused_until,
+              silenceUntil,
+            ) ?? silenceUntil;
+          } catch (mergeErr) {
+            console.warn("[Autoreply] staff silence pause merge failed (non-fatal):", mergeErr);
+          }
           await (supabaseAdmin as any)
             .from("whatsapp_threads")
-            .update({ ai_paused_until: silenceUntil })
+            .update({ ai_paused_until: mergedPause })
             .eq("id", c.thread_id);
           console.info(`[Autoreply] Staff replied recently — staying quiet for ${phone.slice(-6)}`);
           return "skipped_config";
@@ -936,6 +953,24 @@ export async function executeAutoreplyForPhone(
       }
     } catch (e) {
       console.warn("[Autoreply] admin handoff failed (non-fatal):", e);
+    }
+  };
+  /**
+   * Baca ulang jeda/tiket tepat sebelum kirim. Giliran yang sudah memulai
+   * handoff (`adminHandoffDone`) tetap boleh mengirim SATU kalimat serah-terima.
+   * Gagal baca tidak menekan — jangan membisukan semua tamu saat DB berkedip.
+   */
+  const guestSendBlockedByHandover = async (): Promise<boolean> => {
+    if (isManager || adminHandoffDone) return false;
+    try {
+      const snap = await loadThreadHandoverSnapshot(supabaseAdmin as any, {
+        threadId: c.thread_id,
+        phone,
+      });
+      return shouldSuppressBotSend(snap);
+    } catch (e) {
+      console.warn("[Autoreply] handover re-check failed (non-fatal):", e);
+      return false;
     }
   };
   const earlyInbound =
@@ -1036,6 +1071,11 @@ export async function executeAutoreplyForPhone(
     },
     send: async (ackRowId) => {
       try {
+        if (await guestSendBlockedByHandover()) {
+          await supersedeAckRow(ackRowId);
+          console.info(`[Autoreply] quick ack suppressed — handover active for ${phone.slice(-6)}`);
+          return;
+        }
         const { ok, error: ackErr } = await sendWhatsAppMessage(c.wpp_token, sendTarget, QUICK_ACK_MESSAGE);
         if (!ok) {
           console.warn(`[Autoreply] quick ack failed for ${phone.slice(-6)}: ${ackErr}`);
@@ -1086,16 +1126,18 @@ export async function executeAutoreplyForPhone(
   });
 
   // Rasa manusiawi: tandai dibaca + tampilkan "sedang mengetik" sebelum
-  // orchestration. Best-effort, tidak boleh memblokir alur balasan.
-  try { void markWaSeen(c.wpp_token, sendTarget); } catch { /* non-fatal */ }
-  try { void setWaTyping(c.wpp_token, sendTarget, true); } catch { /* non-fatal */ }
-
+  // orchestration. Ditunda sampai kita tahu chat ini tidak sedang di-handoff.
   let bookingState: { state?: string | null; context?: unknown } | null = null;
+  let handoverSilence = false;
   if (!isManager) {
     try {
       const { data: handoffState } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
       bookingState = (handoffState as { state?: string | null; context?: unknown; slots?: unknown } | null) ?? null;
-      if (bookingState?.state && bookingState.state !== "IDLE") {
+      const handedAlready =
+        !!bookingState?.context &&
+        typeof bookingState.context === "object" &&
+        (bookingState.context as { handoff?: unknown }).handoff === true;
+      if (bookingState?.state && bookingState.state !== "IDLE" && !handedAlready) {
         try {
           await (supabaseAdmin as any).rpc("update_booking_state", {
             p_phone: phone,
@@ -1111,82 +1153,52 @@ export async function executeAutoreplyForPhone(
         !!handoffContext &&
         typeof handoffContext === "object" &&
         (handoffContext as { handoff?: unknown }).handoff === true;
-      if (handoffFlag) {
-        const { shouldSkipForHumanHandoff, clearHumanHandoff } = await import("@/services/frustration-detector");
-        let aiPausedUntil: string | null = null;
-        let hasOpenTicket = false;
-        if (c.thread_id) {
-          try {
-            const { data: threadRow } = await (supabaseAdmin as any)
-              .from("whatsapp_threads")
-              .select("ai_paused_until")
-              .eq("id", c.thread_id)
-              .maybeSingle();
-            aiPausedUntil = (threadRow as { ai_paused_until?: string | null } | null)?.ai_paused_until ?? null;
-          } catch (pauseErr) {
-            console.warn("[Autoreply] handoff pause lookup failed (non-fatal):", pauseErr);
-          }
-        }
+      const { shouldSkipForHumanHandoff, clearHumanHandoff } = await import("@/services/frustration-detector");
+      let aiPausedUntil: string | null = (c as { ai_paused_until?: string | null }).ai_paused_until ?? null;
+      let aiAuto: boolean | null = null;
+      let hasOpenTicket = false;
+      if (c.thread_id) {
         try {
-          const { data: openTickets } = await (supabaseAdmin as any)
-            .from("handoff_tickets")
-            .select("id")
-            .eq("phone", phone)
-            .eq("status", "open")
-            .limit(1);
-          hasOpenTicket = Array.isArray(openTickets) && openTickets.length > 0;
-        } catch (ticketErr) {
-          console.warn("[Autoreply] handoff ticket lookup failed (non-fatal):", ticketErr);
+          const { data: threadRow } = await (supabaseAdmin as any)
+            .from("whatsapp_threads")
+            .select("ai_auto, ai_paused_until")
+            .eq("id", c.thread_id)
+            .maybeSingle();
+          const row = threadRow as { ai_auto?: boolean | null; ai_paused_until?: string | null } | null;
+          aiPausedUntil = row?.ai_paused_until ?? aiPausedUntil;
+          aiAuto = row?.ai_auto ?? null;
+        } catch (pauseErr) {
+          console.warn("[Autoreply] handoff pause lookup failed (non-fatal):", pauseErr);
         }
-        if (!shouldSkipForHumanHandoff({ handoffFlag: true, aiPausedUntil, hasOpenTicket })) {
-          // Staf sudah mengembalikan ke AI, tapi flag context.handoff masih nyala.
-          console.info(`[Autoreply] Stale human-handoff flag — resuming bot for ${phone.slice(-6)}`);
-          await clearHumanHandoff(supabaseAdmin, phone);
-        } else {
-          console.info(`[Autoreply] Human handoff active — skipping bot reply for ${phone.slice(-6)}`);
-          await quickAck.beforeReplySend();
-          // Kirim satu ack sopan supaya tamu tidak merasa diabaikan saat admin
-          // belum sempat membalas. Throttle 15 menit: hanya kirim jika ack
-          // terakhir dari sistem (metadata.handoff_ack=true) lebih lama dari itu.
-          try {
-            const fifteenMinAgo = new Date(Date.now() - 15 * 60_000).toISOString();
-            const { data: recentAck } = await (supabaseAdmin as any)
-              .from("whatsapp_messages")
-              .select("id")
-              .eq("thread_id", c.thread_id)
-              .eq("direction", "out")
-              .filter("metadata->>handoff_ack", "eq", "true")
-              .gte("sent_at", fifteenMinAgo)
-              .limit(1);
-            if (!recentAck || recentAck.length === 0) {
-              const ackBody =
-                "Terima kasih, Kak 🙏 Pesan Kakak sudah kami terima. " +
-                "Tim kami akan segera membalas langsung di chat ini, mohon ditunggu sebentar ya.";
-              const ackRowId = await saveOutboundMessage(supabaseAdmin, {
-                threadId: c.thread_id,
-                body: ackBody,
-                metadata: {
-                  agent: "system",
-                  agent_key: "handoff-ack",
-                  handoff_ack: true,
-                  send_status: "pending",
-                } as any,
-              });
-              try {
-                await sendWhatsAppMessage(c.wpp_token, sendTarget, ackBody);
-                await (supabaseAdmin as any)
-                  .from("whatsapp_messages")
-                  .update({ metadata: { agent: "system", agent_key: "handoff-ack", handoff_ack: true, send_status: "sent" } })
-                  .eq("id", ackRowId);
-              } catch (sendErr) {
-                console.warn("[Autoreply] handoff ack send failed:", sendErr);
-              }
-            }
-          } catch (ackErr) {
-            console.warn("[Autoreply] handoff ack guard failed:", ackErr);
-          }
-          return "skipped_config";
-        }
+      }
+      try {
+        const { data: openTickets } = await (supabaseAdmin as any)
+          .from("handoff_tickets")
+          .select("id")
+          .eq("phone", phone)
+          .eq("status", "open")
+          .limit(1);
+        hasOpenTicket = Array.isArray(openTickets) && openTickets.length > 0;
+      } catch (ticketErr) {
+        console.warn("[Autoreply] handoff ticket lookup failed (non-fatal):", ticketErr);
+      }
+      const handoffActive = shouldSkipForHumanHandoff({
+        handoffFlag,
+        aiPausedUntil,
+        hasOpenTicket,
+        aiAuto,
+      });
+      if (handoffFlag && !handoffActive) {
+        // Staf sudah mengembalikan ke AI, tapi flag context.handoff masih nyala.
+        console.info(`[Autoreply] Stale human-handoff flag — resuming bot for ${phone.slice(-6)}`);
+        await clearHumanHandoff(supabaseAdmin, phone);
+      } else if (handoffActive) {
+        // Diam total. Jangan kirim sapaan/ack susulan — staf yang membalas.
+        // Return-nya setelah zombie rescue, supaya kalimat serah-terima yang
+        // tersangkut 'pending' masih sempat dikirim ulang.
+        console.info(`[Autoreply] Human handoff active — skipping bot reply for ${phone.slice(-6)}`);
+        await quickAck.beforeReplySend();
+        handoverSilence = true;
       }
 
     } catch (e) {
@@ -1217,6 +1229,33 @@ export async function executeAutoreplyForPhone(
       | undefined;
 
     if (stuckMsg?.body) {
+      const stuckMeta = (stuckMsg.metadata ?? {}) as Record<string, unknown>;
+      const stuckIsHandoffAck =
+        stuckMeta.intent === "handoff" ||
+        (Array.isArray(stuckMeta.tools_used) && stuckMeta.tools_used.includes("admin-handoff"));
+      if (!stuckIsHandoffAck && (handoverSilence || (await guestSendBlockedByHandover()))) {
+        // Jangan biarkan pesan pending ini terkirim setelah staf melepas chat.
+        try {
+          await (supabaseAdmin as any)
+            .from("whatsapp_messages")
+            .update({
+              metadata: {
+                ...stuckMsg.metadata,
+                send_status: "superseded",
+                handover_suppressed: true,
+              },
+            })
+            .eq("id", stuckMsg.id)
+            .filter("metadata->>send_status", "eq", "pending");
+        } catch (suppressErr) {
+          console.warn("[Autoreply] gagal menandai zombie superseded:", suppressErr);
+        }
+        console.info(
+          `[Autoreply] Zombie rescue suppressed — handover active for ${phone.slice(-6)}`,
+        );
+        await quickAck.beforeReplySend();
+        return "skipped_config";
+      }
       // Atomic claim: ubah send_status pending → rescuing HANYA kalau masih
       // pending. Kalau worker lain duluan, `claimed` kosong → kita tidak
       // memanggil WhatsApp gateway (mencegah double resend).
@@ -1275,6 +1314,12 @@ export async function executeAutoreplyForPhone(
   } catch (e) {
     console.warn("[Autoreply] Zombie rescue check error (non-fatal):", e);
   }
+
+  if (handoverSilence) return "skipped_config";
+
+  // Baru di sini bot benar-benar akan membalas.
+  try { void markWaSeen(c.wpp_token, sendTarget); } catch { /* non-fatal */ }
+  try { void setWaTyping(c.wpp_token, sendTarget, true); } catch { /* non-fatal */ }
 
   const [{ data: prop }, { data: rooms }] = await Promise.all([
     (supabaseAdmin as any).from("properties").select("*").limit(1).maybeSingle(),
@@ -1558,6 +1603,11 @@ export async function executeAutoreplyForPhone(
   // kamar mandi, pesan panjang) tetap `wantsMedia` supaya availability/FAQ
   // tidak menelan fotonya: brosur dikirim dulu, sisanya dijawab AI.
   if (!reply && !isManager && lastMessage && (wantsMedia || facilityAsk)) {
+    if (await guestSendBlockedByHandover()) {
+      await quickAck.beforeReplySend();
+      console.info(`[Autoreply] Brochure/photo suppressed — handover active for ${phone.slice(-6)}`);
+      return "skipped_config";
+    }
     try {
       const contextRoom = roomTypeFromConversation(bookingState);
       const gallery = (rooms ?? []) as any[];
@@ -1680,6 +1730,10 @@ export async function executeAutoreplyForPhone(
 
   const ensureFacilityBrochure = async () => {
     if (brochureDelivered || brochureRepeat.action !== "send") return;
+    if (await guestSendBlockedByHandover()) {
+      console.info(`[Autoreply] Facility brochure suppressed — handover active for ${phone.slice(-6)}`);
+      return;
+    }
     try {
       await quickAck.beforeReplySend();
       const outcome = await sendBrochureFastPath(c.wpp_token, sendTarget, phone, c.thread_id);
@@ -2366,6 +2420,12 @@ export async function executeAutoreplyForPhone(
   // Booking-aware context (activeBookingContext) sudah dimuat sebelum fast path.
 
 
+  if (!reply && (await guestSendBlockedByHandover())) {
+    await quickAck.beforeReplySend();
+    console.info(`[Autoreply] LLM suppressed — handover active for ${phone.slice(-6)}`);
+    return "skipped_config";
+  }
+
   for (let attempt = 1; attempt <= AI_MAX_ATTEMPTS && !reply; attempt++) {
     if (attempt > 1) await sleep(Math.min(1000 * attempt, 3000));
     // Extend the worker lock before each (potentially slow) AI attempt.
@@ -2992,6 +3052,14 @@ export async function executeAutoreplyForPhone(
     queue_entry_id: queueEntryId ?? null,
     ...buildLatencyMetadata(),
   };
+
+  // Giliran lain mungkin sudah menyerahkan chat ke manusia sementara kita
+  // menyusun balasan. Jangan simpan (nanti di-rescue) dan jangan kirim.
+  if (await guestSendBlockedByHandover()) {
+    await quickAck.beforeReplySend();
+    console.info(`[Autoreply] Outbound dropped — handover active for ${phone.slice(-6)}`);
+    return "skipped_config";
+  }
 
   // Persist outbound BEFORE calling WhatsApp gateway. Kalau worker mati setelah WhatsApp gateway
   // sukses, baris ini sudah ada dan dedup-guard di atas akan mencegah
@@ -3763,6 +3831,25 @@ export async function sendFailureFallbackToGuests(): Promise<{
         .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent:skipped]") })
         .eq("id", entry.id);
       continue;
+    }
+
+    if (!isManagerEntry) {
+      try {
+        const snap = await loadThreadHandoverSnapshot(supabaseAdmin as any, {
+          threadId: entry.thread_id,
+          phone: entry.phone,
+        });
+        if (shouldSuppressBotSend(snap)) {
+          await (supabaseAdmin as any)
+            .from("wa_conversation_queue")
+            .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent:skipped]") })
+            .eq("id", entry.id);
+          console.info(`[Fallback] skip ${entry.id.slice(0, 8)} — handover active`);
+          continue;
+        }
+      } catch (e) {
+        console.warn("[Fallback] handover check failed (non-fatal):", e);
+      }
     }
 
     // ── Atomic claim: tandai entry SEBELUM kirim (idempotency key) ─────────
