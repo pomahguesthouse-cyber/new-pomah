@@ -7,9 +7,11 @@
  *
  * Pemicu: tamu minta admin/manusia, kirim bukti transfer, mengancam cancel,
  * komplain, atau balasan bot sendiri menyerahkan ke tim (bot tidak tahu).
- * Aksi: tiket `handoff_tickets`, notifikasi admin (push + WhatsApp), dan bot
- * dijeda di thread itu (`whatsapp_threads.ai_paused_until`) sampai staf
- * mengembalikan ke AI, tiket diselesaikan, atau batas waktu habis.
+ * Aksi: tiket `handoff_tickets`, notifikasi admin (push + WhatsApp),
+ * `wa_booking_states.context.handoff = true`, dan bot dijeda di thread itu
+ * (`whatsapp_threads.ai_paused_until`, 6 jam) sampai staf mengembalikan ke AI
+ * atau tiket diselesaikan. Jeda 6 jam adalah batas bila flag/tiket gagal
+ * tersimpan; selama tiket terbuka dan flag menyala, bot tetap diam.
  *
  * Tidak pernah menjanjikan batas waktu ke tamu.
  */
@@ -175,9 +177,12 @@ export function buildAdminHandoffNotice(input: AdminHandoffNoticeInput): AdminHa
     `Kode booking: ${(input.bookingCode || "").trim() || "-"}`,
     `Pesan: "${trigger}"`,
     "",
-    "Bot BERHENTI membalas otomatis di chat ini sampai admin membalas lalu menekan " +
-      "\"Kembalikan ke AI\" (atau kirim /ai di chat tamu), atau tiket diselesaikan." +
-      (input.pauseUntil ? " Bot aktif lagi otomatis setelah 6 jam." : ""),
+    "Bot BERHENTI membalas otomatis di chat ini sampai admin menekan " +
+      "\"Kembalikan ke AI\" (atau kirim /ai di chat tamu), atau tiket diselesaikan. " +
+      "Selama tiket masih terbuka, bot tidak menyala sendiri." +
+      (input.pauseUntil
+        ? " Bila tiket atau flag handoff tidak tersimpan, jeda bot habis sendiri setelah 6 jam."
+        : ""),
     `Chat: ${url}`,
   ].join("\n");
   return {
@@ -271,17 +276,32 @@ export async function triggerAdminHandoff(
   const pauseMs = input.pauseMs ?? ADMIN_HANDOFF_PAUSE_MS;
   if (input.threadId && pauseMs > 0) {
     try {
-      const { data: thread } = await db
+      const { data: thread, error: readErr } = await db
         .from("whatsapp_threads")
         .select("ai_paused_until")
         .eq("id", input.threadId)
         .maybeSingle();
+      if (readErr) throw readErr;
       const candidate = new Date(now.getTime() + pauseMs).toISOString();
       pausedUntil = laterPause((thread as { ai_paused_until?: string | null } | null)?.ai_paused_until, candidate);
-      await db.from("whatsapp_threads").update({ ai_paused_until: pausedUntil }).eq("id", input.threadId);
+      const updated = await db
+        .from("whatsapp_threads")
+        .update({ ai_paused_until: pausedUntil })
+        .eq("id", input.threadId);
+      if (updated?.error) throw updated.error;
     } catch (e) {
       console.warn("[AdminHandoff] jeda thread gagal:", e);
       pausedUntil = null;
+    }
+  }
+  // Flag booking supaya setiap jalur balasan (bukan hanya jeda thread) berhenti.
+  // State dibiarkan IDLE oleh markHumanHandoff; isi context lain tetap ada.
+  if (typeof db.rpc === "function") {
+    try {
+      const { markHumanHandoff } = await import("../frustration-detector");
+      await markHumanHandoff(db, input.phone, ctx);
+    } catch (e) {
+      console.warn("[AdminHandoff] flag handoff gagal:", e);
     }
   }
   if (input.notify !== false) {

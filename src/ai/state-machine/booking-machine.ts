@@ -2382,6 +2382,12 @@ export async function processBookingState(
   // `context` is reassigned below on booking-form submission; `state` is not.
   let { context } = currentStateRecord;
 
+  // Tamu sudah diserahkan ke admin. Jangan menjawab ketersediaan, DP, atau
+  // melanjutkan alur booking sampai flag ini dihapus staf.
+  if (context?.handoff === true) {
+    return { handled: true, silent: true };
+  }
+
   // Pindah kamar untuk booking yang SUDAH ada: jangan buat booking baru,
   // beri rincian total baru / sudah dibayar / sisa, lalu teruskan ke staf.
   const roomChangeResult = await handleExistingBookingRoomChange(ctx, phone, message, state, context, opts?.roomChange);
