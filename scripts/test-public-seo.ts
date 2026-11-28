@@ -814,7 +814,7 @@ assert.equal(
 
 const LAWANG_TITLE = "Lawang Sewu: Jam Buka & Harga Tiket 2026 | Pomah";
 const LAWANG_META =
-  "Lawang Sewu umumnya buka 08.00–20.00 WIB, Sabtu sampai 22.00. Tiket dewasa Rp20.000, anak Rp10.000. Plus rute 6 km dari Pomah Guesthouse Sampangan.";
+  "Panduan Lawang Sewu di Tugu Muda: jam buka, tiket, dan rute 6 km dari Pomah Guesthouse di Sampangan. Siap-siap menginap setelah keliling kota.";
 const LAWANG_H1 = "Lawang Sewu Semarang: Jam Buka, Harga Tiket 2026 & Rute dari Pomah";
 const STALE_LAWANG_HOURS = /07\.00|21\.00|07:00|21:00/;
 
@@ -827,12 +827,29 @@ function decodeHtml(value: string): string {
     .replace(/&#39;/g, "'");
 }
 
+const STAY_CTA_SENTENCE =
+  "Istirahat di Pomah, guest house keluarga di Sampangan. Cek kamar yang masih tersedia.";
+
+function assertStayCta(html: string, visible: string, firstHeading: string) {
+  const firstSentence = visible.indexOf(STAY_CTA_SENTENCE);
+  const lastSentence = visible.lastIndexOf(STAY_CTA_SENTENCE);
+  const headingAt = visible.indexOf(firstHeading);
+  const lihatJuga = visible.lastIndexOf("Lihat juga");
+  assert.ok(firstSentence >= 0, "CTA awal");
+  assert.ok(lastSentence > firstSentence, "CTA akhir");
+  assert.ok(headingAt > firstSentence, "CTA awal sebelum H2 pertama");
+  assert.ok(lihatJuga > headingAt, "Lihat juga");
+  assert.ok(lastSentence > lihatJuga, "CTA akhir setelah Lihat juga");
+  const roomLinks = [...html.matchAll(/<a\b[^>]*href="\/rooms"[^>]*>Cek kamar di Pomah<\/a>/g)];
+  assert.equal(roomLinks.length, 2);
+}
+
 const lawangArticle = cityGuideArticleForSlug("lawang-sewu-semarang");
 assert.ok(lawangArticle);
 assert.equal(lawangArticle.title, LAWANG_TITLE);
 assert.equal(lawangArticle.title.length, 48);
 assert.equal(lawangArticle.meta, LAWANG_META);
-assert.equal(lawangArticle.meta.length, 147);
+assert.equal(lawangArticle.meta.length, 142);
 assert.equal(lawangArticle.h1, LAWANG_H1);
 assert.equal(
   lawangArticle.cardIntro,
@@ -893,6 +910,7 @@ for (const marker of lawangOrder) {
 }
 assert.doesNotMatch(lawangHtml, STALE_LAWANG_HOURS);
 assert.doesNotMatch(lawangVisible, /Menginap dekat sini/);
+assertStayCta(lawangHtml, lawangVisible, "Info praktis Lawang Sewu");
 
 const lawangFaqScript = lawangHtml.match(
   /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
@@ -989,7 +1007,7 @@ assert.equal(lawangCards.events[0]?.metaDescription, undefined);
 
 const WIDO_TITLE = "Nasi Ayam Bu Wido Semarang: Lokasi, Jam Buka & Menu | Pomah";
 const WIDO_META =
-  "Nasi Ayam Bu Wido di Jl. Melati Selatan dekat Simpang Lima, buka 15.30–22.30. Nasi pincuk, ayam suwir, kuah opor & aneka sate. 8 km dari Pomah.";
+  "Nasi Ayam Bu Wido di Jl. Melati Selatan dekat Simpang Lima, sudah lebih dari 60 tahun. Lihat jam buka, menu, dan rute 8 km dari Pomah Guesthouse.";
 const WIDO_H1 = "Nasi Ayam Bu Wido Semarang: Lokasi, Jam Buka & Rute dari Pomah";
 const WIDO_ADDRESS =
   "Jl. Melati Selatan, Brumbungan, Kec. Semarang Tengah, Kota Semarang, Jawa Tengah 50135";
@@ -1009,7 +1027,7 @@ assert.ok(widoArticle);
 assert.equal(widoArticle.title, WIDO_TITLE);
 assert.equal(widoArticle.title.length, 59);
 assert.equal(widoArticle.meta, WIDO_META);
-assert.equal(widoArticle.meta.length, 143);
+assert.equal(widoArticle.meta.length, 145);
 assert.equal(widoArticle.h1, WIDO_H1);
 assert.equal(widoArticle.canonicalSlug, "nasi-ayam-bu-wido");
 assert.equal(widoArticle.displayAddress, WIDO_ADDRESS);
@@ -1067,6 +1085,13 @@ for (const marker of widoOrder) {
   widoCursor = at;
 }
 assert.doesNotMatch(widoVisible, /2C8C|\+|telur pindang|sambal khas|air panas|air hangat|\bpromo\b/i);
+assertStayCta(widoHtml, widoVisible, "Info praktis Nasi Ayam Bu Wido");
+
+const kotaLama = cityGuideArticleForSlug("kota-lama-semarang");
+assert.ok(kotaLama);
+const kotaLamaHtml = renderToStaticMarkup(createElement(CityGuideArticleBody, { article: kotaLama }));
+assert.doesNotMatch(kotaLamaHtml, /Cek kamar di Pomah/);
+assert.doesNotMatch(kotaLamaHtml, /Istirahat di Pomah, guest house keluarga di Sampangan/);
 
 const widoFaqScript = widoHtml.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
 assert.ok(widoFaqScript);
@@ -1194,7 +1219,11 @@ const widoSql = readFileSync(
   "utf8",
 );
 assert.ok(widoSql.includes(widoArticle.cardIntro));
-assert.ok(widoSql.includes(WIDO_META));
+assert.ok(
+  widoSql.includes(
+    "Nasi Ayam Bu Wido di Jl. Melati Selatan dekat Simpang Lima, buka 15.30–22.30. Nasi pincuk, ayam suwir, kuah opor & aneka sate. 8 km dari Pomah.",
+  ),
+);
 assert.ok(widoSql.includes(WIDO_ADDRESS));
 assert.ok(widoSql.includes("00000000-0000-0000-0000-000000000001"));
 assert.match(widoSql, /label = 'Nasi Ayam Bu Wido'/);
