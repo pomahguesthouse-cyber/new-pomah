@@ -58,6 +58,30 @@ export function isProductionHost(hostname: string): boolean {
   return host === CANONICAL_HOST || host === `www.${CANONICAL_HOST}`;
 }
 
+/**
+ * True when the worker should run `buildSeoRedirect`.
+ * A public trailing slash alone counts. `/api` and staff paths (`/admin`,
+ * `/login`, including a trailing slash) do not, so OAuth hashes stay put.
+ * Preview hosts still drop a public trailing slash, on that same host.
+ */
+export function shouldResolveSeoRedirect(requestUrl: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(requestUrl);
+  } catch {
+    return false;
+  }
+  const rawPath = url.pathname || "/";
+  const pathname = normalizePathname(rawPath);
+  if (isApiPath(rawPath) || isApiPath(pathname)) return false;
+  if (legacyKindForPath(pathname)) return true;
+  if (shouldCanonicalizeHost(url)) return true;
+  if (landingSlugFromPath(pathname)) return true;
+  const staffPath =
+    pathname === "/login" || pathname === "/admin" || pathname.startsWith("/admin/");
+  return rawPath.length > 1 && rawPath.endsWith("/") && !staffPath;
+}
+
 /** www or http on the production host. Preview and localhost are skipped. */
 export function shouldCanonicalizeHost(url: URL): boolean {
   if (isLocalOrPreviewHost(url.hostname)) return false;

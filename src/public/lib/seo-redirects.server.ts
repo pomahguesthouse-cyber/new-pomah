@@ -15,7 +15,7 @@ import {
   legacyKindForPath,
   normalizePathname,
   resolveDeluxeRoomPath,
-  shouldCanonicalizeHost,
+  shouldResolveSeoRedirect,
   type ExplorePlaceRef,
   type SeoRedirect,
 } from "@/public/lib/seo-redirects";
@@ -101,9 +101,11 @@ export async function resolveSeoRedirect(request: Request): Promise<SeoRedirect 
   }
   const pathname = normalizePathname(url.pathname);
   if (isApiPath(pathname)) return null;
+  // Trailing-slash-only URLs must reach buildSeoRedirect. Skipping them let
+  // the framework answer 307 with a relative Location.
+  if (!shouldResolveSeoRedirect(request.url)) return null;
   const kind = legacyKindForPath(pathname);
   const lpSlug = landingSlugFromPath(pathname);
-  if (!kind && !shouldCanonicalizeHost(url) && !lpSlug) return null;
 
   const deluxeRoomPath = kind === "deluxe-ocean-view" ? await lookupDeluxeRoomPath() : undefined;
   const explorePlaces = kind === "explore-slug" ? await lookupExplorePlaces() : undefined;
