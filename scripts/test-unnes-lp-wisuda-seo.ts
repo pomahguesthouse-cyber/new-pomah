@@ -17,10 +17,10 @@ import {
 import { buildGuideTextLinks } from "../src/public/components/guide-links";
 import { faqPageGraph } from "../src/public/lib/structured-data";
 
-const TITLE = "Homestay & Penginapan Dekat UNNES Semarang | Pomah";
+const TITLE = "Homestay Dekat UNNES Sekaran, Semarang | Pomah";
 const META =
-  "Penginapan keluarga di Sampangan, sekitar 4,5 km dari UNNES Sekaran (±10–15 menit). Cocok untuk wisuda & tes masuk. Cek kamar dan pesan via WhatsApp.";
-const H1 = "Homestay & Penginapan Dekat UNNES untuk Orang Tua dan Wisudawan";
+  "Homestay dekat UNNES Sekaran di Sampangan, sekitar 4,5 km, kurang lebih 10–15 menit. Cocok untuk wisuda dan tes masuk. Cek kamar via WhatsApp.";
+const H1 = "Homestay Dekat UNNES Sekaran untuk Orang Tua dan Wisudawan";
 const INTRO =
   "Pomah Guesthouse adalah penginapan keluarga di Sampangan, Semarang, sekitar 4,5 km atau kurang lebih 10–15 menit berkendara dari kampus UNNES Sekaran. Banyak orang tua memilih menginap di sini saat wisuda, tes masuk, atau mengantar putra-putrinya kuliah.";
 const FAQ_Q = "Apakah Pomah termasuk hotel dekat UNNES?";
@@ -72,5 +72,14 @@ assert.equal(articles.length, 2);
 
 const guideSrc = readFileSync(new URL("../src/public/components/city-guide-article.tsx", import.meta.url), "utf8");
 assert.match(guideSrc, /href=\{link\[2\]\}/);
+
+const homeSrc = readFileSync(new URL("../src/routes/index.tsx", import.meta.url), "utf8");
+const introAt = homeSrc.indexOf("{APPROVED_HOME.intro}");
+const wisudaAt = homeSrc.indexOf("Datang untuk wisuda UNNES?");
+assert.ok(introAt >= 0 && wisudaAt > introAt, "Kalimat wisuda UNNES harus di bawah intro beranda");
+assert.match(homeSrc, /UNNES_HOME_ANCHOR/);
+assert.match(homeSrc, /href=\{UNNES_LP_PATH\}/);
+assert.equal(UNNES_HOME_ANCHOR, "penginapan dekat UNNES");
+assert.equal(UNNES_LP_PATH, "/lp/penginapan-dekat-unnes");
 
 console.log("test-unnes-lp-wisuda-seo: ok");

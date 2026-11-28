@@ -1,6 +1,23 @@
 import type { ApprovedSection, CityGuideArticle } from "@/public/content/approved-seo";
+import { Button } from "@/components/ui/button";
 import { canonicalUrlForPath } from "@/public/lib/public-seo";
 import { faqPageGraph } from "@/public/lib/structured-data";
+
+const CITY_GUIDE_STAY_CTA_SLUGS = new Set(["lawang-sewu-semarang", "nasi-ayam-bu-wido"]);
+
+/** Stay prompt for the two city guides that should send guests to /rooms. */
+export function CityGuideStayCta() {
+  return (
+    <aside className="rounded-2xl border border-stone-200 bg-white p-6">
+      <p className="text-sm leading-relaxed text-stone-600">
+        Istirahat di Pomah, guest house keluarga di Sampangan. Cek kamar yang masih tersedia.
+      </p>
+      <Button asChild size="sm" className="mt-4 bg-amber-700 hover:bg-amber-800">
+        <a href="/rooms">Cek kamar di Pomah</a>
+      </Button>
+    </aside>
+  );
+}
 
 function RichText({ text }: { text: string }) {
   const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g);
@@ -69,8 +86,10 @@ function SectionBody({ section }: { section: ApprovedSection }) {
 /** Approved City Guide body: H2 sections, visible FAQ, and crawlable links. */
 export function CityGuideArticleBody({ article }: { article: CityGuideArticle }) {
   const pageUrl = canonicalUrlForPath(`/explore/${article.canonicalSlug}`);
+  const showStayCta = CITY_GUIDE_STAY_CTA_SLUGS.has(article.canonicalSlug);
   return (
     <div className="mt-6 space-y-8 text-base leading-relaxed text-stone-700">
+      {showStayCta ? <CityGuideStayCta /> : null}
       {article.sections.map((section) => (
         <section key={section.heading}>
           <h2 className="text-xl font-bold text-stone-950">{section.heading}</h2>
@@ -111,6 +130,7 @@ export function CityGuideArticleBody({ article }: { article: CityGuideArticle })
           ))}
         </ul>
       </section>
+      {showStayCta ? <CityGuideStayCta /> : null}
     </div>
   );
 }

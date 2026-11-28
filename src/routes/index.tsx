@@ -81,7 +81,7 @@ const BookingDialog = lazy(() =>
 );
 import { BrandLogo, PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { GuideTextLinks, exploreHrefForName } from "@/public/components/guide-links";
-import { APPROVED_HOME, cardIntroForName, omitPublicHotWaterAmenities, publicRoomBlurb } from "@/public/content/approved-seo";
+import { APPROVED_HOME, UNNES_HOME_ANCHOR, UNNES_LP_PATH, cardIntroForName, omitPublicHotWaterAmenities, publicRoomBlurb } from "@/public/content/approved-seo";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 import { DateRangePickerID } from "@/public/components/lazy-public-widgets";
 
@@ -706,6 +706,13 @@ export function PomahHomeView({
 
       <section className="mx-auto max-w-3xl px-6 pb-4 pt-10 md:pt-14" aria-label="Tentang Pomah Guesthouse">
         <p className="text-base leading-relaxed text-stone-700 md:text-lg">{APPROVED_HOME.intro}</p>
+        <p className="mt-4 text-base leading-relaxed text-stone-700 md:text-lg">
+          Datang untuk wisuda UNNES? Lihat{" "}
+          <a href={UNNES_LP_PATH} className="font-semibold text-amber-800 hover:underline">
+            {UNNES_HOME_ANCHOR}
+          </a>
+          .
+        </p>
       </section>
 
       {cfg.sectionOrder.map((key) => (

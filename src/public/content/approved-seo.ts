@@ -225,9 +225,9 @@ export type ApprovedLpRoom = {
 
 export const APPROVED_LP = {
   slug: "penginapan-dekat-unnes",
-  title: "Homestay & Penginapan Dekat UNNES Semarang | Pomah",
-  meta: "Penginapan keluarga di Sampangan, sekitar 4,5 km dari UNNES Sekaran (±10–15 menit). Cocok untuk wisuda & tes masuk. Cek kamar dan pesan via WhatsApp.",
-  h1: "Homestay & Penginapan Dekat UNNES untuk Orang Tua dan Wisudawan",
+  title: "Homestay Dekat UNNES Sekaran, Semarang | Pomah",
+  meta: "Homestay dekat UNNES Sekaran di Sampangan, sekitar 4,5 km, kurang lebih 10–15 menit. Cocok untuk wisuda dan tes masuk. Cek kamar via WhatsApp.",
+  h1: "Homestay Dekat UNNES Sekaran untuk Orang Tua dan Wisudawan",
   cardIntro:
     "Penginapan keluarga di Sampangan, sekitar 4,5 km dari kampus UNNES Sekaran. Pilihan tepat untuk orang tua wisudawan, peserta tes, dan keluarga yang ingin menginap tenang dekat kampus.",
   tagline: "Penginapan keluarga yang nyaman & terjangkau di Sampangan, Semarang.",
@@ -485,7 +485,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
     canonicalSlug: "lawang-sewu-semarang",
     names: ["Lawang Sewu", "Lawang Sewu Semarang"],
     title: "Lawang Sewu: Jam Buka & Harga Tiket 2026 | Pomah",
-    meta: "Lawang Sewu umumnya buka 08.00–20.00 WIB, Sabtu sampai 22.00. Tiket dewasa Rp20.000, anak Rp10.000. Plus rute 6 km dari Pomah Guesthouse Sampangan.",
+    meta: "Panduan Lawang Sewu di Tugu Muda: jam buka, tiket, dan rute 6 km dari Pomah Guesthouse di Sampangan. Siap-siap menginap setelah keliling kota.",
     h1: "Lawang Sewu Semarang: Jam Buka, Harga Tiket 2026 & Rute dari Pomah",
     cardIntro:
       'Gedung "seribu pintu" di Tugu Muda ini dulu kantor perusahaan kereta api zaman Belanda, sekarang jadi museum yang selalu ramai pengunjung. Dari Pomah cukup sekali jalan lewat pusat kota, dan paling enak didatangi pagi atau menjelang sore.',
@@ -595,7 +595,7 @@ export const CITY_GUIDE_ARTICLES: CityGuideArticle[] = [
     canonicalSlug: "nasi-ayam-bu-wido",
     names: ["Nasi Ayam Bu Wido"],
     title: "Nasi Ayam Bu Wido Semarang: Lokasi, Jam Buka & Menu | Pomah",
-    meta: "Nasi Ayam Bu Wido di Jl. Melati Selatan dekat Simpang Lima, buka 15.30–22.30. Nasi pincuk, ayam suwir, kuah opor & aneka sate. 8 km dari Pomah.",
+    meta: "Nasi Ayam Bu Wido di Jl. Melati Selatan dekat Simpang Lima, sudah lebih dari 60 tahun. Lihat jam buka, menu, dan rute 8 km dari Pomah Guesthouse.",
     h1: "Nasi Ayam Bu Wido Semarang: Lokasi, Jam Buka & Rute dari Pomah",
     cardIntro:
       "Nasi ayam legendaris Semarang yang diracik di pincuk daun pisang: nasi, ayam suwir, telur, tahu bacem, sayur labu siam, dan krecek, lalu disiram kuah opor. Warungnya di Jl. Melati Selatan dekat Simpang Lima, buka setiap hari sekitar pukul 15.30–22.30 WIB.",
