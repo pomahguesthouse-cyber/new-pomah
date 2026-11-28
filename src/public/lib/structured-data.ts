@@ -3,7 +3,7 @@
  * objects the page renders — do not hardcode room rates here.
  */
 import { stripPublicHotWaterClaim } from "@/public/content/approved-seo";
-import { CANONICAL_ORIGIN, canonicalUrlForPath } from "@/public/lib/public-seo";
+import { CANONICAL_ORIGIN, SHARE_OG_IMAGE, canonicalUrlForPath } from "@/public/lib/public-seo";
 import {
   POMAH_GEO,
   POMAH_LOCALITY,
@@ -175,6 +175,7 @@ export function homepageLodgingGraph(input: {
       name: POMAH_NAME,
       description: `Guesthouse keluarga di ${POMAH_LOCALITY}. Dekat UNNES Sekaran.`,
       url: `${CANONICAL_ORIGIN}/`,
+      image: SHARE_OG_IMAGE.url,
       telephone: schemaTelephone(input.property?.whatsapp_number),
       email: input.property?.email || "info@pomahguesthouse.com",
       address: postalAddress(),

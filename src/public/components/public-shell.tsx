@@ -644,6 +644,11 @@ function FooterCrawlLinks({ rooms }: { rooms?: FooterRoomLink[] | null }) {
   const list = footerRooms(rooms);
   return (
     <>
+      <li>
+        <a href="/rooms" className="transition hover:text-white">
+          Tipe kamar
+        </a>
+      </li>
       {list.map((room) => (
         <li key={room.slug}>
           <a href={`/rooms/${room.slug}`} className="transition hover:text-white">

@@ -179,6 +179,10 @@ function ExplorePlacePage() {
           <img
             src={image}
             alt={heading}
+            width={1280}
+            height={720}
+            fetchPriority="high"
+            decoding="async"
             className="mt-6 aspect-[16/9] w-full rounded-2xl border border-stone-200 object-cover"
           />
         )}

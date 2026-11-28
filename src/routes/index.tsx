@@ -1541,7 +1541,10 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
                     <img
                       src={getDisplayImageUrl(n.image)}
                       alt={n.title}
+                      width={640}
+                      height={480}
                       loading="lazy"
+                      decoding="async"
                       onError={(e) => handleImageError(e, n.category.toLowerCase().includes("event") ? "event" : "news")}
                       className="h-full w-full object-cover"
                     />

@@ -344,7 +344,10 @@ export function isIndexableSitemapPath(pathname: string): boolean {
   ) {
     return false;
   }
-  if (path === "/" || path === "/book" || path === "/explore" || path === "/rooms") return true;
+  if (path === "/book" || path.startsWith("/book/") || path === "/booking" || path.startsWith("/booking/")) {
+    return false;
+  }
+  if (path === "/" || path === "/explore" || path === "/rooms") return true;
   if (BARE_ROOMS_LISTING.test(path)) return false;
   if (ROOM_PATH.test(path)) return true;
   if (LANDING_PATH.test(path)) return true;
@@ -363,7 +366,7 @@ export function collectSitemapPaths(input: {
   landingSlugs?: Array<string | null | undefined>;
   exploreSlugs?: Array<string | null | undefined>;
 }): string[] {
-  const urls = new Set<string>(["/", "/book", "/explore", "/promo", ROOMS_INDEX_PATH]);
+  const urls = new Set<string>(["/", "/explore", "/promo", ROOMS_INDEX_PATH]);
   const consider = (path: string | null) => {
     if (!path || !isIndexableSitemapPath(path)) return;
     const normalized = path.length > 1 ? path.replace(/\/+$/, "") : path;
@@ -417,8 +420,10 @@ function stampForSlug(rows: SitemapStamp[] | undefined, slug: string): string | 
  *
  * Bump this when homepage copy, sections, or code-managed SEO change.
  * Sitemap `<lastmod>` reads it. Never substitute `new Date()`.
+ *
+ * 2026-11-28: Dewi's homepage title, meta description, and H1.
  */
-export const HOMEPAGE_CONTENT_UPDATED_AT = "2026-11-20T01:13:09.000Z";
+export const HOMEPAGE_CONTENT_UPDATED_AT = "2026-11-28T09:00:00.000Z";
 
 /**
  * Last code edit of `/promo` (commit 5570252e, 2026-11-18T11:55:22Z:

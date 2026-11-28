@@ -597,6 +597,10 @@ function ExploreSemarang() {
                                 <img
                                   src={getDisplayImageUrl(dest.image)}
                                   alt={dest.name}
+                                  width={220}
+                                  height={135}
+                                  loading="lazy"
+                                  decoding="async"
                                   onError={(e) => handleImageError(e, "dest")}
                                   className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
                                 />
@@ -694,6 +698,10 @@ function ExploreSemarang() {
                                 <img
                                   src={getDisplayImageUrl(cul.image)}
                                   alt={cul.name}
+                                  width={220}
+                                  height={135}
+                                  loading="lazy"
+                                  decoding="async"
                                   onError={(e) => handleImageError(e, "culinary")}
                                   className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
                                 />
@@ -795,6 +803,10 @@ function ExploreSemarang() {
                             <img
                               src={getDisplayImageUrl(dest.image)}
                               alt={dest.name}
+                              width={400}
+                              height={150}
+                              loading="lazy"
+                              decoding="async"
                               onError={(e) => handleImageError(e, "dest")}
                               className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
                             />
@@ -849,6 +861,10 @@ function ExploreSemarang() {
                             <img
                               src={getDisplayImageUrl(cul.image)}
                               alt={cul.name}
+                              width={400}
+                              height={150}
+                              loading="lazy"
+                              decoding="async"
                               onError={(e) => handleImageError(e, "culinary")}
                               className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
                             />
@@ -908,6 +924,10 @@ function ExploreSemarang() {
                             <img
                               src={getDisplayImageUrl(ev.image)}
                               alt={ev.title}
+                              width={400}
+                              height={150}
+                              loading="lazy"
+                              decoding="async"
                               onError={(e) => handleImageError(e, "event")}
                               className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
                             />
@@ -986,6 +1006,10 @@ function ExploreSemarang() {
                         <img
                           src={getDisplayImageUrl(item.image)}
                           alt={item.title}
+                          width={88}
+                          height={92}
+                          loading="lazy"
+                          decoding="async"
                           onError={(e) => handleImageError(e, item.type === "event" ? "event" : "news")}
                           className="w-full h-full object-cover transition-transform duration-500 group-hover/item:scale-103"
                         />

@@ -92,16 +92,29 @@ assert.equal(
 );
 assert.equal(resolveHomepageMeta("Meta kustom Dewi"), "Meta kustom Dewi");
 
-// 18 Nov 2026 — "guest house semarang": approved homepage copy + previously-live copy is legacy.
-assert.equal(APPROVED_HOME.title, "Guest House Semarang | Pomah Guesthouse");
+// Dewi (SEO writer): homepage title, meta, and H1. The 18 Nov strings are legacy.
+assert.equal(APPROVED_HOME.title, "Guest House Semarang di Sampangan | Pomah Guesthouse");
 assert.equal(
   APPROVED_HOME.meta,
-  "Guest house keluarga di Sampangan, Semarang. WiFi & parkir gratis, family room 2 kamar tidur. Cocok untuk wisata dan wisuda. Pesan via WhatsApp.",
+  "Pomah Guesthouse, guest house keluarga di Sampangan, Semarang. Dekat Akpelni dan UNNES, WiFi dan parkir gratis. Cek kamar yang tersedia via WhatsApp.",
 );
-assert.equal(APPROVED_HOME.h1, "Guest House Keluarga di Semarang yang Terasa Seperti Rumah");
+assert.equal(APPROVED_HOME.h1, "Guest House Keluarga di Semarang, Nyaman di Sampangan");
 assert.ok(APPROVED_HOME.title.length <= 60);
 assert.ok(APPROVED_HOME.meta.length <= 155);
+assert.doesNotMatch(APPROVED_HOME.title, /Rp/);
 assert.doesNotMatch(APPROVED_HOME.meta, /Rp/);
+assert.doesNotMatch(APPROVED_HOME.h1, /Rp/);
+assert.equal(resolveHomepageTitle("Guest House Semarang | Pomah Guesthouse"), HOME_SEO.title);
+assert.equal(
+  resolveHomepageH1("Guest House Keluarga di Semarang yang Terasa Seperti Rumah"),
+  HOME_SEO.h1,
+);
+assert.equal(
+  resolveHomepageMeta(
+    "Guest house keluarga di Sampangan, Semarang. WiFi & parkir gratis, family room 2 kamar tidur. Cocok untuk wisata dan wisuda. Pesan via WhatsApp.",
+  ),
+  HOME_SEO.description,
+);
 assert.match(APPROVED_HOME.intro, /^Pomah adalah guest house keluarga di Semarang/);
 assert.equal(
   resolveHomepageTitle("Pomah Guesthouse – Guesthouse Keluarga & Penginapan Semarang"),
@@ -147,6 +160,22 @@ assert.equal(DEFAULT_HOMEPAGE_CONFIG.hero.slides[0].subheading, "Guest house kel
 const customHome = applyApprovedHomepageSeo({ seo: { metaTitle: "Judul kustom Dewi", metaDescription: "Meta kustom Dewi" } });
 assert.equal(customHome.seo.metaTitle, "Judul kustom Dewi");
 assert.equal(customHome.seo.metaDescription, "Meta kustom Dewi");
+const previousLiveHome = applyApprovedHomepageSeo({
+  seo: {
+    h1: "Guest House Keluarga di Semarang yang Terasa Seperti Rumah",
+    metaTitle: "Guest House Semarang | Pomah Guesthouse",
+    metaDescription:
+      "Guest house keluarga di Sampangan, Semarang. WiFi & parkir gratis, family room 2 kamar tidur. Cocok untuk wisata dan wisuda. Pesan via WhatsApp.",
+    twitterTitle: "Guest House Semarang | Pomah Guesthouse",
+    twitterDescription:
+      "Guest house keluarga di Sampangan, Semarang. WiFi & parkir gratis, family room 2 kamar tidur. Cocok untuk wisata dan wisuda. Pesan via WhatsApp.",
+  },
+});
+assert.equal(previousLiveHome.seo.h1, APPROVED_HOME.h1);
+assert.equal(previousLiveHome.seo.metaTitle, APPROVED_HOME.title);
+assert.equal(previousLiveHome.seo.metaDescription, APPROVED_HOME.meta);
+assert.equal(previousLiveHome.seo.twitterTitle, APPROVED_HOME.title);
+assert.equal(previousLiveHome.seo.twitterDescription, APPROVED_HOME.meta);
 
 // Homepage FAQ: 6 Q&A, same list for page + JSON-LD, @id ".../#faq" (not "#faq#faq").
 assert.equal(HOMEPAGE_FAQS.length, 6);
@@ -421,7 +450,10 @@ const paths = collectSitemapPaths({
   landingSlugs: ["penginapan-dekat-unnes", "/lp/should-not-duplicate"],
 });
 assert.ok(paths.includes("/"));
-assert.ok(paths.includes("/book"));
+assert.ok(!paths.includes("/book"), "booking page must not be listed");
+assert.equal(isIndexableSitemapPath("/book"), false);
+assert.equal(isIndexableSitemapPath("/booking/form/token"), false);
+assert.ok(!collectSitemapPaths({ pageSlugs: ["/book", "book", "/booking"] }).includes("/book"));
 assert.ok(paths.includes("/explore"), "sitemap must list /explore");
 assert.ok(paths.includes("/lp/penginapan-dekat-unnes"));
 assert.ok(paths.includes("/rooms"), "/rooms is a real SSR listing page (19 Okt 2026) and must be listed");
@@ -456,12 +488,12 @@ const stamps = {
   landings: [{ slug: "penginapan-dekat-unnes", updated_at: "2026-06-01T00:00:00.000Z" }],
   pages: [],
 };
-assert.equal(HOMEPAGE_CONTENT_UPDATED_AT, "2026-11-20T01:13:09.000Z");
+assert.equal(HOMEPAGE_CONTENT_UPDATED_AT, "2026-11-28T09:00:00.000Z");
 assert.equal(PROMO_CONTENT_UPDATED_AT, "2026-11-18T11:55:22.000Z");
 assert.equal(AKPELNI_LP_CONTENT_UPDATED_AT, "2026-10-30T00:59:05.000Z");
 assert.equal(
   sitemapLastmodForPath("/", { ...stamps, propertyUpdatedAt: "2026-10-19T04:39:34.509Z" }),
-  "2026-11-20T01:13:09.000Z",
+  "2026-11-28T09:00:00.000Z",
   "homepage code timestamp wins when properties.updated_at is older",
 );
 assert.equal(
@@ -471,7 +503,7 @@ assert.equal(
 );
 assert.equal(
   sitemapLastmodForPath("/", { ...stamps, propertyUpdatedAt: "   " }),
-  "2026-11-20T01:13:09.000Z",
+  "2026-11-28T09:00:00.000Z",
 );
 assert.equal(sitemapLastmodForPath("/book", stamps), "2026-08-01T00:00:00.000Z");
 assert.equal(sitemapLastmodForPath("/promo", { pages: [] }), "2026-11-18T11:55:22.000Z");
@@ -512,7 +544,7 @@ const lastmodXml = renderSitemapXml([
 ]);
 assert.match(
   lastmodXml,
-  /<loc>https:\/\/pomahguesthouse\.com\/<\/loc><lastmod>2026-11-20T01:13:09\.000Z<\/lastmod>/,
+  /<loc>https:\/\/pomahguesthouse\.com\/<\/loc><lastmod>2026-11-28T09:00:00\.000Z<\/lastmod>/,
 );
 assert.match(
   lastmodXml,
@@ -639,6 +671,17 @@ assert.doesNotMatch(lodgingJson, /UNDIP|Simpang Lima|200000|300000/);
 assert.match(lodgingJson, /FAQPage/);
 assert.match(lodgingJson, /"latitude":-7.0209/);
 assert.match(lodgingJson, /"longitude":110.3881/);
+const lodgingNode = JSON.parse(lodgingJson) as {
+  "@graph": Array<Record<string, unknown>>;
+};
+const lodgingBusiness = lodgingNode["@graph"].find((node) => node["@type"] === "LodgingBusiness");
+assert.ok(lodgingBusiness);
+assert.equal(lodgingBusiness.image, SHARE_OG_IMAGE.url);
+assert.equal((lodgingBusiness.address as { postalCode?: string }).postalCode, "50221");
+assert.equal(lodgingBusiness.checkinTime, "14:00");
+assert.equal(lodgingBusiness.checkoutTime, "12:00");
+assert.equal((lodgingBusiness.geo as { latitude?: number }).latitude, -7.0209);
+assert.equal((lodgingBusiness.geo as { longitude?: number }).longitude, 110.3881);
 
 const roomSchema = JSON.stringify(
   roomPageGraph({ name: "Kamar Single", slug: "kamar-single", base_rate: 175000, capacity: 1 }),

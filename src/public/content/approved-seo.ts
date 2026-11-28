@@ -131,10 +131,15 @@ export const CITY_GUIDE_META_OVERRIDES: Record<string, string> = {
 
 export type ApprovedRoomSeo = { title: string; meta: string; h1: string };
 
+/**
+ * Homepage title, meta description, and H1. One place to edit.
+ * Copy is Dewi's (SEO writer). og:description and twitter description
+ * reuse `meta`. Do not put a price in these three fields.
+ */
 export const APPROVED_HOME = {
-  title: "Guest House Semarang | Pomah Guesthouse",
-  meta: "Guest house keluarga di Sampangan, Semarang. WiFi & parkir gratis, family room 2 kamar tidur. Cocok untuk wisata dan wisuda. Pesan via WhatsApp.",
-  h1: "Guest House Keluarga di Semarang yang Terasa Seperti Rumah",
+  title: "Guest House Semarang di Sampangan | Pomah Guesthouse",
+  meta: "Pomah Guesthouse, guest house keluarga di Sampangan, Semarang. Dekat Akpelni dan UNNES, WiFi dan parkir gratis. Cek kamar yang tersedia via WhatsApp.",
+  h1: "Guest House Keluarga di Semarang, Nyaman di Sampangan",
   intro:
     "Pomah adalah guest house keluarga di Semarang, tepatnya di Jl. Dewi Sartika IV No. 71, Sampangan. Lokasinya sekitar 4,5 km dari UNNES Sekaran (kurang lebih 10–15 menit) dan sekitar 1,2 km dari Akpelni (kurang lebih 5 menit). Tersedia WiFi dan parkir gratis, serta Family Room dan Family Suite dengan dua kamar tidur untuk maksimal empat tamu.",
   heroSubheading: "Guest house keluarga di Sampangan",
@@ -143,6 +148,11 @@ export const APPROVED_HOME = {
 /** Homepage copy that was live before the "guest house semarang" revision (18 Nov 2026). */
 const LIVE_2026_11_HOME_TITLE = "Pomah Guesthouse – Guesthouse Keluarga & Penginapan Semarang";
 const LIVE_2026_11_HOME_H1 = "Guesthouse Keluarga di Semarang yang Terasa Seperti Rumah";
+/** 18 Nov 2026 homepage copy. Still the stored CMS value on 28 Nov, so Dewi's sentences replace it. */
+const LIVE_2026_11_18_HOME_TITLE = "Guest House Semarang | Pomah Guesthouse";
+const LIVE_2026_11_18_HOME_H1 = "Guest House Keluarga di Semarang yang Terasa Seperti Rumah";
+const LIVE_2026_11_18_HOME_META =
+  "Guest house keluarga di Sampangan, Semarang. WiFi & parkir gratis, family room 2 kamar tidur. Cocok untuk wisata dan wisuda. Pesan via WhatsApp.";
 /** Old meta with any "mulai RpX" price (syncFromPrice rewrote the number). */
 const LIVE_2026_11_HOME_META_RE =
   /^Guesthouse keluarga di Sampangan, Semarang\. Kamar bersih mulai Rp\s?\d{1,3}(?:[.,]\d{3})+, family room 2 kamar tidur, WiFi & parkir gratis\. Dekat kampus UNNES\.$/;
@@ -1011,15 +1021,25 @@ export function approvedRoomSeo(slug: string | null | undefined): ApprovedRoomSe
 }
 
 export function isLegacyHomepageH1(value: string): boolean {
-  return value === "Penginapan Dekat UNNES Semarang" || value === PREVIOUS_HOME_H1 || value === LIVE_2026_11_HOME_H1;
+  return (
+    value === "Penginapan Dekat UNNES Semarang" ||
+    value === PREVIOUS_HOME_H1 ||
+    value === LIVE_2026_11_HOME_H1 ||
+    value === LIVE_2026_11_18_HOME_H1
+  );
 }
 
 export function isLegacyHomepageTitle(value: string): boolean {
-  return value === PREVIOUS_HOME_TITLE || value === LIVE_2026_11_HOME_TITLE;
+  return value === PREVIOUS_HOME_TITLE || value === LIVE_2026_11_HOME_TITLE || value === LIVE_2026_11_18_HOME_TITLE;
 }
 
 export function isLegacyHomepageMeta(value: string): boolean {
-  return value === PREVIOUS_HOME_META || LIVE_2026_11_HOME_META_RE.test(value) || HOME_META_STATIC_PRICE_RE.test(value);
+  return (
+    value === PREVIOUS_HOME_META ||
+    value === LIVE_2026_11_18_HOME_META ||
+    LIVE_2026_11_HOME_META_RE.test(value) ||
+    HOME_META_STATIC_PRICE_RE.test(value)
+  );
 }
 
 export function isLegacyHomepageHeroSubheading(value: string): boolean {

@@ -10,6 +10,7 @@ import {
   placeSlugMatches,
   resolveDeluxeRoomPath,
   resolveExploreLegacyTarget,
+  shouldResolveSeoRedirect,
 } from "../src/public/lib/seo-redirects";
 
 const places = [
@@ -76,6 +77,16 @@ assert.equal(
   "https://pomahguesthouse.com/explore",
 );
 assert.match(location("https://pomahguesthouse.com/explore/")?.reason ?? "", /trailing-slash/);
+assert.equal(shouldResolveSeoRedirect("https://pomahguesthouse.com/rooms/"), true);
+assert.equal(shouldResolveSeoRedirect("https://pomahguesthouse.com/explore/"), true);
+assert.equal(shouldResolveSeoRedirect("https://pomahguesthouse.com/rooms/deluxe/"), true);
+assert.equal(shouldResolveSeoRedirect("https://pomahguesthouse.com/rooms"), false);
+assert.equal(shouldResolveSeoRedirect("https://pomahguesthouse.com/admin/"), false);
+assert.equal(shouldResolveSeoRedirect("https://pomahguesthouse.com/login/"), false);
+assert.equal(shouldResolveSeoRedirect("https://pomahguesthouse.com/api/public/hook/"), false);
+assert.equal(shouldResolveSeoRedirect("https://www.pomahguesthouse.com/rooms"), true);
+assert.equal(shouldResolveSeoRedirect("https://id-preview--abc.lovable.app/rooms/"), true);
+assert.equal(shouldResolveSeoRedirect("https://id-preview--abc.lovable.app/rooms"), false);
 assert.equal(
   location("https://www.pomahguesthouse.com/book/")?.location,
   "https://pomahguesthouse.com/book",
