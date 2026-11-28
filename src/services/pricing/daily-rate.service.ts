@@ -115,7 +115,15 @@ export async function getDailyRatesForRange(
     return out;
   }
 
-  for (const row of (data ?? []) as DailyRateRow[]) {
+  return groupDailyRateRows((data ?? []) as DailyRateRow[]);
+}
+
+/** Index daily-rate rows the same way `getDailyRatesForRange` does. */
+export function groupDailyRateRows(
+  rows: readonly DailyRateRow[],
+): Map<string, Map<string, DailyRateRow>> {
+  const out = new Map<string, Map<string, DailyRateRow>>();
+  for (const row of rows) {
     let perRoom = out.get(row.room_type_id);
     if (!perRoom) {
       perRoom = new Map<string, DailyRateRow>();

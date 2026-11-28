@@ -21,7 +21,8 @@ import {
 } from "@/public/content/approved-seo";
 import { PUBLIC_PROPERTY_FIELDS, toPublicSettings } from "@/public/lib/public-settings";
 import { loadPublicPropertyRow } from "@/public/lib/public-property.server";
-import { attachTodayRates } from "@/public/lib/today-rate.server";
+import { applyTodayRates } from "@/public/lib/today-rate";
+import { attachTodayRates, loadTodayRateOverrideMap } from "@/public/lib/today-rate.server";
 import { todayWIB } from "@/lib/date";
 import { PUBLIC_LISTED_ROOM_TYPE_COLUMNS, queryWithOptionalRoomLayout, selectColumns } from "@/lib/room-layout";
 
@@ -225,19 +226,26 @@ async function loadPublicSiteData(): Promise<PublicSiteData> {
   }
   if (siteDataPending) return siteDataPending;
   siteDataPending = (async () => {
-    const [propertyData, roomTypesResult] = await Promise.all([
+    const client = db(supabasePublic);
+    // Tarif harian tidak bergantung pada hasil query kamar: ambil semua
+    // override hari ini bersamaan, lalu tempel dengan applyTodayRates yang
+    // sama. Query gagal → jatuh ke attachTodayRates (perilaku lama).
+    const [propertyData, roomTypesResult, todayOverrides] = await Promise.all([
       loadPublicPropertyRow(),
       queryWithOptionalRoomLayout(PUBLIC_LISTED_ROOM_TYPE_COLUMNS, (columns) =>
-        selectColumns(db(supabasePublic).from("room_types"), columns)
+        selectColumns(client.from("room_types"), columns)
           .eq("is_published", true)
           .eq("is_active", true)
           .order("base_rate"),
       ),
+      loadTodayRateOverrideMap(client, rateDate),
     ]);
     const shaped = shapePublicSiteData(propertyData, roomTypesResult.data);
     const value: PublicSiteData = {
       ...shaped,
-      roomTypes: await attachTodayRates(db(supabasePublic), shaped.roomTypes, rateDate),
+      roomTypes: todayOverrides
+        ? applyTodayRates(shaped.roomTypes, todayOverrides, rateDate)
+        : await attachTodayRates(client, shaped.roomTypes, rateDate),
     };
     if (value.property || value.roomTypes.length > 0) {
       siteDataCache = { at: Date.now(), rateDate, value };
