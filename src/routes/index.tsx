@@ -87,10 +87,9 @@ import { DateRangePickerID } from "@/public/components/lazy-public-widgets";
 
 export const Route = createFileRoute("/")({
   loader: async () => {
-    const { loadCityGuidePlaces } = await import("@/public/lib/city-guide.server");
     const [site, guidePlaces, reviews] = await Promise.all([
       getPublicSiteData(),
-      loadCityGuidePlaces(),
+      import("@/public/lib/city-guide.server").then((m) => m.loadCityGuidePlaces()),
       getGoogleReviews().catch(
         (): GoogleReviewsResult => ({ rating: null, total: null, reviews: [], status: "ERROR" }),
       ),

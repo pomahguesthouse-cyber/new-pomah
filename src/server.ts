@@ -4,7 +4,12 @@ import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { runWithCfContext } from "./lib/cf-context";
 import { resolveSeoRedirect } from "./public/lib/seo-redirects.server";
-import { publicHtmlCacheControl } from "./public/lib/public-cache";
+import {
+  cdnHeaderNames,
+  headerRecordForMode,
+  publicCacheMode,
+  type PublicCacheMode,
+} from "./public/lib/public-cache";
 
 type ExecutionContextLike = { waitUntil?: (promise: Promise<unknown>) => void };
 
@@ -92,28 +97,60 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
-function withPublicHtmlCache(request: Request, response: Response): Response {
-  let pathname = "/";
-  try {
-    pathname = new URL(request.url).pathname;
-  } catch {
-    return response;
+function responseSetCookie(response: Response): string | null {
+  const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+  if (typeof headers.getSetCookie === "function") {
+    const values = headers.getSetCookie();
+    if (values.length > 0) return values.join("\n");
   }
-  const cacheControl = publicHtmlCacheControl({
-    method: request.method,
-    pathname,
-    status: response.status,
-    contentType: response.headers.get("content-type"),
-    setCookie: response.headers.get("set-cookie"),
-  });
-  if (!cacheControl) return response;
+  return response.headers.get("set-cookie");
+}
+
+function withPublicCacheHeaders(response: Response, mode: PublicCacheMode): Response {
+  const record = headerRecordForMode(mode);
+  if (!record) return response;
   const headers = new Headers(response.headers);
-  headers.set("Cache-Control", cacheControl);
+  let changed = false;
+  if (mode === "private") {
+    for (const name of cdnHeaderNames()) {
+      if (headers.has(name)) {
+        headers.delete(name);
+        changed = true;
+      }
+    }
+  }
+  for (const [name, value] of Object.entries(record)) {
+    if (headers.get(name) !== value) {
+      headers.set(name, value);
+      changed = true;
+    }
+  }
+  if (!changed) return response;
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
     headers,
   });
+}
+
+function withPublicHtmlCache(request: Request, response: Response): Response {
+  let url: URL;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return response;
+  }
+  const mode = publicCacheMode({
+    method: request.method,
+    pathname: url.pathname,
+    search: url.search,
+    status: response.status,
+    contentType: response.headers.get("content-type"),
+    setCookie: responseSetCookie(response),
+    cookie: request.headers.get("cookie"),
+    authorization: request.headers.get("authorization"),
+  });
+  return withPublicCacheHeaders(response, mode);
 }
 
 function seoRedirectResponse(location: string, reason: string): Response {

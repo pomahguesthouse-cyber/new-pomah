@@ -5,6 +5,7 @@ import { CITY_GUIDE_ARTICLES, CODE_ONLY_LANDING_SLUGS } from "@/public/content/a
 import { loadCityGuidePlaces } from "@/public/lib/city-guide.server";
 import { filterIndexableLandingRows } from "@/public/lib/landing-page-seo";
 import { isMissingSchemaError } from "@/public/lib/lp-slug-redirects";
+import { publicCacheHeaderRecord } from "@/public/lib/public-cache";
 import { canonicalUrlForPath, collectSitemapPaths, sitemapLastmodForPath } from "@/public/lib/public-seo";
 
 type SitemapLanding = { slug: string; updated_at: string; noindex?: boolean | null };
@@ -69,7 +70,7 @@ export const Route = createFileRoute("/sitemap.xml")({
         return new Response(xml, {
           headers: {
             "Content-Type": "application/xml; charset=utf-8",
-            "Cache-Control": "public, max-age=3600",
+            ...publicCacheHeaderRecord(),
           },
         });
       },

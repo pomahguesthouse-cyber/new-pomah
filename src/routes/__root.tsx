@@ -26,6 +26,11 @@ import { NativeAdminRuntime } from "@/lib/native-admin-runtime";
 import { StaffOAuthReturn } from "@/public/components/staff-oauth-return";
 import appCss from "../styles.css?url";
 import { isNotFoundRender, NOT_FOUND_TITLE } from "@/public/lib/not-found-head";
+import {
+  PUBLIC_HTML_CACHE_CONTROL,
+  isPublicCachePath,
+  searchRecordIsSensitive,
+} from "@/public/lib/public-cache";
 
 function NotFoundComponent() {
   return (
@@ -129,6 +134,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     } catch {
       return { faviconUrl: null, logoUrl: null };
     }
+  },
+  // Route headers are merged into the SSR document (same path as Content-Type).
+  // Only Cache-Control is set here. CDN-Cache-Control is added later by
+  // request middleware, which can still see Set-Cookie and refuse the cache.
+  headers: ({ matches }) => {
+    const leaf = matches[matches.length - 1];
+    const pathname = leaf?.pathname ?? "/";
+    if (!isPublicCachePath(pathname) || searchRecordIsSensitive(leaf?.search)) return undefined;
+    return { "Cache-Control": PUBLIC_HTML_CACHE_CONTROL };
   },
   head: ({ loaderData, matches }) => ({
     meta: [

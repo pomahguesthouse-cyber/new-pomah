@@ -16,7 +16,14 @@ import { approvedCityGuidePlace } from "../src/public/lib/city-guide";
 import { cityGuideGraph, cityGuidePageGraph, faqPageGraph, HOMEPAGE_FAQS, homepageLodgingGraph, postalAddress, roomPageGraph, unnesLandingGraph } from "../src/public/lib/structured-data";
 import { CityGuideArticleBody } from "../src/public/components/city-guide-article";
 import { POMAH_NAP_ADDRESS, POMAH_NAP_LINE, POMAH_POSTAL_CODE } from "../src/public/lib/site-identity";
-import { PUBLIC_HTML_CACHE_CONTROL, publicHtmlCacheControl } from "../src/public/lib/public-cache";
+import {
+  PUBLIC_CDN_CACHE_CONTROL,
+  PUBLIC_HTML_CACHE_CONTROL,
+  hasPersonalizedCookie,
+  publicCacheHeaderRecord,
+  publicCacheMode,
+  publicHtmlCacheControl,
+} from "../src/public/lib/public-cache";
 import { buildLogoImageUrl } from "../src/lib/storage-image";
 import { buildGuideTextLinks } from "../src/public/components/guide-links";
 import { rewritePublicHref } from "../src/public/lib/public-href";
@@ -758,50 +765,122 @@ assert.doesNotMatch(logoUrl, /\/object\/public\//);
 assert.doesNotMatch(logoUrl, /format=origin/);
 
 assert.equal(
+  PUBLIC_HTML_CACHE_CONTROL,
+  "public, max-age=0, s-maxage=300, stale-while-revalidate=86400",
+);
+assert.equal(PUBLIC_CDN_CACHE_CONTROL, "public, max-age=300, stale-while-revalidate=86400");
+assert.doesNotMatch(PUBLIC_CDN_CACHE_CONTROL, /s-maxage/);
+assert.deepEqual(publicCacheHeaderRecord(), {
+  "Cache-Control": PUBLIC_HTML_CACHE_CONTROL,
+  "CDN-Cache-Control": PUBLIC_CDN_CACHE_CONTROL,
+  "Cloudflare-CDN-Cache-Control": PUBLIC_CDN_CACHE_CONTROL,
+});
+
+const html = { status: 200, contentType: "text/html; charset=utf-8" };
+for (const pathname of [
+  "/",
+  "/rooms",
+  "/rooms/",
+  "/rooms/kamar-single",
+  "/explore",
+  "/explore/lawang-sewu-semarang",
+  "/promo",
+  "/lp/penginapan-dekat-unnes",
+]) {
+  assert.equal(
+    publicHtmlCacheControl({ method: "GET", pathname, ...html }),
+    PUBLIC_HTML_CACHE_CONTROL,
+    pathname,
+  );
+}
+assert.equal(
   publicHtmlCacheControl({
+    method: "GET",
+    pathname: "/sitemap.xml",
+    status: 200,
+    contentType: "application/xml; charset=utf-8",
+  }),
+  PUBLIC_HTML_CACHE_CONTROL,
+);
+assert.equal(
+  publicHtmlCacheControl({
+    method: "GET",
+    pathname: "/robots.txt",
+    status: 200,
+    contentType: "text/plain; charset=utf-8",
+  }),
+  PUBLIC_HTML_CACHE_CONTROL,
+);
+assert.equal(publicCacheMode({ method: "GET", pathname: "/", status: 404, contentType: "text/html" }), "private");
+assert.equal(
+  publicCacheMode({
     method: "GET",
     pathname: "/",
-    status: 200,
-    contentType: "text/html; charset=utf-8",
+    ...html,
+    setCookie: "sb-access-token=secret",
   }),
-  PUBLIC_HTML_CACHE_CONTROL,
+  "private",
 );
 assert.equal(
-  publicHtmlCacheControl({
+  publicCacheMode({
+    method: "GET",
+    pathname: "/",
+    ...html,
+    setCookie: "theme=light",
+  }),
+  "private",
+);
+assert.equal(
+  publicCacheMode({
+    method: "GET",
+    pathname: "/rooms/deluxe",
+    ...html,
+    cookie: "sb-project-auth-token=secret",
+  }),
+  "private",
+);
+assert.equal(
+  publicCacheMode({
+    method: "GET",
+    pathname: "/",
+    ...html,
+    cookie: "__cf_bm=bot",
+  }),
+  "public",
+);
+assert.equal(hasPersonalizedCookie("__cf_bm=bot; cf_clearance=ok"), false);
+assert.equal(hasPersonalizedCookie("__cf_bm=bot; pomah_staff=1"), true);
+assert.equal(
+  publicCacheMode({
     method: "GET",
     pathname: "/lp/penginapan-dekat-unnes",
-    status: 200,
-    contentType: "text/html",
+    search: "?preview=1",
+    ...html,
   }),
-  PUBLIC_HTML_CACHE_CONTROL,
+  "private",
 );
 assert.equal(
-  publicHtmlCacheControl({
+  publicCacheMode({
     method: "GET",
-    pathname: "/login",
-    status: 200,
-    contentType: "text/html",
+    pathname: "/",
+    ...html,
+    authorization: "Bearer secret",
   }),
-  null,
+  "private",
 );
-assert.equal(
-  publicHtmlCacheControl({
-    method: "GET",
-    pathname: "/admin/settings",
-    status: 200,
-    contentType: "text/html",
-  }),
-  null,
-);
-assert.equal(
-  publicHtmlCacheControl({
-    method: "GET",
-    pathname: "/book/confirmation/ABC",
-    status: 200,
-    contentType: "text/html",
-  }),
-  null,
-);
+for (const pathname of [
+  "/login",
+  "/admin/settings",
+  "/book",
+  "/book/confirmation/ABC",
+  "/booking/form/token",
+  "/api/cron/process-wa-queue",
+  "/api/public/whatsapp/webhook",
+  "/connect",
+]) {
+  assert.equal(publicHtmlCacheControl({ method: "GET", pathname, ...html }), null, pathname);
+  assert.equal(publicCacheMode({ method: "GET", pathname, ...html }), "skip", pathname);
+}
 assert.equal(
   publicHtmlCacheControl({
     method: "POST",
@@ -811,6 +890,7 @@ assert.equal(
   }),
   null,
 );
+assert.equal(publicCacheMode({ method: "POST", pathname: "/", ...html }), "private");
 
 const LAWANG_TITLE = "Lawang Sewu: Jam Buka & Harga Tiket 2026 | Pomah";
 const LAWANG_META =
